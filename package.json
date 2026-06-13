@@ -11,7 +11,8 @@
     "test": "npm run test --workspaces --if-present",
     "dev:server": "npm run dev -w @specregistry/server",
     "dev:web": "npm run dev -w @specregistry/web",
-    "seed": "npm run seed -w @specregistry/server"
+    "seed": "npm run seed -w @specregistry/server",
+    "sample:ai-sdd": "node samples/ai-sdd/load.mjs"
   },
   "engines": {
     "node": ">=20"

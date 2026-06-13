@@ -34,7 +34,21 @@
       "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js verify)",
       "Bash(rm -f /Users/joeldg/Projects/SDDManager/specregistry.db /Users/joeldg/Projects/SDDManager/specregistry.db-*)",
       "Bash(rm -rf /tmp/specreg-demo)",
-      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add platform tier: spec compiler, AI audit/efficacy, auth+LDAP, channels, signing, two-way git sync, Slack/GChat *)"
+      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add platform tier: spec compiler, AI audit/efficacy, auth+LDAP, channels, signing, two-way git sync, Slack/GChat *)",
+      "Read(//Users/joeldg/**)",
+      "Bash(python3 -c \"import pypdf; print\\('pypdf ok'\\)\")",
+      "Bash(python3 -c \"import PyPDF2; print\\('PyPDF2 ok'\\)\")",
+      "Bash(pip3 list *)",
+      "Read(//private/tmp/**)",
+      "Bash(python3 -m venv pdfenv)",
+      "Bash(./pdfenv/bin/pip install *)",
+      "Bash(./pdfenv/bin/python -c ' *)",
+      "Bash(node samples/ai-sdd/load.mjs)",
+      "Bash(curl -s \"http://localhost:4000/api/v1/ai/search?q=hardware%20readiness%20gate&project_type=Embedded%20Systems%20Platform\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).results;console.log\\('hits:',r.length,'top:',r[0]?.filename,'§',r[0]?.section\\)}\\)\")",
+      "Bash(curl -s \"http://localhost:4000/api/v1/ai/specs/Embedded%20Systems%20Platform\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const s=JSON.parse\\(d\\).specs;console.log\\('specs served:',s.length,'\\('+s.map\\(x=>x.filename\\).join\\(', '\\)+'\\)'\\)}\\)\")",
+      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add AI-SDD sample spec pack with API loader *)"
     ]
   }
 }

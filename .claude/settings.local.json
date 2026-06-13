@@ -33,7 +33,8 @@
       "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js compile --target claude)",
       "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js verify)",
       "Bash(rm -f /Users/joeldg/Projects/SDDManager/specregistry.db /Users/joeldg/Projects/SDDManager/specregistry.db-*)",
-      "Bash(rm -rf /tmp/specreg-demo)"
+      "Bash(rm -rf /tmp/specreg-demo)",
+      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add platform tier: spec compiler, AI audit/efficacy, auth+LDAP, channels, signing, two-way git sync, Slack/GChat *)"
     ]
   }
 }

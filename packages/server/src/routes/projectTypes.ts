@@ -41,12 +41,15 @@ export async function projectTypeRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     app.db
       .prepare(
-        `UPDATE project_types SET name = ?, industry = ?, description = ?, updated_at = ? WHERE id = ?`
+        `UPDATE project_types SET name = ?, industry = ?, description = ?, required_reviewers = ?, updated_at = ? WHERE id = ?`
       )
       .run(
         (body.name as string) ?? existing.name,
         (body.industry as string) ?? existing.industry,
         (body.description as string) ?? existing.description,
+        Array.isArray(body.required_reviewers)
+          ? JSON.stringify(body.required_reviewers)
+          : ((existing as unknown as Record<string, unknown>).required_reviewers as string) ?? "[]",
         now(),
         existing.id
       );

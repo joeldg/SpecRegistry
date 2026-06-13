@@ -73,6 +73,7 @@ export default function ProjectTypesPage() {
             <th>Industry</th>
             <th>Description</th>
             <th>Specs</th>
+            <th>Required reviewers</th>
             <th>Created</th>
           </tr>
         </thead>
@@ -84,11 +85,57 @@ export default function ProjectTypesPage() {
               <td className="dim">{t.industry ?? "—"}</td>
               <td className="dim">{t.description ?? "—"}</td>
               <td className="mono">{t.spec_count}</td>
+              <td>
+                <ReviewerEditor type={t} onSaved={reload} onError={setError} />
+              </td>
               <td className="faint">{timeAgo(t.created_at)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </>
+  );
+}
+
+function ReviewerEditor({
+  type,
+  onSaved,
+  onError,
+}: {
+  type: ProjectTypeWithCount & { required_reviewers?: string };
+  onSaved: () => void;
+  onError: (msg: string) => void;
+}) {
+  const initial = (() => {
+    try {
+      return (JSON.parse(type.required_reviewers ?? "[]") as string[]).join(", ");
+    } catch {
+      return "";
+    }
+  })();
+  const [value, setValue] = useState(initial);
+
+  async function save() {
+    try {
+      await api.updateProjectType(type.id, {
+        required_reviewers: value.split(",").map((s) => s.trim()).filter(Boolean),
+      });
+      onSaved();
+    } catch (e) {
+      onError((e as Error).message);
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      placeholder="anyone"
+      title="Comma-separated reviewer usernames; approvals are restricted to these (admins bypass)"
+      value={value}
+      style={{ width: 160 }}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => value !== initial && save()}
+      onKeyDown={(e) => e.key === "Enter" && save()}
+    />
   );
 }

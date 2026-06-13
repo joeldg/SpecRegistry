@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { bumpVersion, type ChangeRequest } from "@specregistry/shared";
 import { now, uuid } from "../db.js";
 import { HttpError, requireSpec, requireString } from "../helpers.js";
+import { enforceRequiredReviewers } from "../lib/auth.js";
 import { dispatchWebhooks } from "../lib/events.js";
 import { enqueueSyncJobs, processSyncJobs } from "../lib/github.js";
 import { reindexSpec } from "../lib/search.js";
@@ -37,14 +38,24 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Approve: bump semver per the requested delta, publish new content, record the version.
+  // channel="beta" records a prerelease version without touching the stable head.
   app.post("/reviews/:id/approve", async (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as Record<string, unknown>;
     const reviewedBy = requireString(body, "reviewed_by");
+    const channel = body.channel === "beta" ? "beta" : "stable";
     const cr = requireChangeRequest(app, id);
     if (cr.status !== "pending") throw new HttpError(409, `Change request already ${cr.status}`);
     const spec = requireSpec(app.db, cr.spec_id);
-    const newVersion = bumpVersion(spec.current_version, cr.version_delta);
+    enforceRequiredReviewers(app.db, spec.project_type_id, reviewedBy, req);
+    const bumped = bumpVersion(spec.current_version, cr.version_delta);
+    let newVersion = bumped;
+    if (channel === "beta") {
+      const priorBetas = app.db
+        .prepare("SELECT COUNT(*) AS n FROM spec_versions WHERE spec_id = ? AND version LIKE ?")
+        .get(spec.id, `${bumped}-beta.%`) as { n: number };
+      newVersion = `${bumped}-beta.${priorBetas.n + 1}`;
+    }
     const ts = now();
 
     const approve = app.db.transaction(() => {
@@ -53,32 +64,39 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
           `UPDATE change_requests SET status = 'approved', reviewed_by = ?, reviewed_at = ?, resulting_version = ? WHERE id = ?`
         )
         .run(reviewedBy, ts, newVersion, cr.id);
+      if (channel === "stable") {
+        app.db
+          .prepare(
+            `UPDATE specs SET content = ?, current_version = ?, status = 'published', updated_by = ?, updated_at = ? WHERE id = ?`
+          )
+          .run(cr.proposed_content, newVersion, cr.proposed_by, ts, spec.id);
+      } else {
+        // The stable head is untouched; the spec leaves pending_review.
+        app.db.prepare("UPDATE specs SET status = 'published', updated_at = ? WHERE id = ?").run(ts, spec.id);
+      }
       app.db
         .prepare(
-          `UPDATE specs SET content = ?, current_version = ?, status = 'published', updated_by = ?, updated_at = ? WHERE id = ?`
+          `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at, channel)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(cr.proposed_content, newVersion, cr.proposed_by, ts, spec.id);
-      app.db
-        .prepare(
-          `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(uuid(), spec.id, newVersion, cr.proposed_content, reviewedBy, ts);
+        .run(uuid(), spec.id, newVersion, cr.proposed_content, reviewedBy, ts, channel);
     });
     approve();
 
     const updated = requireSpec(app.db, spec.id);
-    reindexSpec(app.db, updated);
-    const queued = enqueueSyncJobs(app.db, updated);
-    if (queued > 0 && process.env.GITHUB_TOKEN) {
-      // Push-back PRs run in the background; failures land on the job rows.
-      void processSyncJobs(app.db, process.env.GITHUB_TOKEN);
+    if (channel === "stable") {
+      reindexSpec(app.db, updated);
+      const queued = enqueueSyncJobs(app.db, updated);
+      if (queued > 0 && process.env.GITHUB_TOKEN) {
+        // Push-back PRs run in the background; failures land on the job rows.
+        void processSyncJobs(app.db, process.env.GITHUB_TOKEN);
+      }
     }
     await dispatchWebhooks(
       app.db,
       "review.approved",
-      `${updated.filename} v${newVersion} approved by ${reviewedBy}`,
-      { change_request_id: cr.id, spec_id: updated.id, filename: updated.filename, version: newVersion }
+      `${updated.filename} v${newVersion}${channel === "beta" ? " (beta)" : ""} approved by ${reviewedBy}`,
+      { change_request_id: cr.id, spec_id: updated.id, filename: updated.filename, version: newVersion, channel }
     );
     return requireChangeRequest(app, cr.id);
   });

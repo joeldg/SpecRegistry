@@ -77,7 +77,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.post("/webhooks", async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const url = requireString(body, "url");
-    const format = body.format === "slack" ? "slack" : "json";
+    const format = body.format === "slack" || body.format === "gchat" ? body.format : "json";
     const events = Array.isArray(body.events) ? body.events : [];
     const id = uuid();
     app.db

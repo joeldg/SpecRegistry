@@ -64,7 +64,8 @@ export default function SettingsPage() {
             />
             <select value={hookFormat} onChange={(e) => setHookFormat(e.target.value)}>
               <option value="json">JSON payload</option>
-              <option value="slack">Slack message</option>
+              <option value="slack">Slack message (interactive)</option>
+              <option value="gchat">Google Chat message</option>
             </select>
             <button
               className="primary"

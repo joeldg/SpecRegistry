@@ -3,7 +3,9 @@ import type { AgentFeedback, FeedbackErrorType, Spec } from "@specregistry/share
 import { now, uuid } from "../db.js";
 import { HttpError, requireOneOf, requireProjectType, requireSpec, requireString } from "../helpers.js";
 import { draftFix } from "../lib/aifix.js";
+import { auditCodebase, runEfficacy, type AuditInput } from "../lib/audit.js";
 import { createChangeRequest } from "../lib/changes.js";
+import { uuid as makeId } from "../db.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { searchSpecs } from "../lib/search.js";
 
@@ -119,6 +121,47 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       return app.db.prepare(`${base} WHERE f.status = ? ORDER BY f.created_at DESC`).all(status);
     }
     return app.db.prepare(`${base} ORDER BY f.created_at DESC`).all();
+  });
+
+  // Reverse conformance: does a codebase snapshot follow its governed specs?
+  app.post("/ai/audit", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const pt = requireProjectType(app.db, requireString(body, "project_type"));
+    const tree = requireString(body, "tree");
+    const files = Array.isArray(body.files)
+      ? (body.files as AuditInput["files"]).filter(
+          (f) => typeof f?.path === "string" && typeof f?.content === "string"
+        )
+      : [];
+    const findings = await auditCodebase(app.db, pt, { tree, files });
+    return { project_type: pt.name, findings, finding_count: findings.length };
+  });
+
+  // Spec efficacy A/B: does this spec measurably change agent output for a task?
+  app.post("/ai/efficacy", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const spec = requireSpec(app.db, requireString(body, "spec_id"));
+    const task = requireString(body, "task_prompt");
+    const result = await runEfficacy(spec.content, spec.filename, task);
+    const id = makeId();
+    app.db
+      .prepare(
+        `INSERT INTO efficacy_runs (id, spec_id, task_prompt, score_with, score_without, improved, rationale, model, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        spec.id,
+        task,
+        result.score_with,
+        result.score_without,
+        result.improved ? 1 : 0,
+        result.rationale,
+        result.model,
+        now()
+      );
+    reply.code(201);
+    return app.db.prepare("SELECT * FROM efficacy_runs WHERE id = ?").get(id);
   });
 
   // Spec authors triage alerts: open -> acknowledged -> resolved.

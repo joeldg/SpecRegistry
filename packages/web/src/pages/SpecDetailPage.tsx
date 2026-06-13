@@ -128,12 +128,26 @@ export default function SpecDetailPage() {
           </button>
         )}
         <div className="right">
+          {shownVersion && (shownVersion as { channel?: string }).channel === "beta" && (
+            <button
+              className="success"
+              onClick={() =>
+                act(
+                  () => api.promote(spec.id, shownVersion.version, getAuthor()),
+                  `Promoted ${shownVersion.version} to stable`
+                )
+              }
+            >
+              Promote to stable
+            </button>
+          )}
           {spec.versions.length > 0 && (
             <select value={viewVersion ?? ""} onChange={(e) => setViewVersion(e.target.value || undefined)}>
               <option value="">Current ({spec.current_version})</option>
               {spec.versions.map((v) => (
                 <option key={v.id} value={v.version}>
-                  v{v.version} · {timeAgo(v.published_at)}
+                  v{v.version}
+                  {(v as { channel?: string }).channel === "beta" ? " [beta]" : ""} · {timeAgo(v.published_at)}
                 </option>
               ))}
             </select>
@@ -242,6 +256,91 @@ export default function SpecDetailPage() {
           <DiffView diff={spec.change_requests.find((cr) => cr.status === "pending")!.diff} />
         </div>
       )}
+
+      <EfficacyPanel spec={spec} onRan={reload} onError={setError} />
     </>
+  );
+}
+
+function EfficacyPanel({
+  spec,
+  onRan,
+  onError,
+}: {
+  spec: SpecDetail;
+  onRan: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [task, setTask] = useState("");
+  const [running, setRunning] = useState(false);
+
+  async function run() {
+    if (!task.trim()) return;
+    setRunning(true);
+    try {
+      await api.runEfficacy(spec.id, task.trim());
+      setTask("");
+      onRan();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="section" style={{ marginTop: 28 }}>
+      <h2>Spec efficacy</h2>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="form-row">
+          <input
+            type="text"
+            placeholder='Task to A/B test, e.g. "Add a login endpoint to the service"'
+            value={task}
+            style={{ flex: 1, minWidth: 320 }}
+            onChange={(e) => setTask(e.target.value)}
+          />
+          <button className="primary" disabled={running} onClick={run}>
+            {running ? "Running A/B…" : "Run A/B test"}
+          </button>
+        </div>
+        <span className="faint">
+          Generates a response with and without this spec in context, then grades both for spec adherence.
+          Requires ANTHROPIC_API_KEY on the server; takes ~a minute.
+        </span>
+      </div>
+      {spec.efficacy_runs.length > 0 && (
+        <table className="grid">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>With spec</th>
+              <th>Without</th>
+              <th>Verdict</th>
+              <th>Rationale</th>
+              <th>When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {spec.efficacy_runs.map((run) => (
+              <tr key={run.id}>
+                <td className="dim feedback-desc">{run.task_prompt}</td>
+                <td className="mono">{run.score_with}</td>
+                <td className="mono">{run.score_without}</td>
+                <td>
+                  {run.improved ? (
+                    <span className="badge approved">earns its tokens</span>
+                  ) : (
+                    <span className="badge rejected">no lift</span>
+                  )}
+                </td>
+                <td className="dim feedback-desc">{run.rationale}</td>
+                <td className="faint">{timeAgo(run.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }

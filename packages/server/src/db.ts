@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
   id TEXT PRIMARY KEY,
   url TEXT NOT NULL,
   events TEXT NOT NULL DEFAULT '[]',
-  format TEXT NOT NULL DEFAULT 'json' CHECK (format IN ('json', 'slack')),
+  format TEXT NOT NULL DEFAULT 'json' CHECK (format IN ('json', 'slack', 'gchat')),
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
@@ -128,12 +128,67 @@ CREATE VIRTUAL TABLE IF NOT EXISTS spec_chunks USING fts5(
   section,
   content
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  display_name TEXT,
+  role TEXT NOT NULL DEFAULT 'author' CHECK (role IN ('admin', 'reviewer', 'author', 'agent')),
+  password_hash TEXT,
+  source TEXT NOT NULL DEFAULT 'local' CHECK (source IN ('local', 'ldap')),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tokens (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS efficacy_runs (
+  id TEXT PRIMARY KEY,
+  spec_id TEXT NOT NULL REFERENCES specs(id),
+  task_prompt TEXT NOT NULL,
+  score_with INTEGER NOT NULL,
+  score_without INTEGER NOT NULL,
+  improved INTEGER NOT NULL,
+  rationale TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;
 
-/** Columns added after the initial release; applied idempotently for existing databases. */
-const MIGRATIONS = [
-  "ALTER TABLE change_requests ADD COLUMN compatibility TEXT",
-  "ALTER TABLE change_requests ADD COLUMN lint TEXT",
+/** Versioned migrations for databases created before the current schema. Each runs once. */
+const MIGRATIONS: Array<{ version: number; sql: string }> = [
+  { version: 1, sql: "ALTER TABLE change_requests ADD COLUMN compatibility TEXT" },
+  { version: 2, sql: "ALTER TABLE change_requests ADD COLUMN lint TEXT" },
+  { version: 3, sql: "ALTER TABLE spec_versions ADD COLUMN channel TEXT NOT NULL DEFAULT 'stable'" },
+  { version: 4, sql: "ALTER TABLE project_types ADD COLUMN required_reviewers TEXT NOT NULL DEFAULT '[]'" },
+  {
+    // Widen the webhook format CHECK to admit 'gchat' (SQLite requires a rebuild).
+    version: 5,
+    sql: `
+      ALTER TABLE webhooks RENAME TO webhooks_old;
+      CREATE TABLE webhooks (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        events TEXT NOT NULL DEFAULT '[]',
+        format TEXT NOT NULL DEFAULT 'json' CHECK (format IN ('json', 'slack', 'gchat')),
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO webhooks SELECT * FROM webhooks_old;
+      DROP TABLE webhooks_old;
+    `,
+  },
 ];
 
 export function createDb(path: string): Db {
@@ -141,13 +196,20 @@ export function createDb(path: string): Db {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as
+    | { value: string }
+    | undefined;
+  let version = row ? Number(row.value) : 0;
   for (const migration of MIGRATIONS) {
+    if (migration.version <= version) continue;
     try {
-      db.exec(migration);
+      db.exec(migration.sql);
     } catch {
-      // column already exists (fresh schema or previously migrated)
+      // already satisfied by the fresh-schema definition (e.g. column exists)
     }
+    version = migration.version;
   }
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
   return db;
 }
 

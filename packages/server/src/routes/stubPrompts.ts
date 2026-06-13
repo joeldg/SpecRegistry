@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { driftSeverity, satisfiesCaret } from "@specregistry/shared";
 import type { Spec, StubPrompt, StubPromptResponse, SyncCheckResponse } from "@specregistry/shared";
 import { requireProjectType, requireString } from "../helpers.js";
 import { recordUsage } from "../lib/events.js";
@@ -9,7 +10,7 @@ export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const pt = requireProjectType(app.db, requireString(body, "project_type"));
     const local = Array.isArray(body.specs)
-      ? (body.specs as Array<{ filename: string; version: string }>).filter(
+      ? (body.specs as Array<{ filename: string; version: string; pin?: string }>).filter(
           (s) => typeof s?.filename === "string" && typeof s?.version === "string"
         )
       : [];
@@ -34,7 +35,14 @@ export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
       } else if (serverVersion === file.version) {
         up_to_date.push(file.filename);
       } else {
-        outdated.push({ filename: file.filename, local_version: file.version, latest_version: serverVersion });
+        outdated.push({
+          filename: file.filename,
+          local_version: file.version,
+          latest_version: serverVersion,
+          severity: driftSeverity(file.version, serverVersion),
+          // A latest outside the manifest's caret pin signals a breaking change ahead.
+          within_pin: file.pin ? satisfiesCaret(serverVersion, file.pin) : true,
+        });
       }
     }
     const localNames = new Set(local.map((f) => f.filename));

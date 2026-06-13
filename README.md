@@ -12,11 +12,11 @@ The full product specification lives in [docs/SPEC.md](docs/SPEC.md).
 
 | Package | Purpose |
 | --- | --- |
-| `packages/server` | Fastify API + SQLite storage, review workflow, zip downloads, AI feedback ingestion, prompt stubs, FTS5 search, webhooks, analytics, git push-back |
-| `packages/web` | React management dashboard (specs, diffs, reviews, feedback alerts, templates, settings, search, analytics) |
-| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `check`, `sync`) |
+| `packages/server` | Fastify API + SQLite storage, review workflow, signed bundles, AI feedback/draft-fix/audit/efficacy, FTS5 search, webhooks, analytics, auth + LDAP, git push-back, inbound git sync, Slack/GChat |
+| `packages/web` | React management dashboard (specs, diffs, reviews, feedback, templates, settings, search, analytics, login, efficacy) |
+| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `check`, `sync`, `compile`, `verify`, `audit`) |
 | `packages/mcp` | `specreg-mcp` — MCP stdio server so AI agents read specs / search / file feedback natively |
-| `packages/shared` | Shared TypeScript domain types + semver helpers |
+| `packages/shared` | Shared TypeScript domain types + semver/range helpers |
 
 ## Quick start
 
@@ -24,7 +24,7 @@ The full product specification lives in [docs/SPEC.md](docs/SPEC.md).
 npm install
 npm run build
 
-# Development: API on :4000 (auto-seeds Thinkom demo data on first run)
+# Development: API on :4000 (auto-seeds Acme demo data on first run)
 npm run dev:server
 # In another terminal: web UI on :5173, proxying /api to :4000
 npm run dev:web
@@ -52,8 +52,17 @@ node packages/cli/dist/index.js generate
 node packages/cli/dist/index.js check   # exit 1 on drift — wire into CI
 node packages/cli/dist/index.js sync    # re-pull approved specs when drifted
 
+# Compile the governed spec set into an agent context file.
+node packages/cli/dist/index.js compile --target claude   # or agents | cursor
+
+# Verify local spec hashes + the registry's ed25519 bundle signature.
+node packages/cli/dist/index.js verify
+
+# Ask Claude whether this codebase violates its governed specs (needs server ANTHROPIC_API_KEY).
+node packages/cli/dist/index.js audit --ci   # exit 1 when findings exist
+
 # Flags: --server <url> (or $SPECREG_SERVER), --type <name> to skip the prompt,
-#        --dir (spec directory), --out (generate output)
+#        --dir (spec directory), --out (generate output), --target, --force, --ci
 ```
 
 `npm link -w @specregistry/cli -w @specregistry/mcp` installs `specreg` and `specreg-mcp` onto your PATH.
@@ -70,7 +79,7 @@ feedback without raw HTTP.
 
 - **Hierarchy** — project types are rows, not code. A seeded `scope=global` type holds
   organization-wide specs; every download/agent query bundles global + type specs.
-  The Thinkom types are just seed data (`packages/server/src/seed.ts`).
+  The Acme types are just seed data (`packages/server/src/seed.ts`).
 - **Lifecycle** — new specs start as `0.1.0` drafts and are edited directly. Publishing
   makes them `1.0.0`. Published specs only change through a change request
   (`POST /api/v1/specs/review`): the server stores a unified diff, the spec enters
@@ -92,6 +101,28 @@ feedback without raw HTTP.
 - **Search & analytics** — `GET /api/v1/ai/search?q=` serves section-level FTS5 hits
   to agents and the Search page; usage events (pulls, agent reads, searches, drift
   checks) roll up on the dashboard, including stale-but-published spec detection.
+- **Spec compiler** — `GET /api/v1/specs/:type/compile?target=claude|agents|cursor`
+  renders the governed global + type spec set into the file agents actually load
+  (`CLAUDE.md` / `AGENTS.md` / `.cursorrules`). `specreg sync` regenerates any target
+  the repo has compiled, so the registry is the single source that produces agent context.
+- **Reverse conformance audit** — `POST /api/v1/ai/audit` (and `specreg audit`) asks
+  Claude whether a codebase snapshot *follows* its governed specs, reporting violations
+  with spec/section/file citations. Checks adherence, not just spec currency.
+- **Spec efficacy testing** — `POST /api/v1/ai/efficacy` runs a task with and without
+  the spec in context and grades both, measuring whether a spec actually changes agent
+  output ("earns its tokens" vs "no lift").
+- **Auth, roles & review routing** — local accounts (scrypt) or optional LDAP; roles
+  (admin/reviewer/author/agent) gate approvals and settings; per-project-type required
+  reviewers (CODEOWNERS-style). Bearer tokens / `x-api-key` for agents and CI.
+- **Channels & semver ranges** — approve to a `beta` channel without touching the stable
+  head, then promote; manifests can carry caret pins (`^1.0.0`) and `sync-check` reports
+  drift severity and whether the latest is within the pin.
+- **Signed bundles** — download manifests carry per-file SHA-256 and an ed25519 signature;
+  `specreg verify` checks provenance offline against `/api/v1/meta/public-key`.
+- **Two-way git sync** — a subscribed repo editing `specs/*.md` (HMAC-verified GitHub push
+  webhook) auto-opens a matching change request, closing the last drift hole.
+- **Chat integrations** — webhooks in JSON, **Slack** (with interactive approve/reject
+  buttons → `/api/v1/integrations/slack/actions`), or **Google Chat** format.
 
 ## API surface (v1)
 
@@ -105,14 +136,41 @@ POST /api/v1/reviews/:id/approve        POST /api/v1/reviews/:id/reject
 GET  /api/v1/ai/specs/:projectType      POST /api/v1/ai/feedback
 GET  /api/v1/ai/feedback[?status=]      POST /api/v1/ai/feedback/:id/status
 POST /api/v1/ai/feedback/:id/draft-fix  GET  /api/v1/ai/search?q=[&project_type=]
+POST /api/v1/ai/audit                   POST /api/v1/ai/efficacy
+POST /api/v1/specs/:id/promote          GET  /api/v1/specs/:type/compile?target=
+GET  /api/v1/specs/:type/download[?channel=beta]   GET /api/v1/meta/public-key
 POST /api/v1/cli/stub-prompts           POST /api/v1/cli/sync-check
 GET/POST/PUT/DELETE /api/v1/templates   GET/POST/DELETE /api/v1/webhooks
 GET/POST/DELETE /api/v1/subscriptions   GET /api/v1/sync-jobs · POST /api/v1/sync-jobs/run
-GET  /api/v1/analytics/summary
+GET  /api/v1/analytics/summary          POST /api/v1/auth/login · GET /api/v1/auth/me
+GET/POST /api/v1/auth/users             POST /api/v1/auth/api-keys
+POST /api/v1/integrations/github/webhook   POST /api/v1/integrations/slack/actions
 ```
 
-Server environment variables: `PORT`, `SPECREG_DB`, `ANTHROPIC_API_KEY` (AI draft-fix),
-`GITHUB_TOKEN` (git push-back PRs).
+### Authentication & roles
 
-There is no authentication in this version; author/reviewer names are free-text
-(the web UI keeps an "acting as" identity in localStorage).
+Auth is **off by default** (anonymous access, free-text author names) for the zero-config
+dev experience. Set `SPECREG_AUTH=required` to require a Bearer token / `x-api-key` on every
+non-public route. A local `admin` account is seeded (password from `SPECREG_ADMIN_PASSWORD`,
+default `admin`). Roles: `admin` > `reviewer` > `author` > `agent`; approvals need `reviewer`,
+settings need `admin`. Per-project-type required reviewers restrict who can approve.
+
+Set `LDAP_URL` to authenticate against a directory instead (direct-bind via
+`LDAP_BIND_DN_TEMPLATE`, or service-account search via `LDAP_SEARCH_BASE`/`LDAP_SEARCH_FILTER`);
+map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
+
+### Server environment variables
+
+| Variable | Enables |
+| --- | --- |
+| `PORT`, `SPECREG_DB` | Listen port (4000) and SQLite path |
+| `SPECREG_AUTH=required` | Require auth on all non-public routes |
+| `SPECREG_ADMIN_PASSWORD` | Seeded admin password (default `admin`) |
+| `ANTHROPIC_API_KEY` | AI draft-fix, audit, and efficacy |
+| `GITHUB_TOKEN` | Git push-back PRs + inbound webhook file fetch |
+| `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks |
+| `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions |
+| `LDAP_URL` (+ `LDAP_*`) | Optional LDAP authentication |
+
+Spec download bundles are ed25519-signed; the keypair is generated on first use and stored
+in the database. `specreg verify` checks bundle provenance against the public key.

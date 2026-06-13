@@ -2,6 +2,9 @@
 import { runInit } from "./init.js";
 import { runGenerate } from "./generate.js";
 import { runSync } from "./sync.js";
+import { runCompile, COMPILE_TARGETS, type CompileTarget } from "./compile.js";
+import { runVerify } from "./verify.js";
+import { runAudit } from "./audit.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -10,12 +13,18 @@ Usage:
   specreg generate  Scan this codebase and fetch LLM prompts to generate missing specs
   specreg check     Compare local specs to the registry; exit 1 on drift (CI gate)
   specreg sync      Like check, but pulls the latest approved specs when drift is found
+  specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
+  specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
+  specreg audit     Ask Claude whether this codebase violates its governed specs
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
   --type <name>     Project type name (skips the interactive prompt)
-  --dir <path>      init/check/sync: spec directory (default: specs)
+  --dir <path>      Spec directory (default: specs)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
+  --target <t>      compile: claude | agents | cursor (default: claude)
+  --force           compile: overwrite a non-generated existing file
+  --ci              audit: exit 1 when findings exist
   -h, --help        Show this help
 `;
 
@@ -73,6 +82,28 @@ try {
       server,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       mode: command,
+    });
+  } else if (command === "compile") {
+    const target = typeof flags.target === "string" ? flags.target : "claude";
+    if (!(COMPILE_TARGETS as readonly string[]).includes(target)) {
+      throw new Error(`--target must be one of: ${COMPILE_TARGETS.join(", ")}`);
+    }
+    await runCompile({
+      server,
+      type: typeof flags.type === "string" ? flags.type : undefined,
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      target: target as CompileTarget,
+      force: flags.force === true,
+    });
+  } else if (command === "verify") {
+    const ok = await runVerify({ server, dir: typeof flags.dir === "string" ? flags.dir : "specs" });
+    if (!ok) process.exit(1);
+  } else if (command === "audit") {
+    await runAudit({
+      server,
+      type: typeof flags.type === "string" ? flags.type : undefined,
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      ci: flags.ci === true,
     });
   } else {
     console.error(`Unknown command: ${command}\n`);

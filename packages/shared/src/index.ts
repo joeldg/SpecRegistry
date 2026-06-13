@@ -148,10 +148,45 @@ export interface SyncCheckRequest {
 export interface SyncCheckResponse {
   project_type: string;
   up_to_date: string[];
-  outdated: Array<{ filename: string; local_version: string; latest_version: string }>;
+  outdated: Array<{
+    filename: string;
+    local_version: string;
+    latest_version: string;
+    severity: VersionDelta;
+    within_pin: boolean;
+  }>;
   missing_locally: Array<{ filename: string; latest_version: string }>;
   not_on_server: string[];
   drift: boolean;
+}
+
+/** Strip a prerelease suffix: "1.2.0-beta.1" -> "1.2.0". */
+export function stableOf(version: string): string {
+  return version.replace(/-.*$/, "");
+}
+
+/** Drift severity between two stable semver strings. */
+export function driftSeverity(local: string, latest: string): VersionDelta {
+  const [lMaj, lMin] = stableOf(local).split(".").map(Number);
+  const [sMaj, sMin] = stableOf(latest).split(".").map(Number);
+  if (lMaj !== sMaj) return "major";
+  if (lMin !== sMin) return "minor";
+  return "patch";
+}
+
+/** Caret-range check: "^1.2.0" admits >=1.2.0 <2.0.0 (for major 0: same minor). */
+export function satisfiesCaret(version: string, pin: string): boolean {
+  const match = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(pin.trim());
+  if (!match) return true; // unsupported pin syntax: don't block
+  const [pMaj, pMin, pPat] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const parsed = /^(\d+)\.(\d+)\.(\d+)/.exec(stableOf(version));
+  if (!parsed) return false;
+  const [vMaj, vMin, vPat] = [Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
+  if (vMaj !== pMaj) return false;
+  if (pMaj === 0 && vMin !== pMin) return false;
+  if (vMin > pMin) return true;
+  if (vMin < pMin) return false;
+  return vPat >= pPat;
 }
 
 /** Bump a semantic version string by the given delta. */

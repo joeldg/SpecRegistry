@@ -3,6 +3,8 @@ import path from "node:path";
 import type { SyncCheckResponse } from "@specregistry/shared";
 import { fetchJson } from "./registry.js";
 import { runInit } from "./init.js";
+import { runCompile, savedCompileTargets } from "./compile.js";
+import { runVerify } from "./verify.js";
 
 export interface SyncOptions {
   server: string;
@@ -13,7 +15,7 @@ export interface SyncOptions {
 
 interface Manifest {
   project_type: string;
-  specs: Array<{ filename: string; version: string }>;
+  specs: Array<{ filename: string; version: string; pin?: string }>;
 }
 
 function readManifest(dir: string): Manifest {
@@ -37,7 +39,10 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   console.log(`Project type: ${result.project_type}`);
   console.log(`  Up to date:     ${result.up_to_date.length}`);
   for (const file of result.outdated) {
-    console.log(`  OUTDATED:       ${file.filename}  ${file.local_version} -> ${file.latest_version}`);
+    const pinNote = file.within_pin ? "" : "  ⚠ outside manifest pin (breaking change ahead)";
+    console.log(
+      `  OUTDATED (${file.severity}): ${file.filename}  ${file.local_version} -> ${file.latest_version}${pinNote}`
+    );
   }
   for (const file of result.missing_locally) {
     console.log(`  MISSING LOCAL:  ${file.filename}  (latest ${file.latest_version})`);
@@ -57,5 +62,10 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   }
 
   console.log("\nDrift detected — pulling latest approved specs...");
+  const compileTargets = savedCompileTargets(opts.dir);
   await runInit({ server: opts.server, type: manifest.project_type, dir: opts.dir });
+  await runVerify({ server: opts.server, dir: opts.dir, quiet: false });
+  for (const target of compileTargets) {
+    await runCompile({ server: opts.server, type: manifest.project_type, dir: opts.dir, target, force: true });
+  }
 }

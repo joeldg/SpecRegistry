@@ -33,7 +33,7 @@ The system ensures that both human developers and AI agents operate against unif
 
 * **Organization Hierarchy:**
     * **Global Level:** Specs that apply across the entire organization (e.g., Global Security, General Coding Standards).
-    * **Project Type Level:** Domain-specific groupings (e.g., Thinkom Hardware Specs, Thinkom Firmware Specs, Web App Standard). Fully configurable via UI to support any industry pivot.
+    * **Project Type Level:** Domain-specific groupings (e.g., Acme Hardware Specs, Acme Firmware Specs, Web App Standard). Fully configurable via UI to support any industry pivot.
 * **Specification Lifecycle Management:**
     * Markdown editor with side-by-side preview.
     * Author attribution, date tracking, and strict Semantic Versioning (`MAJOR.MINOR.PATCH`).
@@ -69,7 +69,7 @@ A command-line interface deployed to developer environments to synchronize local
 ```json
 {
   "id": "uuid",
-  "name": "Thinkom Edge Device",
+  "name": "Acme Edge Device",
   "scope": "project_type",
   "industry": "Aerospace/Telecommunications",
   "created_at": "timestamp",
@@ -176,4 +176,4 @@ Output strict markdown. Avoid fluff.
 ## 6. Non-Functional Requirements
 
 * **UI Aesthetic:** High-density, clean, technical dashboard (similar to modern developer tools like Vercel or Linear) optimizing for scannability and quick diff comparison.
-* **Extensibility:** No hardcoded industry structures. The "Thinkom" project patterns must simply be a seeded configuration of the underlying generic hierarchical model.
+* **Extensibility:** No hardcoded industry structures. The "Acme" project patterns must simply be a seeded configuration of the underlying generic hierarchical model.

@@ -12,10 +12,22 @@ import type {
 } from "@specregistry/shared";
 
 export type ProjectTypeWithCount = ProjectType & { spec_count: number };
+export interface EfficacyRun {
+  id: string;
+  spec_id: string;
+  task_prompt: string;
+  score_with: number;
+  score_without: number;
+  improved: number;
+  rationale: string;
+  model: string;
+  created_at: string;
+}
 export type SpecDetail = Spec & {
-  versions: SpecVersion[];
+  versions: Array<SpecVersion & { channel?: string }>;
   change_requests: ChangeRequest[];
   feedback: AgentFeedback[];
+  efficacy_runs: EfficacyRun[];
 };
 export type ReviewRow = ChangeRequest & {
   filename: string;
@@ -51,10 +63,35 @@ export interface SearchHit {
   excerpt: string;
 }
 
+const TOKEN_KEY = "specregistry.token";
+const USERNAME_KEY = "specregistry.username";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getLoginUsername(): string | null {
+  return localStorage.getItem(USERNAME_KEY);
+}
+
+export function setSession(token: string, username: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USERNAME_KEY, username);
+}
+
+export function clearSession(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USERNAME_KEY);
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(url, {
     ...init,
-    headers: init?.body ? { "content-type": "application/json" } : undefined,
+    headers: {
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
   });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
@@ -135,12 +172,28 @@ export const api = {
     request<{ processed: number }>("/api/v1/sync-jobs/run", { method: "POST", body: JSON.stringify({}) }),
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
+
+  login: (username: string, password: string) =>
+    request<{ token: string; user: { username: string; role: string } }>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  promote: (specId: string, version: string, promoted_by: string) =>
+    request<Spec>(`/api/v1/specs/${specId}/promote`, {
+      method: "POST",
+      body: JSON.stringify({ version, promoted_by }),
+    }),
+  runEfficacy: (spec_id: string, task_prompt: string) =>
+    request<EfficacyRun>("/api/v1/ai/efficacy", { method: "POST", body: JSON.stringify({ spec_id, task_prompt }) }),
+  updateProjectType: (id: string, body: Record<string, unknown>) =>
+    request<ProjectType>(`/api/v1/project-types/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 };
 
 const AUTHOR_KEY = "specregistry.author";
 
 export function getAuthor(): string {
-  return localStorage.getItem(AUTHOR_KEY) || "anonymous";
+  // A signed-in identity wins over the free-text "acting as" name.
+  return getLoginUsername() || localStorage.getItem(AUTHOR_KEY) || "anonymous";
 }
 
 export function setAuthor(name: string): void {

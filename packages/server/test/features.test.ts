@@ -34,7 +34,7 @@ describe("sync-check (CLI drift detection)", () => {
       method: "POST",
       url: "/api/v1/cli/sync-check",
       payload: {
-        project_type: "Thinkom Edge Device",
+        project_type: "Acme Edge Device",
         specs: [
           { filename: "DESIGN.md", version: "1.0.0" },
           { filename: "STRUCTURE.md", version: "1.0.0" },
@@ -49,14 +49,14 @@ describe("sync-check (CLI drift detection)", () => {
     expect(clean.json().up_to_date.length).toBe(5);
 
     // Bump DESIGN.md via the review workflow
-    const spec = await findSpec("DESIGN.md", "Thinkom Edge Device");
+    const spec = await findSpec("DESIGN.md", "Acme Edge Device");
     const cr = (
       await app.inject({
         method: "POST",
         url: "/api/v1/specs/review",
         payload: {
           spec_id: spec.id,
-          proposed_content: spec.filename + "\n\n# Thinkom Edge Device — Design Specification\n\n## System Architecture\nv2\n\n## Design Patterns\nv2\n\n## Data Flow\nv2\n",
+          proposed_content: spec.filename + "\n\n# Acme Edge Device — Design Specification\n\n## System Architecture\nv2\n\n## Design Patterns\nv2\n\n## Data Flow\nv2\n",
           version_delta: "minor",
           proposed_by: "joel",
         },
@@ -68,14 +68,20 @@ describe("sync-check (CLI drift detection)", () => {
       method: "POST",
       url: "/api/v1/cli/sync-check",
       payload: {
-        project_type: "Thinkom Edge Device",
+        project_type: "Acme Edge Device",
         specs: [{ filename: "DESIGN.md", version: "1.0.0" }],
       },
     });
     const body = drifted.json();
     expect(body.drift).toBe(true);
     expect(body.outdated).toEqual([
-      { filename: "DESIGN.md", local_version: "1.0.0", latest_version: "1.1.0" },
+      {
+        filename: "DESIGN.md",
+        local_version: "1.0.0",
+        latest_version: "1.1.0",
+        severity: "minor",
+        within_pin: true,
+      },
     ]);
     expect(body.missing_locally.length).toBe(4);
   });
@@ -88,7 +94,7 @@ describe("search", () => {
     expect(res.results[0].filename).toBe("GLOBAL_SECURITY.md");
 
     const scoped = await getJson(
-      "/api/v1/ai/search?q=beam%20steering&project_type=Thinkom%20Edge%20Device"
+      "/api/v1/ai/search?q=beam%20steering&project_type=Acme%20Edge%20Device"
     );
     expect(scoped.results.some((r: any) => r.filename === "DESIGN.md")).toBe(true);
 
@@ -125,7 +131,7 @@ describe("search", () => {
 
 describe("templates & lint", () => {
   it("flags missing required sections on a change request", async () => {
-    const spec = await findSpec("DESIGN.md", "Thinkom Firmware");
+    const spec = await findSpec("DESIGN.md", "Acme Firmware");
     const cr = (
       await app.inject({
         method: "POST",
@@ -193,7 +199,7 @@ describe("webhooks", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("ok"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const spec = await findSpec("API.md", "Thinkom Edge Device");
+    const spec = await findSpec("API.md", "Acme Edge Device");
     const cr = (
       await app.inject({
         method: "POST",
@@ -216,14 +222,14 @@ describe("webhooks", () => {
 describe("git push-back", () => {
   it("queues sync jobs on approval for subscribed repos", async () => {
     const types = await getJson("/api/v1/project-types");
-    const edge = types.find((t: any) => t.name === "Thinkom Edge Device");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
     await app.inject({
       method: "POST",
       url: "/api/v1/subscriptions",
       payload: { project_type_id: edge.id, repo: "joeldg/edge-firmware" },
     });
 
-    const spec = await findSpec("STRUCTURE.md", "Thinkom Edge Device");
+    const spec = await findSpec("STRUCTURE.md", "Acme Edge Device");
     const cr = (
       await app.inject({
         method: "POST",
@@ -242,7 +248,7 @@ describe("git push-back", () => {
 
   it("global spec approval fans out to all subscriptions", async () => {
     const types = await getJson("/api/v1/project-types");
-    for (const name of ["Thinkom Edge Device", "Web App Standard"]) {
+    for (const name of ["Acme Edge Device", "Web App Standard"]) {
       const t = types.find((x: any) => x.name === name);
       await app.inject({
         method: "POST",
@@ -292,7 +298,7 @@ describe("AI draft-fix", () => {
 
 describe("usage analytics", () => {
   it("records downloads and agent reads in the summary", async () => {
-    await app.inject({ method: "GET", url: "/api/v1/specs/Thinkom%20Edge%20Device/download" });
+    await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/download" });
     await app.inject({ method: "GET", url: "/api/v1/ai/specs/Web%20App%20Standard" });
     await app.inject({ method: "GET", url: "/api/v1/ai/specs/Web%20App%20Standard" });
     const summary = await getJson("/api/v1/analytics/summary");

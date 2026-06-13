@@ -29,7 +29,11 @@
       "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js sync)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{for\\(const line of d.trim\\(\\).split\\('\\\\n'\\)\\){const m=JSON.parse\\(line\\);if\\(m.id===2\\)console.log\\('tools:',m.result.tools.map\\(t=>t.name\\).join\\(', '\\)\\);if\\(m.id===3\\)console.log\\('search result sample:',JSON.parse\\(m.result.content[0].text\\).results[0].filename\\)}}\\)\")",
       "Bash(git add *)",
-      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add closed-loop governance features: sync/CI gate, MCP server, AI draft-fix, and more *)"
+      "Bash(git -c user.name=joeldg -c user.email=joeldg@gmail.com commit -q -m 'Add closed-loop governance features: sync/CI gate, MCP server, AI draft-fix, and more *)",
+      "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js compile --target claude)",
+      "Bash(node /Users/joeldg/Projects/SDDManager/packages/cli/dist/index.js verify)",
+      "Bash(rm -f /Users/joeldg/Projects/SDDManager/specregistry.db /Users/joeldg/Projects/SDDManager/specregistry.db-*)",
+      "Bash(rm -rf /tmp/specreg-demo)"
     ]
   }
 }

@@ -12,8 +12,42 @@ interface WebhookRow {
   id: string;
   url: string;
   events: string;
-  format: "json" | "slack";
+  format: "json" | "slack" | "gchat";
   active: number;
+}
+
+/** Slack Block Kit payload; pending reviews get interactive approve/reject buttons. */
+function slackPayload(event: WebhookEvent, summary: string, data: Record<string, unknown>) {
+  const text = `*SpecRegistry* · ${event}\n${summary}`;
+  if (event !== "review.submitted" || !data.change_request_id) {
+    return { text };
+  }
+  // Buttons require a Slack app with interactivity pointed at /api/v1/integrations/slack/actions.
+  return {
+    text,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text } },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Approve" },
+            style: "primary",
+            action_id: "specreg_approve",
+            value: `approve:${data.change_request_id}`,
+          },
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Reject" },
+            style: "danger",
+            action_id: "specreg_reject",
+            value: `reject:${data.change_request_id}`,
+          },
+        ],
+      },
+    ],
+  };
 }
 
 /**
@@ -37,8 +71,10 @@ export async function dispatchWebhooks(
     hooks.map(async (hook) => {
       const body =
         hook.format === "slack"
-          ? { text: `*SpecRegistry* · ${event}\n${summary}` }
-          : { event, summary, data, timestamp: now() };
+          ? slackPayload(event, summary, data)
+          : hook.format === "gchat"
+            ? { text: `*SpecRegistry* · ${event}\n${summary}` } // Google Chat incoming-webhook format
+            : { event, summary, data, timestamp: now() };
       try {
         await fetch(hook.url, {
           method: "POST",

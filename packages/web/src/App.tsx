@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
-import { getAuthor, setAuthor } from "./api";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { clearSession, getAuthor, getLoginUsername, setAuthor } from "./api";
+import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import SpecsPage from "./pages/SpecsPage";
 import SpecDetailPage from "./pages/SpecDetailPage";
@@ -51,14 +52,36 @@ export default function App() {
         </NavLink>
         <div className="spacer" />
         <div className="author-box">
-          <label htmlFor="author">Acting as</label>
-          <input
-            id="author"
-            type="text"
-            value={author}
-            style={{ width: "100%" }}
-            onChange={(e) => setAuthorState(e.target.value || "anonymous")}
-          />
+          {getLoginUsername() ? (
+            <>
+              <label>Signed in</label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="mono">{getLoginUsername()}</span>
+                <button
+                  onClick={() => {
+                    clearSession();
+                    window.location.href = "/";
+                  }}
+                >
+                  Out
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label htmlFor="author">Acting as</label>
+              <input
+                id="author"
+                type="text"
+                value={author}
+                style={{ width: "100%" }}
+                onChange={(e) => setAuthorState(e.target.value || "anonymous")}
+              />
+              <Link to="/login" className="faint" style={{ fontSize: 11 }}>
+                Sign in →
+              </Link>
+            </>
+          )}
         </div>
       </nav>
       <main className="main">
@@ -73,6 +96,7 @@ export default function App() {
           <Route path="/project-types" element={<ProjectTypesPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/login" element={<LoginPage />} />
         </Routes>
       </main>
     </div>

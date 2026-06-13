@@ -1,5 +1,6 @@
 import type { Db } from "./db.js";
 import { now, uuid } from "./db.js";
+import { createUser } from "./lib/auth.js";
 
 const DESIGN_STUB = `You are an expert software architect. Analyze the provided file structure and codebase context:
 [CONTEXT]
@@ -110,9 +111,22 @@ _List the main entry points and configuration files._
   );
 }
 
-/** Seeds the Thinkom demo configuration. No-op if any project type already exists. */
+/** Bootstrap admin for local auth; password from SPECREG_ADMIN_PASSWORD (default "admin"). */
+function seedAdmin(db: Db): void {
+  const existing = db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number };
+  if (existing.n > 0) return;
+  createUser(db, {
+    username: "admin",
+    role: "admin",
+    password: process.env.SPECREG_ADMIN_PASSWORD ?? "admin",
+    display_name: "Administrator",
+  });
+}
+
+/** Seeds the Acme demo configuration. No-op if any project type already exists. */
 export function seed(db: Db): boolean {
   seedTemplates(db);
+  seedAdmin(db);
   const existing = db.prepare("SELECT COUNT(*) AS n FROM project_types").get() as { n: number };
   if (existing.n > 0) return false;
 
@@ -161,14 +175,14 @@ No specification becomes active without an approved review in SpecRegistry.
 
   const edgeId = insertProjectType(
     db,
-    "Thinkom Edge Device",
+    "Acme Edge Device",
     "project_type",
     "Aerospace/Telecommunications",
     "Phased-array antenna edge devices: embedded controllers, RF front-end management."
   );
   insertPublishedSpec(db, edgeId, {
     filename: "DESIGN.md",
-    content: `# Thinkom Edge Device — Design Specification
+    content: `# Acme Edge Device — Design Specification
 
 ## System Architecture
 Edge devices are composed of three planes:
@@ -186,7 +200,7 @@ Telemetry flows MCU → management plane at 1 Hz; alarms are event-driven.
   });
   insertPublishedSpec(db, edgeId, {
     filename: "STRUCTURE.md",
-    content: `# Thinkom Edge Device — Repository Structure
+    content: `# Acme Edge Device — Repository Structure
 
 | Path | Purpose |
 | --- | --- |
@@ -205,7 +219,7 @@ Telemetry flows MCU → management plane at 1 Hz; alarms are event-driven.
   });
   insertPublishedSpec(db, edgeId, {
     filename: "API.md",
-    content: `# Thinkom Edge Device — Management API
+    content: `# Acme Edge Device — Management API
 
 ## Transport
 CoAP over DTLS on the management plane interface. JSON payloads, snake_case keys.
@@ -222,14 +236,14 @@ All commands must be idempotent; retries are expected on lossy links.
 
   const fwId = insertProjectType(
     db,
-    "Thinkom Firmware",
+    "Acme Firmware",
     "project_type",
     "Aerospace/Telecommunications",
     "Shared firmware platform: RTOS components, drivers, and build infrastructure."
   );
   insertPublishedSpec(db, fwId, {
     filename: "DESIGN.md",
-    content: `# Thinkom Firmware Platform — Design Specification
+    content: `# Acme Firmware Platform — Design Specification
 
 ## System Architecture
 A layered RTOS platform: board support packages at the bottom, a hardware
@@ -245,7 +259,7 @@ OTA images are signed and staged to the inactive bank; swap occurs on verified b
   });
   insertPublishedSpec(db, fwId, {
     filename: "STRUCTURE.md",
-    content: `# Thinkom Firmware Platform — Repository Structure
+    content: `# Acme Firmware Platform — Repository Structure
 
 | Path | Purpose |
 | --- | --- |

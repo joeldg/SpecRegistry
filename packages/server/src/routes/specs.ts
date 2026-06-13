@@ -11,9 +11,12 @@ import {
   requireString,
 } from "../helpers.js";
 import { createChangeRequest } from "../lib/changes.js";
+import { bundleSpecs, compileBundle, type CompileTarget } from "../lib/compile.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
+import { enqueueSyncJobs } from "../lib/github.js";
 import { lintContent } from "../lib/lint.js";
 import { reindexSpec } from "../lib/search.js";
+import { sha256, signManifest } from "../lib/sign.js";
 
 const SUMMARY_SELECT = `
   SELECT s.id, s.project_type_id, s.filename, s.current_version, s.status,
@@ -40,17 +43,12 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Zipped folder of the latest published specs for a project type (+ all global specs).
+  // ?channel=beta overlays the newest beta versions; the manifest is ed25519-signed.
   app.get("/specs/:key/download", async (req, reply) => {
     const { key } = req.params as { key: string };
+    const { channel } = req.query as { channel?: string };
     const pt = requireProjectType(app.db, key);
-    const specs = app.db
-      .prepare(
-        `SELECT s.* FROM specs s
-         JOIN project_types pt ON pt.id = s.project_type_id
-         WHERE s.status = 'published' AND (pt.id = ? OR pt.scope = 'global')
-         ORDER BY pt.scope = 'global' DESC, s.filename`
-      )
-      .all(pt.id) as Spec[];
+    const specs = bundleSpecs(app.db, pt.id, channel ?? "stable");
     if (specs.length === 0) throw new HttpError(404, `No published specs for: ${pt.name}`);
 
     const zip = new AdmZip();
@@ -58,15 +56,18 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     for (const spec of specs) {
       zip.addFile(spec.filename, Buffer.from(spec.content, "utf8"));
     }
-    const manifest = specs.map((s) => ({
-      filename: s.filename,
-      version: s.current_version,
-      project_type: s.project_type_id === pt.id ? pt.name : "Global",
-    }));
-    zip.addFile(
-      ".specregistry.json",
-      Buffer.from(JSON.stringify({ project_type: pt.name, fetched_at: now(), specs: manifest }, null, 2))
-    );
+    const manifest = signManifest(app.db, {
+      project_type: pt.name,
+      channel: channel ?? "stable",
+      fetched_at: now(),
+      specs: specs.map((s) => ({
+        filename: s.filename,
+        version: s.current_version,
+        project_type: s.project_type_id === pt.id ? pt.name : "Global",
+        sha256: sha256(s.content),
+      })),
+    });
+    zip.addFile(".specregistry.json", Buffer.from(JSON.stringify(manifest, null, 2)));
 
     recordUsage(app.db, "download", pt.id);
     reply
@@ -88,7 +89,10 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     const feedback = app.db
       .prepare("SELECT * FROM agent_feedback WHERE spec_id = ? ORDER BY created_at DESC")
       .all(spec.id);
-    return { ...spec, versions, change_requests, feedback };
+    const efficacy_runs = app.db
+      .prepare("SELECT * FROM efficacy_runs WHERE spec_id = ? ORDER BY created_at DESC")
+      .all(spec.id);
+    return { ...spec, versions, change_requests, feedback, efficacy_runs };
   });
 
   // Create a new draft spec (0.1.0). Publishing records the first immutable version.
@@ -163,6 +167,62 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       version,
     });
     return { ...published, lint };
+  });
+
+  // Compile the governed spec set into an agent context file (CLAUDE.md / AGENTS.md / .cursorrules).
+  app.get("/specs/:key/compile", async (req) => {
+    const { key } = req.params as { key: string };
+    const { target, channel } = req.query as { target?: string; channel?: string };
+    const pt = requireProjectType(app.db, key);
+    const compileTarget = (target ?? "claude") as CompileTarget;
+    if (!["claude", "agents", "cursor"].includes(compileTarget)) {
+      throw new HttpError(400, "target must be one of: claude, agents, cursor");
+    }
+    recordUsage(app.db, "download", pt.id, `compile:${compileTarget}`);
+    return compileBundle(app.db, pt, compileTarget, channel ?? "stable");
+  });
+
+  // Promote a beta version to the stable head.
+  app.post("/specs/:key/promote", async (req) => {
+    const { key } = req.params as { key: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const promotedBy = requireString(body, "promoted_by");
+    const version = requireString(body, "version");
+    const spec = requireSpec(app.db, key);
+    const beta = app.db
+      .prepare("SELECT * FROM spec_versions WHERE spec_id = ? AND version = ? AND channel != 'stable'")
+      .get(spec.id, version) as SpecVersion | undefined;
+    if (!beta) throw new HttpError(404, `No beta version ${version} for ${spec.filename}`);
+
+    const stableVersion = version.replace(/-.*$/, "");
+    const conflict = app.db
+      .prepare("SELECT id FROM spec_versions WHERE spec_id = ? AND version = ?")
+      .get(spec.id, stableVersion);
+    if (conflict) throw new HttpError(409, `Stable version ${stableVersion} already exists`);
+
+    const ts = now();
+    const promote = app.db.transaction(() => {
+      app.db
+        .prepare("UPDATE specs SET content = ?, current_version = ?, updated_by = ?, updated_at = ? WHERE id = ?")
+        .run(beta.content, stableVersion, promotedBy, ts, spec.id);
+      app.db
+        .prepare(
+          `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at, channel)
+           VALUES (?, ?, ?, ?, ?, ?, 'stable')`
+        )
+        .run(uuid(), spec.id, stableVersion, beta.content, promotedBy, ts);
+    });
+    promote();
+
+    const updated = requireSpec(app.db, spec.id);
+    reindexSpec(app.db, updated);
+    enqueueSyncJobs(app.db, updated);
+    await dispatchWebhooks(app.db, "spec.published", `${updated.filename} v${stableVersion} promoted from ${version}`, {
+      spec_id: updated.id,
+      filename: updated.filename,
+      version: stableVersion,
+    });
+    return updated;
   });
 
   // Submit a markdown change request; the spec enters pending_review.

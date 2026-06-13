@@ -28,7 +28,7 @@ describe("project types & specs", () => {
     const types = await getJson("/api/v1/project-types");
     expect(types.length).toBe(4);
     expect(types[0].scope).toBe("global");
-    expect(types.map((t: any) => t.name)).toContain("Thinkom Edge Device");
+    expect(types.map((t: any) => t.name)).toContain("Acme Edge Device");
   });
 
   it("lists all specs as summaries with counts", async () => {
@@ -76,7 +76,7 @@ describe("project types & specs", () => {
 
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
-    const edge = types.find((t: any) => t.name === "Thinkom Edge Device");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/specs",
@@ -87,7 +87,7 @@ describe("project types & specs", () => {
 });
 
 describe("review workflow", () => {
-  async function firstSpec(filename = "DESIGN.md", typeName = "Thinkom Edge Device") {
+  async function firstSpec(filename = "DESIGN.md", typeName = "Acme Edge Device") {
     const specs = await getJson("/api/v1/specs");
     return specs.find((s: any) => s.filename === filename && s.project_type_name === typeName);
   }
@@ -99,7 +99,7 @@ describe("review workflow", () => {
       url: "/api/v1/specs/review",
       payload: {
         spec_id: spec.id,
-        proposed_content: "# Thinkom Edge Device — Design Specification\n\nRewritten guidance.\n",
+        proposed_content: "# Acme Edge Device — Design Specification\n\nRewritten guidance.\n",
         version_delta: "minor",
         proposed_by: "joel",
         summary: "Simplify design doc",
@@ -223,7 +223,7 @@ describe("AI feedback loop", () => {
   });
 
   it("serves published specs (global + type) to agents", async () => {
-    const res = await getJson("/api/v1/ai/specs/Thinkom%20Edge%20Device");
+    const res = await getJson("/api/v1/ai/specs/Acme%20Edge%20Device");
     const filenames = res.specs.map((s: any) => s.filename);
     expect(filenames).toContain("GLOBAL_SECURITY.md");
     expect(filenames).toContain("DESIGN.md");
@@ -233,7 +233,7 @@ describe("AI feedback loop", () => {
 
 describe("CLI support endpoints", () => {
   it("returns a zip with global + project-type specs and a manifest", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/v1/specs/Thinkom%20Edge%20Device/download" });
+    const res = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/download" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("application/zip");
     const zip = new AdmZip(res.rawPayload);
@@ -242,7 +242,7 @@ describe("CLI support endpoints", () => {
     expect(names).toContain("GLOBAL_SECURITY.md");
     expect(names).toContain(".specregistry.json");
     const manifest = JSON.parse(zip.readAsText(".specregistry.json"));
-    expect(manifest.project_type).toBe("Thinkom Edge Device");
+    expect(manifest.project_type).toBe("Acme Edge Device");
     expect(manifest.specs.length).toBe(5);
   });
 

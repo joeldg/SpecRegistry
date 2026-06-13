@@ -12,7 +12,7 @@ const port = Number(process.env.PORT ?? 4000);
 
 const db = createDb(dbPath);
 if (seed(db)) {
-  console.log("Seeded database with Thinkom demo configuration");
+  console.log("Seeded database with Acme demo configuration");
 }
 
 const app = await buildApp(db, { logger: true });

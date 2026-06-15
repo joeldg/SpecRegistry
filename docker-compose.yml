@@ -1,0 +1,22 @@
+services:
+  specregistry:
+    build: .
+    image: specregistry:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      PORT: 4000
+      SPECREG_DB: /data/specregistry.db
+      SPECREG_PUBLIC_URL: ${SPECREG_PUBLIC_URL:-http://localhost:4000}
+      SPECREG_AUTH: ${SPECREG_AUTH:-}
+      SPECREG_ADMIN_PASSWORD: ${SPECREG_ADMIN_PASSWORD:-admin}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+    volumes:
+      - specregistry-data:/data
+
+volumes:
+  specregistry-data:

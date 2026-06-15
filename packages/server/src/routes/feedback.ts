@@ -4,6 +4,7 @@ import { now, uuid } from "../db.js";
 import { HttpError, requireOneOf, requireProjectType, requireSpec, requireString } from "../helpers.js";
 import { draftFix } from "../lib/aifix.js";
 import { mcpConfig, mcpSkillMarkdown } from "../lib/agentPack.js";
+import { publicUrl } from "../lib/publicUrl.js";
 import { auditCodebase, runEfficacy, type AuditInput } from "../lib/audit.js";
 import { createChangeRequest } from "../lib/changes.js";
 import { uuid as makeId } from "../db.js";
@@ -16,7 +17,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ai/mcp-guide/:projectType?", async (req) => {
     const { projectType } = req.params as { projectType?: string };
     const pt = projectType ? requireProjectType(app.db, projectType) : undefined;
-    const serverUrl = "http://localhost:4000";
+    const serverUrl = publicUrl(req);
     return {
       filename: "SPECREGISTRY_MCP_SKILL.md",
       project_type: pt?.name ?? null,

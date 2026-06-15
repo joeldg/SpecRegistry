@@ -21,6 +21,7 @@ afterEach(async () => {
   delete process.env.SLACK_SIGNING_SECRET;
   delete process.env.LDAP_URL;
   delete process.env.LDAP_DEFAULT_ROLE;
+  delete process.env.SPECREG_PUBLIC_URL;
 });
 
 async function getJson(target: FastifyInstance, url: string) {
@@ -396,15 +397,18 @@ describe("LDAP settings", () => {
 
 describe("agent MCP guide", () => {
   it("returns a feedable guide and matching MCP config for a project type", async () => {
+    process.env.SPECREG_PUBLIC_URL = "https://specreg.example.com";
     const guide = await getJson(app, "/api/v1/ai/mcp-guide/Acme%20Edge%20Device");
     expect(guide.filename).toBe("SPECREGISTRY_MCP_SKILL.md");
     expect(guide.project_type).toBe("Acme Edge Device");
     expect(guide.content).toContain("SpecRegistry MCP Skill");
     expect(guide.content).toContain("get_specs");
+    expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });
 
   it("returns a downloadable agent pack with generated files and MCP setup", async () => {
+    process.env.SPECREG_PUBLIC_URL = "https://specreg.example.com";
     const res = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
     expect(res.statusCode).toBe(200);
     const zip = new AdmZip(res.rawPayload);
@@ -415,9 +419,9 @@ describe("agent MCP guide", () => {
     expect(names).toContain(".mcp.json");
     expect(names).toContain("SPECREGISTRY_MCP_SKILL.md");
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("report_spec_feedback");
-    expect(JSON.parse(zip.readAsText(".mcp.json")).mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe(
-      "Acme Edge Device"
-    );
+    const mcp = JSON.parse(zip.readAsText(".mcp.json"));
+    expect(mcp.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
+    expect(mcp.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });
 });
 

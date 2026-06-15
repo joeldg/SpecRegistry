@@ -41,6 +41,21 @@ the defaults; the SQLite file defaults to `./specregistry.db`).
 npm test   # server API suite (vitest)
 ```
 
+## Docker
+
+For a containerized registry:
+
+```sh
+cp .env.example .env
+# edit SPECREG_PUBLIC_URL to the URL agents/developers can reach
+docker compose up --build
+```
+
+`SPECREG_PUBLIC_URL` is important for server deployments. Agent packs and MCP guide
+content use it when generating `.mcp.json` and `SPECREGISTRY_MCP_SKILL.md`. If omitted,
+the server falls back to forwarded request headers and then `http://localhost:4000`.
+Persisted SQLite data lives in the `specregistry-data` Docker volume by default.
+
 ## Sample data
 
 Beyond the built-in Acme demo seed, an **AI-SDD sample spec pack** populates a running
@@ -197,6 +212,7 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | Variable | Enables |
 | --- | --- |
 | `PORT`, `SPECREG_DB` | Listen port (4000) and SQLite path |
+| `SPECREG_PUBLIC_URL` | Externally reachable URL used in agent packs and MCP guides |
 | `SPECREG_AUTH=required` | Require auth on all non-public routes |
 | `SPECREG_ADMIN_PASSWORD` | Seeded admin password (default `admin`) |
 | `ANTHROPIC_API_KEY` | AI draft-fix, audit, and efficacy |

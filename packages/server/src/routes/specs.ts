@@ -13,6 +13,7 @@ import {
 import { createChangeRequest } from "../lib/changes.js";
 import { mcpConfig, mcpSkillMarkdown } from "../lib/agentPack.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
+import { publicUrl } from "../lib/publicUrl.js";
 import { bundleSpecs, compileBundle, type CompileTarget } from "../lib/compile.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { enqueueSyncJobs } from "../lib/github.js";
@@ -202,7 +203,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       const compiled = compileBundle(app.db, pt, target, channel ?? "stable");
       zip.addFile(compiled.target_filename, Buffer.from(compiled.content, "utf8"));
     }
-    const serverUrl = "http://localhost:4000";
+    const serverUrl = publicUrl(req);
     zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt), null, 2) + "\n", "utf8"));
     zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt), "utf8"));
     recordUsage(app.db, "download", pt.id, "agent-pack");

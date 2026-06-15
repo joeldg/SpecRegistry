@@ -52,6 +52,7 @@ Every governed repository should follow this workflow.
 
 2. **Load Agent Context**
    Agents should use the SpecRegistry MCP server and call `get_specs` before code changes. If an agent cannot use MCP, provide the generated `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, or the full agent pack from `GET /api/v1/specs/:type/agent-pack`.
+   In server or Docker deployments, configure `SPECREG_PUBLIC_URL` so generated MCP config points to the reachable registry URL rather than the container's local bind address.
 
 3. **Check Drift**
    CI should run `specreg check`. Drift is a governance failure, not a style nit. The implementation may be correct against an old spec and wrong against the current one.

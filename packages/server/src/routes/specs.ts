@@ -11,6 +11,7 @@ import {
   requireString,
 } from "../helpers.js";
 import { createChangeRequest } from "../lib/changes.js";
+import { mcpConfig, mcpSkillMarkdown } from "../lib/agentPack.js";
 import { bundleSpecs, compileBundle, type CompileTarget } from "../lib/compile.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { enqueueSyncJobs } from "../lib/github.js";
@@ -180,6 +181,26 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     }
     recordUsage(app.db, "download", pt.id, `compile:${compileTarget}`);
     return compileBundle(app.db, pt, compileTarget, channel ?? "stable");
+  });
+
+  // One-click agent onboarding pack: generated agent files, MCP config, and MCP skill guide.
+  app.get("/specs/:key/agent-pack", async (req, reply) => {
+    const { key } = req.params as { key: string };
+    const { channel } = req.query as { channel?: string };
+    const pt = requireProjectType(app.db, key);
+    const zip = new AdmZip();
+    for (const target of ["claude", "agents", "cursor"] as const) {
+      const compiled = compileBundle(app.db, pt, target, channel ?? "stable");
+      zip.addFile(compiled.target_filename, Buffer.from(compiled.content, "utf8"));
+    }
+    const serverUrl = "http://localhost:4000";
+    zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt), null, 2) + "\n", "utf8"));
+    zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt), "utf8"));
+    recordUsage(app.db, "download", pt.id, "agent-pack");
+    reply
+      .header("content-type", "application/zip")
+      .header("content-disposition", `attachment; filename="${pt.name.replace(/[^\w.-]+/g, "_")}-agent-pack.zip"`);
+    return zip.toBuffer();
   });
 
   // Promote a beta version to the stable head.

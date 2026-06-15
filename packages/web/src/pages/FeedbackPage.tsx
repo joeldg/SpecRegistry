@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type FeedbackRow } from "../api";
+import { api, type FeedbackCluster, type FeedbackRow } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 export default function FeedbackPage() {
   const [rows, setRows] = useState<FeedbackRow[]>([]);
+  const [clusters, setClusters] = useState<FeedbackCluster[]>([]);
   const [filter, setFilter] = useState("open");
   const [error, setError] = useState<string>();
   const [drafting, setDrafting] = useState<string>();
   const navigate = useNavigate();
 
   const reload = useCallback(() => {
-    api
-      .feedback(filter === "all" ? undefined : filter)
-      .then(setRows)
+    Promise.all([
+      api.feedback(filter === "all" ? undefined : filter),
+      api.feedbackClusters(filter === "all" ? undefined : filter),
+    ])
+      .then(([feedback, grouped]) => {
+        setRows(feedback);
+        setClusters(grouped);
+      })
       .catch((e) => setError(e.message));
   }, [filter]);
 
@@ -53,6 +59,36 @@ export default function FeedbackPage() {
         </select>
       </div>
       {error && <div className="error-banner">{error}</div>}
+
+      {clusters.length > 0 && (
+        <div className="section">
+          <h2>Clusters</h2>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Count</th>
+                <th>Type</th>
+                <th>Spec</th>
+                <th>Sample</th>
+                <th>Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clusters.slice(0, 8).map((c) => (
+                <tr key={c.key} className="click" onClick={() => navigate(`/specs/${c.spec_id}`)}>
+                  <td className="mono">{c.count}</td>
+                  <td>
+                    <StatusBadge status={c.error_type} />
+                  </td>
+                  <td className="mono">{c.filename}</td>
+                  <td className="feedback-desc dim">{c.sample_description}</td>
+                  <td className="faint">{timeAgo(c.latest_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="empty">No {filter === "all" ? "" : filter + " "}feedback.</div>

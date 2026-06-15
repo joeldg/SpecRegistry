@@ -3,6 +3,7 @@ import type { AgentFeedback, FeedbackErrorType, Spec } from "@specregistry/share
 import { now, uuid } from "../db.js";
 import { HttpError, requireOneOf, requireProjectType, requireSpec, requireString } from "../helpers.js";
 import { draftFix } from "../lib/aifix.js";
+import { mcpConfig, mcpSkillMarkdown } from "../lib/agentPack.js";
 import { auditCodebase, runEfficacy, type AuditInput } from "../lib/audit.js";
 import { createChangeRequest } from "../lib/changes.js";
 import { uuid as makeId } from "../db.js";
@@ -16,52 +17,11 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { projectType } = req.params as { projectType?: string };
     const pt = projectType ? requireProjectType(app.db, projectType) : undefined;
     const serverUrl = "http://localhost:4000";
-    const mcpConfig = {
-      mcpServers: {
-        specregistry: {
-          command: "specreg-mcp",
-          args: [],
-          env: {
-            SPECREG_SERVER: serverUrl,
-            ...(pt ? { SPECREG_PROJECT_TYPE: pt.name } : {}),
-          },
-        },
-      },
-    };
-    const content = `# SpecRegistry MCP Skill
-
-Use this skill when working in a repository governed by SpecRegistry.
-
-## Configure MCP
-
-Add this server to the repository's MCP configuration:
-
-\`\`\`json
-${JSON.stringify(mcpConfig, null, 2)}
-\`\`\`
-
-If the project type is not preconfigured, call \`list_project_types\` first and choose the best match.
-
-## Required Workflow
-
-1. Before making code changes, call \`get_specs\` for the project type. Treat global specs and project-type specs as governing instructions.
-2. Use \`search_specs\` when you need focused guidance from a large spec set.
-3. If specs are ambiguous, contradictory, or outdated, call \`report_spec_feedback\` with the affected \`spec_id\`, issue type, description, and relevant code or spec context.
-4. Do not silently ignore a governed requirement. Either follow it or report feedback.
-5. When a local repo has run \`specreg init\`, respect the checked-in \`specs/.specregistry.json\` manifest and use \`specreg check\` or \`specreg sync\` to detect drift.
-
-## MCP Tools
-
-- \`list_project_types\`: list configured project types.
-- \`get_specs\`: fetch full markdown specs for a project type, including global specs.
-- \`search_specs\`: search matching spec sections.
-- \`report_spec_feedback\`: file ambiguity, contradiction, or outdated-guidance feedback for review.
-`;
     return {
       filename: "SPECREGISTRY_MCP_SKILL.md",
       project_type: pt?.name ?? null,
-      mcp_config: mcpConfig,
-      content,
+      mcp_config: mcpConfig(serverUrl, pt),
+      content: mcpSkillMarkdown(serverUrl, pt),
     };
   });
 
@@ -176,6 +136,49 @@ If the project type is not preconfigured, call \`list_project_types\` first and 
       return app.db.prepare(`${base} WHERE f.status = ? ORDER BY f.created_at DESC`).all(status);
     }
     return app.db.prepare(`${base} ORDER BY f.created_at DESC`).all();
+  });
+
+  app.get("/ai/feedback/clusters", async (req) => {
+    const { status } = req.query as { status?: string };
+    const rows = app.db
+      .prepare(
+        `SELECT f.*, s.filename, pt.name AS project_type_name
+         FROM agent_feedback f
+         JOIN specs s ON s.id = f.spec_id
+         JOIN project_types pt ON pt.id = s.project_type_id
+         ${status ? "WHERE f.status = ?" : ""}
+         ORDER BY f.created_at DESC`
+      )
+      .all(...(status ? [status] : [])) as Array<AgentFeedback & { filename: string; project_type_name: string }>;
+    const clusters = new Map<string, Array<(typeof rows)[number]>>();
+    for (const row of rows) {
+      const normalized = row.description
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .split(/\s+/)
+        .filter((word) => word.length > 3)
+        .slice(0, 10)
+        .join(" ");
+      const key = `${row.spec_id}:${row.error_type}:${normalized}`;
+      clusters.set(key, [...(clusters.get(key) ?? []), row]);
+    }
+    return [...clusters.entries()]
+      .map(([key, items]) => ({
+        key,
+        spec_id: items[0].spec_id,
+        filename: items[0].filename,
+        project_type_name: items[0].project_type_name,
+        error_type: items[0].error_type,
+        count: items.length,
+        status_counts: items.reduce<Record<string, number>>((acc, item) => {
+          acc[item.status] = (acc[item.status] ?? 0) + 1;
+          return acc;
+        }, {}),
+        latest_at: items[0].created_at,
+        sample_description: items[0].description,
+        feedback_ids: items.map((item) => item.id),
+      }))
+      .sort((a, b) => b.count - a.count || b.latest_at.localeCompare(a.latest_at));
   });
 
   // Reverse conformance: does a codebase snapshot follow its governed specs?

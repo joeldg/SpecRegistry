@@ -229,6 +229,27 @@ describe("AI feedback loop", () => {
     expect(filenames).toContain("DESIGN.md");
     expect(res.specs[0]).toHaveProperty("content");
   });
+
+  it("clusters repeated agent feedback by spec, type, and complaint text", async () => {
+    const specs = await getJson("/api/v1/specs");
+    const spec = specs.find((s: any) => s.filename === "GLOBAL_SECURITY.md");
+    for (const agent of ["agent-a", "agent-b"]) {
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/ai/feedback",
+        payload: {
+          spec_id: spec.id,
+          agent_identifier: agent,
+          error_type: "ambiguity",
+          description: "TLS firewall guidance is ambiguous for local development.",
+        },
+      });
+    }
+    const clusters = await getJson("/api/v1/ai/feedback/clusters?status=open");
+    expect(clusters[0].filename).toBe("GLOBAL_SECURITY.md");
+    expect(clusters[0].count).toBe(2);
+    expect(clusters[0].feedback_ids.length).toBe(2);
+  });
 });
 
 describe("CLI support endpoints", () => {

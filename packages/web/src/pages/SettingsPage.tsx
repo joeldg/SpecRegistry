@@ -3,6 +3,7 @@ import type { Webhook } from "@specregistry/shared";
 import {
   api,
   type ApiKeyRow,
+  type ApprovalPolicyRow,
   type LdapConfig,
   type McpGuide,
   type ProjectTypeWithCount,
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [ldap, setLdap] = useState<LdapConfig>();
   const [mcpGuide, setMcpGuide] = useState<McpGuide>();
+  const [policies, setPolicies] = useState<ApprovalPolicyRow[]>([]);
   const [error, setError] = useState<string>();
   const [issuedToken, setIssuedToken] = useState<string>();
   const [ldapNotice, setLdapNotice] = useState<string>();
@@ -44,6 +46,10 @@ export default function SettingsPage() {
   const [ldapTestPassword, setLdapTestPassword] = useState("");
   const [ldapGroups, setLdapGroups] = useState("");
   const [mcpTypeName, setMcpTypeName] = useState("");
+  const [policyTypeId, setPolicyTypeId] = useState("");
+  const [policyGlob, setPolicyGlob] = useState("*.md");
+  const [policyApprovals, setPolicyApprovals] = useState(2);
+  const [policyReviewers, setPolicyReviewers] = useState("");
 
   const reload = useCallback(() => {
     Promise.all([
@@ -54,8 +60,9 @@ export default function SettingsPage() {
       api.users(),
       api.apiKeys(),
       api.ldapConfig(),
+      api.approvalPolicies(),
     ])
-      .then(([w, s, j, t, u, k, l]) => {
+      .then(([w, s, j, t, u, k, l, p]) => {
         setWebhooks(w);
         setSubs(s);
         setJobs(j);
@@ -63,9 +70,11 @@ export default function SettingsPage() {
         setUsers(u);
         setKeys(k);
         setLdap(l);
+        setPolicies(p);
         setSubTypeId((current) => current || t[0]?.id || "");
         setKeyUsername((current) => current || u[0]?.username || "");
         setMcpTypeName((current) => current || t.find((x) => x.scope !== "global")?.name || t[0]?.name || "");
+        setPolicyTypeId((current) => current || t.find((x) => x.scope !== "global")?.id || "");
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -392,6 +401,9 @@ export default function SettingsPage() {
               value={`/api/v1/ai/mcp-guide/${encodeURIComponent(mcpTypeName)}`}
               style={{ flex: 1, minWidth: 320 }}
             />
+            <a className="btn" href={`/api/v1/specs/${encodeURIComponent(mcpTypeName)}/agent-pack`}>
+              Download agent pack
+            </a>
           </div>
           {mcpGuide && (
             <pre className="mono" style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto", marginBottom: 0 }}>
@@ -399,6 +411,83 @@ export default function SettingsPage() {
             </pre>
           )}
         </div>
+      </div>
+
+      <div className="section">
+        <h2>Approval policies</h2>
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="form-row">
+            <select value={policyTypeId} onChange={(e) => setPolicyTypeId(e.target.value)}>
+              <option value="">All project types</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.scope === "global" ? `${t.name} (global)` : t.name}
+                </option>
+              ))}
+            </select>
+            <input type="text" value={policyGlob} onChange={(e) => setPolicyGlob(e.target.value)} />
+            <input
+              type="number"
+              min={1}
+              value={policyApprovals}
+              style={{ width: 80 }}
+              onChange={(e) => setPolicyApprovals(Number(e.target.value))}
+            />
+            <input
+              type="text"
+              placeholder="Required reviewers (comma-separated)"
+              value={policyReviewers}
+              style={{ flex: 1, minWidth: 260 }}
+              onChange={(e) => setPolicyReviewers(e.target.value)}
+            />
+            <button
+              className="primary"
+              onClick={() =>
+                act(async () => {
+                  await api.createApprovalPolicy({
+                    project_type_id: policyTypeId || null,
+                    filename_glob: policyGlob || "*",
+                    min_approvals: policyApprovals,
+                    required_reviewers: policyReviewers.split(",").map((r) => r.trim()).filter(Boolean),
+                  });
+                  setPolicyReviewers("");
+                })
+              }
+            >
+              Add policy
+            </button>
+          </div>
+        </div>
+        {policies.length === 0 ? (
+          <div className="empty">No approval policies configured.</div>
+        ) : (
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Project type</th>
+                <th>Filename</th>
+                <th>Approvals</th>
+                <th>Required reviewers</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {policies.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.project_type_name ?? "All"}</td>
+                  <td className="mono">{p.filename_glob}</td>
+                  <td className="mono">{p.min_approvals}</td>
+                  <td className="dim">{(JSON.parse(p.required_reviewers) as string[]).join(", ") || "any reviewer"}</td>
+                  <td>
+                    <button className="danger" onClick={() => act(() => api.deleteApprovalPolicy(p.id))}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="section">

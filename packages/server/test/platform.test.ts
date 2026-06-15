@@ -128,6 +128,48 @@ describe("channels", () => {
   });
 });
 
+describe("approval policies", () => {
+  it("keeps a review pending until the configured approval count is met", async () => {
+    const types = await getJson(app, "/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const policy = await app.inject({
+      method: "POST",
+      url: "/api/v1/approval-policies",
+      payload: { project_type_id: edge.id, filename_glob: "API.md", min_approvals: 2 },
+    });
+    expect(policy.statusCode).toBe(201);
+
+    const spec = await findSpec("API.md", "Acme Edge Device");
+    const cr = await submitCr(spec.id, "# API v2\n", "patch");
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/api/v1/reviews/${cr.id}/approve`,
+      payload: { reviewed_by: "reviewer-1" },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().status).toBe("pending");
+    expect(first.json().approval_count).toBe(1);
+    expect(first.json().required_approvals).toBe(2);
+
+    const stillPending = await getJson(app, `/api/v1/specs/${spec.id}`);
+    expect(stillPending.status).toBe("pending_review");
+    expect(stillPending.current_version).toBe("1.0.0");
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/v1/reviews/${cr.id}/approve`,
+      payload: { reviewed_by: "reviewer-2" },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().status).toBe("approved");
+
+    const updated = await getJson(app, `/api/v1/specs/${spec.id}`);
+    expect(updated.status).toBe("published");
+    expect(updated.current_version).toBe("1.0.1");
+  });
+});
+
 describe("drift severity & pins", () => {
   it("classifies drift and flags versions outside the caret pin", async () => {
     const spec = await findSpec("STRUCTURE.md", "Acme Firmware");
@@ -351,6 +393,22 @@ describe("agent MCP guide", () => {
     expect(guide.content).toContain("SpecRegistry MCP Skill");
     expect(guide.content).toContain("get_specs");
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
+  });
+
+  it("returns a downloadable agent pack with generated files and MCP setup", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
+    expect(res.statusCode).toBe(200);
+    const zip = new AdmZip(res.rawPayload);
+    const names = zip.getEntries().map((e) => e.entryName);
+    expect(names).toContain("CLAUDE.md");
+    expect(names).toContain("AGENTS.md");
+    expect(names).toContain(".cursorrules");
+    expect(names).toContain(".mcp.json");
+    expect(names).toContain("SPECREGISTRY_MCP_SKILL.md");
+    expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("report_spec_feedback");
+    expect(JSON.parse(zip.readAsText(".mcp.json")).mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe(
+      "Acme Edge Device"
+    );
   });
 });
 

@@ -53,6 +53,24 @@ CREATE TABLE IF NOT EXISTS change_requests (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS review_approvals (
+  id TEXT PRIMARY KEY,
+  change_request_id TEXT NOT NULL REFERENCES change_requests(id),
+  reviewer TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (change_request_id, reviewer)
+);
+
+CREATE TABLE IF NOT EXISTS approval_policies (
+  id TEXT PRIMARY KEY,
+  project_type_id TEXT REFERENCES project_types(id),
+  filename_glob TEXT NOT NULL DEFAULT '*',
+  min_approvals INTEGER NOT NULL DEFAULT 1 CHECK (min_approvals >= 1),
+  required_reviewers TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS agent_feedback (
   id TEXT PRIMARY KEY,
   spec_id TEXT NOT NULL REFERENCES specs(id),
@@ -187,6 +205,32 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
       INSERT INTO webhooks SELECT * FROM webhooks_old;
       DROP TABLE webhooks_old;
+    `,
+  },
+  {
+    version: 6,
+    sql: `
+      CREATE TABLE IF NOT EXISTS review_approvals (
+        id TEXT PRIMARY KEY,
+        change_request_id TEXT NOT NULL REFERENCES change_requests(id),
+        reviewer TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (change_request_id, reviewer)
+      );
+    `,
+  },
+  {
+    version: 7,
+    sql: `
+      CREATE TABLE IF NOT EXISTS approval_policies (
+        id TEXT PRIMARY KEY,
+        project_type_id TEXT REFERENCES project_types(id),
+        filename_glob TEXT NOT NULL DEFAULT '*',
+        min_approvals INTEGER NOT NULL DEFAULT 1 CHECK (min_approvals >= 1),
+        required_reviewers TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `,
   },
 ];

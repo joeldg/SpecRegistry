@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { bumpVersion, type ChangeRequest } from "@specregistry/shared";
 import { now, uuid } from "../db.js";
 import { HttpError, requireSpec, requireString } from "../helpers.js";
+import { approvalCount, policyReviewers, requiredApprovalCount } from "../lib/approvalPolicies.js";
 import { enforceRequiredReviewers } from "../lib/auth.js";
 import { dispatchWebhooks } from "../lib/events.js";
 import { enqueueSyncJobs, processSyncJobs } from "../lib/github.js";
@@ -34,7 +35,7 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const cr = requireChangeRequest(app, id);
     const spec = requireSpec(app.db, cr.spec_id);
-    return { ...cr, spec };
+    return { ...cr, spec, approval_count: approvalCount(app.db, cr.id), required_approvals: requiredApprovalCount(app.db, spec) };
   });
 
   // Approve: bump semver per the requested delta, publish new content, record the version.
@@ -48,6 +49,32 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
     if (cr.status !== "pending") throw new HttpError(409, `Change request already ${cr.status}`);
     const spec = requireSpec(app.db, cr.spec_id);
     enforceRequiredReviewers(app.db, spec.project_type_id, reviewedBy, req);
+    const policyRequired = policyReviewers(app.db, spec);
+    if (
+      policyRequired.length > 0 &&
+      req.user?.role !== "admin" &&
+      !policyRequired.some((r) => r.toLowerCase() === (req.user?.username ?? reviewedBy).toLowerCase())
+    ) {
+      throw new HttpError(403, `This spec requires review by one of: ${policyRequired.join(", ")}`);
+    }
+    try {
+      app.db
+        .prepare("INSERT INTO review_approvals (id, change_request_id, reviewer, created_at) VALUES (?, ?, ?, ?)")
+        .run(uuid(), cr.id, reviewedBy, now());
+    } catch {
+      throw new HttpError(409, `Reviewer has already approved this change request: ${reviewedBy}`);
+    }
+    const approvals = approvalCount(app.db, cr.id);
+    const requiredApprovals = requiredApprovalCount(app.db, spec);
+    if (approvals < requiredApprovals) {
+      await dispatchWebhooks(
+        app.db,
+        "review.approval_recorded",
+        `${spec.filename}: approval ${approvals}/${requiredApprovals} recorded by ${reviewedBy}`,
+        { change_request_id: cr.id, spec_id: spec.id, filename: spec.filename, approvals, required_approvals: requiredApprovals }
+      );
+      return { ...requireChangeRequest(app, cr.id), approval_count: approvals, required_approvals: requiredApprovals };
+    }
     const bumped = bumpVersion(spec.current_version, cr.version_delta);
     let newVersion = bumped;
     if (channel === "beta") {

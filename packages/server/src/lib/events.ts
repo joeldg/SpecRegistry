@@ -4,6 +4,7 @@ import { now, uuid } from "../db.js";
 export type WebhookEvent =
   | "spec.published"
   | "review.submitted"
+  | "review.approval_recorded"
   | "review.approved"
   | "review.rejected"
   | "feedback.created";

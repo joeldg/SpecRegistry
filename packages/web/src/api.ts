@@ -97,6 +97,28 @@ export interface McpGuide {
   mcp_config: Record<string, unknown>;
   content: string;
 }
+export interface ApprovalPolicyRow {
+  id: string;
+  project_type_id: string | null;
+  project_type_name?: string | null;
+  filename_glob: string;
+  min_approvals: number;
+  required_reviewers: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface FeedbackCluster {
+  key: string;
+  spec_id: string;
+  filename: string;
+  project_type_name: string;
+  error_type: string;
+  count: number;
+  status_counts: Record<string, number>;
+  latest_at: string;
+  sample_description: string;
+  feedback_ids: string[];
+}
 
 const TOKEN_KEY = "specregistry.token";
 const USERNAME_KEY = "specregistry.username";
@@ -196,6 +218,8 @@ export const api = {
 
   feedback: (status?: string) =>
     request<FeedbackRow[]>(`/api/v1/ai/feedback${status ? `?status=${status}` : ""}`),
+  feedbackClusters: (status?: string) =>
+    request<FeedbackCluster[]>(`/api/v1/ai/feedback/clusters${status ? `?status=${status}` : ""}`),
   setFeedbackStatus: (id: string, status: string) =>
     request<AgentFeedback>(`/api/v1/ai/feedback/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
   draftFix: (feedbackId: string) =>
@@ -264,6 +288,14 @@ export const api = {
     }),
   mcpGuide: (projectType?: string) =>
     request<McpGuide>(`/api/v1/ai/mcp-guide${projectType ? `/${encodeURIComponent(projectType)}` : ""}`),
+  approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
+  createApprovalPolicy: (body: {
+    project_type_id?: string | null;
+    filename_glob: string;
+    min_approvals: number;
+    required_reviewers: string[];
+  }) => request<ApprovalPolicyRow>("/api/v1/approval-policies", { method: "POST", body: JSON.stringify(body) }),
+  deleteApprovalPolicy: (id: string) => requestVoid(`/api/v1/approval-policies/${id}`, { method: "DELETE" }),
   promote: (specId: string, version: string, promoted_by: string) =>
     request<Spec>(`/api/v1/specs/${specId}/promote`, {
       method: "POST",

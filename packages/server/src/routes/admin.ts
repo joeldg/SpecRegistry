@@ -44,6 +44,51 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  // --- Approval policies ---
+
+  app.get("/approval-policies", async () => {
+    return app.db
+      .prepare(
+        `SELECT ap.*, pt.name AS project_type_name
+         FROM approval_policies ap LEFT JOIN project_types pt ON pt.id = ap.project_type_id
+         ORDER BY pt.name, ap.filename_glob`
+      )
+      .all();
+  });
+
+  app.post("/approval-policies", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const id = uuid();
+    const ts = now();
+    const projectTypeId =
+      typeof body.project_type_id === "string" && body.project_type_id ? requireProjectType(app.db, body.project_type_id).id : null;
+    const reviewers = Array.isArray(body.required_reviewers) ? body.required_reviewers.map(String) : [];
+    app.db
+      .prepare(
+        `INSERT INTO approval_policies
+           (id, project_type_id, filename_glob, min_approvals, required_reviewers, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        projectTypeId,
+        (body.filename_glob as string) || "*",
+        Math.max(1, Number(body.min_approvals ?? 1)),
+        JSON.stringify(reviewers),
+        ts,
+        ts
+      );
+    reply.code(201);
+    return app.db.prepare("SELECT * FROM approval_policies WHERE id = ?").get(id);
+  });
+
+  app.delete("/approval-policies/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const result = app.db.prepare("DELETE FROM approval_policies WHERE id = ?").run(id);
+    if (result.changes === 0) throw new HttpError(404, `Unknown approval policy: ${id}`);
+    reply.code(204);
+  });
+
   // --- Spec templates (conformance) ---
 
   app.get("/templates", async () => {

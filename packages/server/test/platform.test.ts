@@ -214,6 +214,44 @@ describe("auth & roles", () => {
       });
       expect(blockedAdminRoute.statusCode).toBe(403);
 
+      const blockedUserList = await secured.inject({
+        method: "GET",
+        url: "/api/v1/auth/users",
+        headers: aliceHeaders,
+      });
+      expect(blockedUserList.statusCode).toBe(403);
+
+      const listedUsers = await secured.inject({
+        method: "GET",
+        url: "/api/v1/auth/users",
+        headers: adminHeaders,
+      });
+      expect(listedUsers.statusCode).toBe(200);
+      expect(listedUsers.json().some((u: any) => u.username === "alice")).toBe(true);
+
+      const listedKeys = await secured.inject({
+        method: "GET",
+        url: "/api/v1/auth/api-keys",
+        headers: adminHeaders,
+      });
+      expect(listedKeys.statusCode).toBe(200);
+      const aliceKeyRow = listedKeys.json().find((k: any) => k.username === "alice");
+      expect(aliceKeyRow.name).toBe("api key");
+
+      const revoked = await secured.inject({
+        method: "DELETE",
+        url: `/api/v1/auth/api-keys/${aliceKeyRow.id}`,
+        headers: adminHeaders,
+      });
+      expect(revoked.statusCode).toBe(204);
+
+      const revokedToken = await secured.inject({
+        method: "GET",
+        url: "/api/v1/specs",
+        headers: aliceHeaders,
+      });
+      expect(revokedToken.statusCode).toBe(401);
+
       const approved = await secured.inject({
         method: "POST",
         url: `/api/v1/reviews/${cr.id}/approve`,

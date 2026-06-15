@@ -55,6 +55,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  app.get("/auth/api-keys", async () => {
+    return app.db
+      .prepare(
+        `SELECT t.id, t.user_id, u.username, u.role, t.name, t.created_at, t.last_used_at
+         FROM tokens t JOIN users u ON u.id = t.user_id
+         ORDER BY t.created_at DESC`
+      )
+      .all();
+  });
+
   app.post("/auth/users", async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const username = requireString(body, "username");
@@ -79,5 +89,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const token = issueToken(app.db, user.id, (body.name as string) ?? "api key");
     reply.code(201);
     return { token, username: user.username, role: user.role };
+  });
+
+  app.delete("/auth/api-keys/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const result = app.db.prepare("DELETE FROM tokens WHERE id = ?").run(id);
+    if (result.changes === 0) throw new HttpError(404, `Unknown API key: ${id}`);
+    reply.code(204);
   });
 }

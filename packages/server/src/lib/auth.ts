@@ -185,8 +185,8 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/promote$/, min: "reviewer" },
   { method: /POST|PUT|DELETE/, path: /^\/api\/v1\/(templates|webhooks|subscriptions)(\/|$)/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/sync-jobs\/run$/, min: "admin" },
-  { method: /POST|PUT|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
-  { method: /POST/, path: /^\/api\/v1\/auth\/api-keys$/, min: "admin" },
+  { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
+  { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/api-keys(\/|$)/, min: "admin" },
   { method: /POST|PUT/, path: /^\/api\/v1\/specs(\/|$)/, min: "author" },
   { method: /POST|PUT/, path: /^\/api\/v1\/project-types(\/|$)/, min: "author" },
 ];

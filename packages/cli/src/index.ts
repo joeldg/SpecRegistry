@@ -23,6 +23,7 @@ Options:
   --dir <path>      Spec directory (default: specs)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
   --target <t>      compile: claude | agents | cursor (default: claude)
+  --write           generate: use $ANTHROPIC_API_KEY to write generated specs
   --force           compile: overwrite a non-generated existing file
   --ci              audit: exit 1 when findings exist
   -h, --help        Show this help
@@ -76,6 +77,9 @@ try {
       server,
       type: typeof flags.type === "string" ? flags.type : undefined,
       out: typeof flags.out === "string" ? flags.out : ".spec/prompts",
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      write: flags.write === true,
+      force: flags.force === true,
     });
   } else if (command === "check" || command === "sync") {
     await runSync({

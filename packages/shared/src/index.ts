@@ -114,7 +114,7 @@ export interface Webhook {
   url: string;
   /** JSON array of subscribed event names; empty = all events */
   events: string;
-  format: "json" | "slack";
+  format: "json" | "slack" | "gchat";
   active: number;
   created_at: string;
 }

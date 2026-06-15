@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Webhook } from "@specregistry/shared";
-import { api, type ProjectTypeWithCount, type SubscriptionRow, type SyncJobRow } from "../api";
+import { api, type ApiKeyRow, type ProjectTypeWithCount, type SubscriptionRow, type SyncJobRow, type UserRow } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved", "review.rejected", "feedback.created"];
@@ -10,7 +10,10 @@ export default function SettingsPage() {
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [jobs, setJobs] = useState<SyncJobRow[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [error, setError] = useState<string>();
+  const [issuedToken, setIssuedToken] = useState<string>();
 
   const [hookUrl, setHookUrl] = useState("");
   const [hookFormat, setHookFormat] = useState("json");
@@ -18,15 +21,24 @@ export default function SettingsPage() {
   const [subRepo, setSubRepo] = useState("");
   const [subBranch, setSubBranch] = useState("main");
   const [subPath, setSubPath] = useState("specs");
+  const [newUsername, setNewUsername] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newRole, setNewRole] = useState("author");
+  const [newPassword, setNewPassword] = useState("");
+  const [keyUsername, setKeyUsername] = useState("");
+  const [keyName, setKeyName] = useState("api key");
 
   const reload = useCallback(() => {
-    Promise.all([api.webhooks(), api.subscriptions(), api.syncJobs(), api.projectTypes()])
-      .then(([w, s, j, t]) => {
+    Promise.all([api.webhooks(), api.subscriptions(), api.syncJobs(), api.projectTypes(), api.users(), api.apiKeys()])
+      .then(([w, s, j, t, u, k]) => {
         setWebhooks(w);
         setSubs(s);
         setJobs(j);
         setTypes(t);
+        setUsers(u);
+        setKeys(k);
         setSubTypeId((current) => current || t[0]?.id || "");
+        setKeyUsername((current) => current || u[0]?.username || "");
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -50,6 +62,135 @@ export default function SettingsPage() {
         <span className="sub">Notifications and git distribution</span>
       </div>
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="section">
+        <h2>Users and API keys</h2>
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="form-row">
+            <input type="text" placeholder="Username" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Display name"
+              value={newDisplayName}
+              onChange={(e) => setNewDisplayName(e.target.value)}
+            />
+            <select value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+              <option value="admin">admin</option>
+              <option value="reviewer">reviewer</option>
+              <option value="author">author</option>
+              <option value="agent">agent</option>
+            </select>
+            <input
+              type="password"
+              placeholder="Password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button
+              className="primary"
+              onClick={() =>
+                act(async () => {
+                  await api.createUser({
+                    username: newUsername.trim(),
+                    display_name: newDisplayName.trim() || undefined,
+                    role: newRole,
+                    password: newPassword || undefined,
+                  });
+                  setNewUsername("");
+                  setNewDisplayName("");
+                  setNewPassword("");
+                })
+              }
+            >
+              Add user
+            </button>
+          </div>
+        </div>
+        {users.length > 0 && (
+          <table className="grid" style={{ marginBottom: 12 }}>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Source</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td className="mono">{u.username}</td>
+                  <td>{u.display_name ?? "—"}</td>
+                  <td>
+                    <StatusBadge status={u.role} />
+                  </td>
+                  <td>{u.source}</td>
+                  <td className="faint">{timeAgo(u.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="form-row">
+            <select value={keyUsername} onChange={(e) => setKeyUsername(e.target.value)}>
+              {users.map((u) => (
+                <option key={u.id} value={u.username}>
+                  {u.username} ({u.role})
+                </option>
+              ))}
+            </select>
+            <input type="text" value={keyName} onChange={(e) => setKeyName(e.target.value)} />
+            <button
+              className="primary"
+              onClick={() =>
+                act(async () => {
+                  const created = await api.createApiKey({ username: keyUsername, name: keyName.trim() || undefined });
+                  setIssuedToken(created.token);
+                })
+              }
+            >
+              Issue API key
+            </button>
+          </div>
+          {issuedToken && (
+            <pre className="mono" style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+              {issuedToken}
+            </pre>
+          )}
+        </div>
+        {keys.length === 0 ? (
+          <div className="empty">No API keys issued.</div>
+        ) : (
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Name</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id}>
+                  <td className="mono">{k.username}</td>
+                  <td>{k.name ?? "api key"}</td>
+                  <td className="faint">{timeAgo(k.created_at)}</td>
+                  <td className="faint">{k.last_used_at ? timeAgo(k.last_used_at) : "never"}</td>
+                  <td>
+                    <button className="danger" onClick={() => act(() => api.deleteApiKey(k.id))}>
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <div className="section">
         <h2>Webhooks</h2>

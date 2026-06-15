@@ -62,6 +62,23 @@ export interface SearchHit {
   section: string;
   excerpt: string;
 }
+export interface UserRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+  role: "admin" | "reviewer" | "author" | "agent";
+  source: "local" | "ldap";
+  created_at: string;
+}
+export interface ApiKeyRow {
+  id: string;
+  user_id: string;
+  username: string;
+  role: string;
+  name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
 
 const TOKEN_KEY = "specregistry.token";
 const USERNAME_KEY = "specregistry.username";
@@ -106,6 +123,27 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function requestVoid(url: string, init?: RequestInit): Promise<void> {
+  const token = getToken();
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      message = body.message ?? body.error ?? message;
+    } catch {
+      // keep default message
+    }
+    throw new Error(message);
+  }
+}
+
 export const api = {
   projectTypes: () => request<ProjectTypeWithCount[]>("/api/v1/project-types"),
   createProjectType: (body: { name: string; industry?: string; description?: string }) =>
@@ -130,8 +168,11 @@ export const api = {
   reviews: (status?: string) =>
     request<ReviewRow[]>(`/api/v1/reviews${status ? `?status=${status}` : ""}`),
   review: (id: string) => request<ChangeRequest & { spec: Spec }>(`/api/v1/reviews/${id}`),
-  approveReview: (id: string, reviewed_by: string) =>
-    request<ChangeRequest>(`/api/v1/reviews/${id}/approve`, { method: "POST", body: JSON.stringify({ reviewed_by }) }),
+  approveReview: (id: string, reviewed_by: string, channel?: "stable" | "beta") =>
+    request<ChangeRequest>(`/api/v1/reviews/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ reviewed_by, ...(channel === "beta" ? { channel } : {}) }),
+    }),
   rejectReview: (id: string, reviewed_by: string) =>
     request<ChangeRequest>(`/api/v1/reviews/${id}/reject`, { method: "POST", body: JSON.stringify({ reviewed_by }) }),
 
@@ -156,17 +197,17 @@ export const api = {
   }) => request<SpecTemplate>("/api/v1/templates", { method: "POST", body: JSON.stringify(body) }),
   updateTemplate: (id: string, body: Partial<{ required_sections: string[]; content_template: string; description: string }>) =>
     request<SpecTemplate>(`/api/v1/templates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  deleteTemplate: (id: string) => fetch(`/api/v1/templates/${id}`, { method: "DELETE" }),
+  deleteTemplate: (id: string) => requestVoid(`/api/v1/templates/${id}`, { method: "DELETE" }),
 
   webhooks: () => request<Webhook[]>("/api/v1/webhooks"),
   createWebhook: (body: { url: string; events: string[]; format: string }) =>
     request<Webhook>("/api/v1/webhooks", { method: "POST", body: JSON.stringify(body) }),
-  deleteWebhook: (id: string) => fetch(`/api/v1/webhooks/${id}`, { method: "DELETE" }),
+  deleteWebhook: (id: string) => requestVoid(`/api/v1/webhooks/${id}`, { method: "DELETE" }),
 
   subscriptions: () => request<SubscriptionRow[]>("/api/v1/subscriptions"),
   createSubscription: (body: { project_type_id: string; repo: string; branch?: string; base_path?: string }) =>
     request<RepoSubscription>("/api/v1/subscriptions", { method: "POST", body: JSON.stringify(body) }),
-  deleteSubscription: (id: string) => fetch(`/api/v1/subscriptions/${id}`, { method: "DELETE" }),
+  deleteSubscription: (id: string) => requestVoid(`/api/v1/subscriptions/${id}`, { method: "DELETE" }),
   syncJobs: () => request<SyncJobRow[]>("/api/v1/sync-jobs"),
   runSyncJobs: () =>
     request<{ processed: number }>("/api/v1/sync-jobs/run", { method: "POST", body: JSON.stringify({}) }),
@@ -178,6 +219,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  users: () => request<UserRow[]>("/api/v1/auth/users"),
+  createUser: (body: { username: string; role: string; password?: string; display_name?: string }) =>
+    request<UserRow>("/api/v1/auth/users", { method: "POST", body: JSON.stringify(body) }),
+  apiKeys: () => request<ApiKeyRow[]>("/api/v1/auth/api-keys"),
+  createApiKey: (body: { username: string; name?: string }) =>
+    request<{ token: string; username: string; role: string }>("/api/v1/auth/api-keys", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteApiKey: (id: string) => requestVoid(`/api/v1/auth/api-keys/${id}`, { method: "DELETE" }),
   promote: (specId: string, version: string, promoted_by: string) =>
     request<Spec>(`/api/v1/specs/${specId}/promote`, {
       method: "POST",

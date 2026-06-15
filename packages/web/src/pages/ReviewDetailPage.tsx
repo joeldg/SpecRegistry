@@ -30,6 +30,7 @@ export default function ReviewDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [review, setReview] = useState<ChangeRequest & { spec: Spec }>();
   const [error, setError] = useState<string>();
+  const [approvalChannel, setApprovalChannel] = useState<"stable" | "beta">("stable");
 
   const reload = useCallback(() => {
     if (!id) return;
@@ -48,7 +49,7 @@ export default function ReviewDetailPage() {
   async function decide(action: "approve" | "reject") {
     setError(undefined);
     try {
-      if (action === "approve") await api.approveReview(review!.id, getAuthor());
+      if (action === "approve") await api.approveReview(review!.id, getAuthor(), approvalChannel);
       else await api.rejectReview(review!.id, getAuthor());
       reload();
     } catch (e) {
@@ -149,8 +150,12 @@ export default function ReviewDetailPage() {
 
       {review.status === "pending" && (
         <div className="toolbar">
+          <select value={approvalChannel} onChange={(e) => setApprovalChannel(e.target.value as "stable" | "beta")}>
+            <option value="stable">stable</option>
+            <option value="beta">beta</option>
+          </select>
           <button className="success" onClick={() => decide("approve")}>
-            Approve &amp; publish
+            Approve {approvalChannel === "beta" ? "beta" : "& publish"}
           </button>
           <button className="danger" onClick={() => decide("reject")}>
             Reject

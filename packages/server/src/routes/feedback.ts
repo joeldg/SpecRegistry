@@ -10,6 +10,61 @@ import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { searchSpecs } from "../lib/search.js";
 
 export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
+  // Agent-facing onboarding guide: feed this markdown to an agent so it knows how
+  // to configure and use the SpecRegistry MCP server in a codebase.
+  app.get("/ai/mcp-guide/:projectType?", async (req) => {
+    const { projectType } = req.params as { projectType?: string };
+    const pt = projectType ? requireProjectType(app.db, projectType) : undefined;
+    const serverUrl = "http://localhost:4000";
+    const mcpConfig = {
+      mcpServers: {
+        specregistry: {
+          command: "specreg-mcp",
+          args: [],
+          env: {
+            SPECREG_SERVER: serverUrl,
+            ...(pt ? { SPECREG_PROJECT_TYPE: pt.name } : {}),
+          },
+        },
+      },
+    };
+    const content = `# SpecRegistry MCP Skill
+
+Use this skill when working in a repository governed by SpecRegistry.
+
+## Configure MCP
+
+Add this server to the repository's MCP configuration:
+
+\`\`\`json
+${JSON.stringify(mcpConfig, null, 2)}
+\`\`\`
+
+If the project type is not preconfigured, call \`list_project_types\` first and choose the best match.
+
+## Required Workflow
+
+1. Before making code changes, call \`get_specs\` for the project type. Treat global specs and project-type specs as governing instructions.
+2. Use \`search_specs\` when you need focused guidance from a large spec set.
+3. If specs are ambiguous, contradictory, or outdated, call \`report_spec_feedback\` with the affected \`spec_id\`, issue type, description, and relevant code or spec context.
+4. Do not silently ignore a governed requirement. Either follow it or report feedback.
+5. When a local repo has run \`specreg init\`, respect the checked-in \`specs/.specregistry.json\` manifest and use \`specreg check\` or \`specreg sync\` to detect drift.
+
+## MCP Tools
+
+- \`list_project_types\`: list configured project types.
+- \`get_specs\`: fetch full markdown specs for a project type, including global specs.
+- \`search_specs\`: search matching spec sections.
+- \`report_spec_feedback\`: file ambiguity, contradiction, or outdated-guidance feedback for review.
+`;
+    return {
+      filename: "SPECREGISTRY_MCP_SKILL.md",
+      project_type: pt?.name ?? null,
+      mcp_config: mcpConfig,
+      content,
+    };
+  });
+
   // Agent-facing read endpoint: latest published specs (global + project type), full content.
   app.get("/ai/specs/:projectType", async (req) => {
     const { projectType } = req.params as { projectType: string };

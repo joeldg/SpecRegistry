@@ -79,6 +79,24 @@ export interface ApiKeyRow {
   created_at: string;
   last_used_at: string | null;
 }
+export interface LdapConfig {
+  enabled: boolean;
+  url: string;
+  bind_dn_template: string;
+  bind_user: string;
+  search_base: string;
+  search_filter: string;
+  admin_group: string;
+  reviewer_group: string;
+  default_role: "admin" | "reviewer" | "author" | "agent";
+  has_bind_password: boolean;
+}
+export interface McpGuide {
+  filename: string;
+  project_type: string | null;
+  mcp_config: Record<string, unknown>;
+  content: string;
+}
 
 const TOKEN_KEY = "specregistry.token";
 const USERNAME_KEY = "specregistry.username";
@@ -229,6 +247,23 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteApiKey: (id: string) => requestVoid(`/api/v1/auth/api-keys/${id}`, { method: "DELETE" }),
+  ldapConfig: () => request<LdapConfig>("/api/v1/ldap/config"),
+  updateLdapConfig: (body: Partial<Omit<LdapConfig, "enabled" | "has_bind_password">> & {
+    bind_password?: string;
+    clear_bind_password?: boolean;
+  }) => request<LdapConfig>("/api/v1/ldap/config", { method: "PUT", body: JSON.stringify(body) }),
+  testLdap: (username: string, password: string) =>
+    request<{ ok: boolean; username: string; dn: string; display_name: string | null; groups: string[]; role: string }>(
+      "/api/v1/ldap/test",
+      { method: "POST", body: JSON.stringify({ username, password }) }
+    ),
+  previewLdapRole: (groups: string[]) =>
+    request<{ role: string; groups: string[] }>("/api/v1/ldap/role-preview", {
+      method: "POST",
+      body: JSON.stringify({ groups }),
+    }),
+  mcpGuide: (projectType?: string) =>
+    request<McpGuide>(`/api/v1/ai/mcp-guide${projectType ? `/${encodeURIComponent(projectType)}` : ""}`),
   promote: (specId: string, version: string, promoted_by: string) =>
     request<Spec>(`/api/v1/specs/${specId}/promote`, {
       method: "POST",

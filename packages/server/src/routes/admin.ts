@@ -1,9 +1,49 @@
 import type { FastifyInstance } from "fastify";
 import { now, uuid } from "../db.js";
 import { HttpError, requireProjectType, requireString } from "../helpers.js";
+import {
+  getLdapConfig,
+  ldapAuthenticate,
+  mapLdapGroupsToRole,
+  publicLdapConfig,
+  saveLdapConfig,
+  type LdapConfig,
+} from "../lib/auth.js";
 import { processSyncJobs } from "../lib/github.js";
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  // --- LDAP settings ---
+
+  app.get("/ldap/config", async () => {
+    return publicLdapConfig(app.db);
+  });
+
+  app.put("/ldap/config", async (req) => {
+    const body = (req.body ?? {}) as Partial<LdapConfig> & { clear_bind_password?: boolean };
+    return publicLdapConfig(app.db, saveLdapConfig(app.db, body));
+  });
+
+  app.post("/ldap/role-preview", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const groups = Array.isArray(body.groups) ? body.groups.map(String) : [];
+    return { role: mapLdapGroupsToRole(groups, getLdapConfig(app.db)), groups };
+  });
+
+  app.post("/ldap/test", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const username = requireString(body, "username");
+    const password = requireString(body, "password");
+    const result = await ldapAuthenticate(app.db, username, password);
+    return {
+      ok: true,
+      username,
+      dn: result.dn,
+      display_name: result.displayName ?? null,
+      groups: result.groups,
+      role: result.role,
+    };
+  });
+
   // --- Spec templates (conformance) ---
 
   app.get("/templates", async () => {

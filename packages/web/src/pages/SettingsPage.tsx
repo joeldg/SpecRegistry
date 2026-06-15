@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Webhook } from "@specregistry/shared";
-import { api, type ApiKeyRow, type ProjectTypeWithCount, type SubscriptionRow, type SyncJobRow, type UserRow } from "../api";
+import {
+  api,
+  type ApiKeyRow,
+  type LdapConfig,
+  type McpGuide,
+  type ProjectTypeWithCount,
+  type SubscriptionRow,
+  type SyncJobRow,
+  type UserRow,
+} from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved", "review.rejected", "feedback.created"];
@@ -12,8 +21,11 @@ export default function SettingsPage() {
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
+  const [ldap, setLdap] = useState<LdapConfig>();
+  const [mcpGuide, setMcpGuide] = useState<McpGuide>();
   const [error, setError] = useState<string>();
   const [issuedToken, setIssuedToken] = useState<string>();
+  const [ldapNotice, setLdapNotice] = useState<string>();
 
   const [hookUrl, setHookUrl] = useState("");
   const [hookFormat, setHookFormat] = useState("json");
@@ -27,23 +39,42 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [keyUsername, setKeyUsername] = useState("");
   const [keyName, setKeyName] = useState("api key");
+  const [ldapPassword, setLdapPassword] = useState("");
+  const [ldapTestUsername, setLdapTestUsername] = useState("");
+  const [ldapTestPassword, setLdapTestPassword] = useState("");
+  const [ldapGroups, setLdapGroups] = useState("");
+  const [mcpTypeName, setMcpTypeName] = useState("");
 
   const reload = useCallback(() => {
-    Promise.all([api.webhooks(), api.subscriptions(), api.syncJobs(), api.projectTypes(), api.users(), api.apiKeys()])
-      .then(([w, s, j, t, u, k]) => {
+    Promise.all([
+      api.webhooks(),
+      api.subscriptions(),
+      api.syncJobs(),
+      api.projectTypes(),
+      api.users(),
+      api.apiKeys(),
+      api.ldapConfig(),
+    ])
+      .then(([w, s, j, t, u, k, l]) => {
         setWebhooks(w);
         setSubs(s);
         setJobs(j);
         setTypes(t);
         setUsers(u);
         setKeys(k);
+        setLdap(l);
         setSubTypeId((current) => current || t[0]?.id || "");
         setKeyUsername((current) => current || u[0]?.username || "");
+        setMcpTypeName((current) => current || t.find((x) => x.scope !== "global")?.name || t[0]?.name || "");
       })
       .catch((e) => setError(e.message));
   }, []);
 
   useEffect(reload, [reload]);
+
+  useEffect(() => {
+    api.mcpGuide(mcpTypeName).then(setMcpGuide).catch((e) => setError(e.message));
+  }, [mcpTypeName]);
 
   async function act(fn: () => Promise<unknown>) {
     setError(undefined);
@@ -190,6 +221,184 @@ export default function SettingsPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="section">
+        <h2>LDAP</h2>
+        {ldap && (
+          <>
+            {ldapNotice && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                {ldapNotice}
+              </div>
+            )}
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="ldap://directory.example.com"
+                  value={ldap.url}
+                  style={{ flex: 1, minWidth: 280 }}
+                  onChange={(e) => setLdap({ ...ldap, url: e.target.value })}
+                />
+                <select value={ldap.default_role} onChange={(e) => setLdap({ ...ldap, default_role: e.target.value as LdapConfig["default_role"] })}>
+                  <option value="author">default author</option>
+                  <option value="agent">default agent</option>
+                  <option value="reviewer">default reviewer</option>
+                  <option value="admin">default admin</option>
+                </select>
+                <button
+                  className="primary"
+                  onClick={() =>
+                    act(async () => {
+                      const saved = await api.updateLdapConfig({
+                        url: ldap.url,
+                        bind_dn_template: ldap.bind_dn_template,
+                        bind_user: ldap.bind_user,
+                        bind_password: ldapPassword || undefined,
+                        search_base: ldap.search_base,
+                        search_filter: ldap.search_filter,
+                        admin_group: ldap.admin_group,
+                        reviewer_group: ldap.reviewer_group,
+                        default_role: ldap.default_role,
+                      });
+                      setLdap(saved);
+                      setLdapPassword("");
+                      setLdapNotice("LDAP settings saved.");
+                    })
+                  }
+                >
+                  Save LDAP
+                </button>
+              </div>
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Direct bind DN template: uid={username},ou=people,dc=example,dc=com"
+                  value={ldap.bind_dn_template}
+                  style={{ flex: 1, minWidth: 360 }}
+                  onChange={(e) => setLdap({ ...ldap, bind_dn_template: e.target.value })}
+                />
+              </div>
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Service bind user"
+                  value={ldap.bind_user}
+                  onChange={(e) => setLdap({ ...ldap, bind_user: e.target.value })}
+                />
+                <input
+                  type="password"
+                  placeholder={ldap.has_bind_password ? "Stored bind password" : "Bind password"}
+                  value={ldapPassword}
+                  onChange={(e) => setLdapPassword(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Search base"
+                  value={ldap.search_base}
+                  style={{ flex: 1, minWidth: 260 }}
+                  onChange={(e) => setLdap({ ...ldap, search_base: e.target.value })}
+                />
+                <input
+                  type="text"
+                  placeholder="(uid={username})"
+                  value={ldap.search_filter}
+                  onChange={(e) => setLdap({ ...ldap, search_filter: e.target.value })}
+                />
+              </div>
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Admin group DN"
+                  value={ldap.admin_group}
+                  style={{ flex: 1, minWidth: 260 }}
+                  onChange={(e) => setLdap({ ...ldap, admin_group: e.target.value })}
+                />
+                <input
+                  type="text"
+                  placeholder="Reviewer group DN"
+                  value={ldap.reviewer_group}
+                  style={{ flex: 1, minWidth: 260 }}
+                  onChange={(e) => setLdap({ ...ldap, reviewer_group: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="card">
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Test username"
+                  value={ldapTestUsername}
+                  onChange={(e) => setLdapTestUsername(e.target.value)}
+                />
+                <input
+                  type="password"
+                  placeholder="Test password"
+                  value={ldapTestPassword}
+                  onChange={(e) => setLdapTestPassword(e.target.value)}
+                />
+                <button
+                  onClick={() =>
+                    act(async () => {
+                      const result = await api.testLdap(ldapTestUsername, ldapTestPassword);
+                      setLdapNotice(`LDAP test ok: ${result.display_name ?? result.username} maps to ${result.role}.`);
+                      setLdapTestPassword("");
+                    })
+                  }
+                >
+                  Test login
+                </button>
+                <input
+                  type="text"
+                  placeholder="Group DNs to preview role"
+                  value={ldapGroups}
+                  style={{ flex: 1, minWidth: 260 }}
+                  onChange={(e) => setLdapGroups(e.target.value)}
+                />
+                <button
+                  onClick={() =>
+                    act(async () => {
+                      const result = await api.previewLdapRole(ldapGroups.split(",").map((g) => g.trim()).filter(Boolean));
+                      setLdapNotice(`Preview role: ${result.role}`);
+                    })
+                  }
+                >
+                  Preview role
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="section">
+        <h2>Agent MCP guide</h2>
+        <div className="card">
+          <div className="form-row">
+            <select value={mcpTypeName} onChange={(e) => setMcpTypeName(e.target.value)}>
+              {types
+                .filter((t) => t.scope !== "global")
+                .map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+            </select>
+            <input
+              className="mono"
+              type="text"
+              readOnly
+              value={`/api/v1/ai/mcp-guide/${encodeURIComponent(mcpTypeName)}`}
+              style={{ flex: 1, minWidth: 320 }}
+            />
+          </div>
+          {mcpGuide && (
+            <pre className="mono" style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto", marginBottom: 0 }}>
+              {mcpGuide.content}
+            </pre>
+          )}
+        </div>
       </div>
 
       <div className="section">

@@ -23,8 +23,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const password = requireString(body, "password");
 
     let user = findUser(app.db, username);
-    if (ldapEnabled() && user?.source !== "local") {
-      const { role, displayName } = await ldapAuthenticate(username, password);
+    if (ldapEnabled(app.db) && user?.source !== "local") {
+      const { role, displayName } = await ldapAuthenticate(app.db, username, password);
       if (!user) {
         user = createUser(app.db, { username, role, display_name: displayName, source: "ldap" });
       } else {

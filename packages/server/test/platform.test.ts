@@ -19,6 +19,8 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   delete process.env.GITHUB_WEBHOOK_SECRET;
   delete process.env.SLACK_SIGNING_SECRET;
+  delete process.env.LDAP_URL;
+  delete process.env.LDAP_DEFAULT_ROLE;
 });
 
 async function getJson(target: FastifyInstance, url: string) {
@@ -296,6 +298,59 @@ describe("auth & roles", () => {
       payload: { reviewed_by: "security-team" },
     });
     expect(rightReviewer.statusCode).toBe(200);
+  });
+});
+
+describe("LDAP settings", () => {
+  it("persists config, masks bind password, and previews role mapping", async () => {
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/ldap/config",
+      payload: {
+        url: "ldap://directory.example.com",
+        bind_user: "cn=reader,dc=example,dc=com",
+        bind_password: "secret",
+        search_base: "ou=people,dc=example,dc=com",
+        search_filter: "(uid={username})",
+        admin_group: "cn=admins,dc=example,dc=com",
+        reviewer_group: "cn=reviewers,dc=example,dc=com",
+        default_role: "agent",
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().enabled).toBe(true);
+    expect(saved.json()).not.toHaveProperty("bind_password");
+    expect(saved.json().has_bind_password).toBe(true);
+
+    const loaded = await getJson(app, "/api/v1/ldap/config");
+    expect(loaded.url).toBe("ldap://directory.example.com");
+    expect(loaded.default_role).toBe("agent");
+
+    const reviewer = await app.inject({
+      method: "POST",
+      url: "/api/v1/ldap/role-preview",
+      payload: { groups: ["cn=reviewers,dc=example,dc=com"] },
+    });
+    expect(reviewer.statusCode).toBe(200);
+    expect(reviewer.json().role).toBe("reviewer");
+
+    const fallback = await app.inject({
+      method: "POST",
+      url: "/api/v1/ldap/role-preview",
+      payload: { groups: ["cn=unknown,dc=example,dc=com"] },
+    });
+    expect(fallback.json().role).toBe("agent");
+  });
+});
+
+describe("agent MCP guide", () => {
+  it("returns a feedable guide and matching MCP config for a project type", async () => {
+    const guide = await getJson(app, "/api/v1/ai/mcp-guide/Acme%20Edge%20Device");
+    expect(guide.filename).toBe("SPECREGISTRY_MCP_SKILL.md");
+    expect(guide.project_type).toBe("Acme Edge Device");
+    expect(guide.content).toContain("SpecRegistry MCP Skill");
+    expect(guide.content).toContain("get_specs");
+    expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });
 });
 

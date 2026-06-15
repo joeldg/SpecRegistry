@@ -5,6 +5,7 @@ import { now, uuid } from "../db.js";
 import { HttpError } from "../helpers.js";
 
 export type Role = "admin" | "reviewer" | "author" | "agent";
+export const ROLES = ["admin", "reviewer", "author", "agent"] as const satisfies readonly Role[];
 
 export interface User {
   id: string;
@@ -93,10 +94,92 @@ export function createUser(
   return db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User;
 }
 
-// --- Optional LDAP (active when LDAP_URL is set) ---
+// --- Optional LDAP (active when LDAP_URL is configured) ---
 
-export function ldapEnabled(): boolean {
-  return Boolean(process.env.LDAP_URL);
+export interface LdapConfig {
+  url: string;
+  bind_dn_template: string;
+  bind_user: string;
+  bind_password: string;
+  search_base: string;
+  search_filter: string;
+  admin_group: string;
+  reviewer_group: string;
+  default_role: Role;
+}
+
+const LDAP_SETTING_KEYS = {
+  url: "ldap.url",
+  bind_dn_template: "ldap.bind_dn_template",
+  bind_user: "ldap.bind_user",
+  bind_password: "ldap.bind_password",
+  search_base: "ldap.search_base",
+  search_filter: "ldap.search_filter",
+  admin_group: "ldap.admin_group",
+  reviewer_group: "ldap.reviewer_group",
+  default_role: "ldap.default_role",
+} as const;
+
+function envConfig(): LdapConfig {
+  return {
+    url: process.env.LDAP_URL ?? "",
+    bind_dn_template: process.env.LDAP_BIND_DN_TEMPLATE ?? "",
+    bind_user: process.env.LDAP_BIND_USER ?? "",
+    bind_password: process.env.LDAP_BIND_PASSWORD ?? "",
+    search_base: process.env.LDAP_SEARCH_BASE ?? "",
+    search_filter: process.env.LDAP_SEARCH_FILTER ?? "(uid={username})",
+    admin_group: process.env.LDAP_ADMIN_GROUP ?? "",
+    reviewer_group: process.env.LDAP_REVIEWER_GROUP ?? "",
+    default_role: (process.env.LDAP_DEFAULT_ROLE as Role | undefined) ?? "author",
+  };
+}
+
+export function getLdapConfig(db: Db): LdapConfig {
+  const base = envConfig();
+  const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'ldap.%'").all() as Array<{
+    key: string;
+    value: string;
+  }>;
+  const settings = new Map(rows.map((r) => [r.key, r.value]));
+  const role = settings.get(LDAP_SETTING_KEYS.default_role) ?? base.default_role;
+  return {
+    url: settings.get(LDAP_SETTING_KEYS.url) ?? base.url,
+    bind_dn_template: settings.get(LDAP_SETTING_KEYS.bind_dn_template) ?? base.bind_dn_template,
+    bind_user: settings.get(LDAP_SETTING_KEYS.bind_user) ?? base.bind_user,
+    bind_password: settings.get(LDAP_SETTING_KEYS.bind_password) ?? base.bind_password,
+    search_base: settings.get(LDAP_SETTING_KEYS.search_base) ?? base.search_base,
+    search_filter: settings.get(LDAP_SETTING_KEYS.search_filter) ?? base.search_filter,
+    admin_group: settings.get(LDAP_SETTING_KEYS.admin_group) ?? base.admin_group,
+    reviewer_group: settings.get(LDAP_SETTING_KEYS.reviewer_group) ?? base.reviewer_group,
+    default_role: ROLES.includes(role as Role) ? (role as Role) : "author",
+  };
+}
+
+export function saveLdapConfig(db: Db, input: Partial<LdapConfig> & { clear_bind_password?: boolean }): LdapConfig {
+  const current = getLdapConfig(db);
+  const next: LdapConfig = {
+    ...current,
+    ...Object.fromEntries(
+      Object.entries(input).filter(([key, value]) => key !== "clear_bind_password" && value !== undefined)
+    ),
+  } as LdapConfig;
+  if (input.clear_bind_password) next.bind_password = "";
+  if (!ROLES.includes(next.default_role)) next.default_role = "author";
+
+  const upsert = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
+  for (const [field, key] of Object.entries(LDAP_SETTING_KEYS) as Array<[keyof LdapConfig, string]>) {
+    upsert.run(key, next[field] ?? "");
+  }
+  return getLdapConfig(db);
+}
+
+export function publicLdapConfig(db: Db, input = getLdapConfig(db)) {
+  const { bind_password, ...config } = input;
+  return { ...config, enabled: Boolean(config.url), has_bind_password: Boolean(bind_password) };
+}
+
+export function ldapEnabled(db: Db): boolean {
+  return Boolean(getLdapConfig(db).url);
 }
 
 /**
@@ -106,25 +189,31 @@ export function ldapEnabled(): boolean {
  *                  LDAP_SEARCH_BASE + LDAP_SEARCH_FILTER="(uid={username})"
  * Role mapping: membership of LDAP_ADMIN_GROUP / LDAP_REVIEWER_GROUP DNs; default author.
  */
-export async function ldapAuthenticate(username: string, password: string): Promise<{ role: Role; displayName?: string }> {
+export async function ldapAuthenticate(
+  db: Db,
+  username: string,
+  password: string
+): Promise<{ role: Role; displayName?: string; groups: string[]; dn: string }> {
+  const config = getLdapConfig(db);
+  if (!config.url) throw new HttpError(503, "LDAP is not configured");
   const { Client } = await import("ldapts");
-  const client = new Client({ url: process.env.LDAP_URL! });
+  const client = new Client({ url: config.url });
   try {
     let userDn: string;
     let groups: string[] = [];
     let displayName: string | undefined;
 
-    if (process.env.LDAP_BIND_DN_TEMPLATE) {
-      userDn = process.env.LDAP_BIND_DN_TEMPLATE.replaceAll("{username}", username);
+    if (config.bind_dn_template) {
+      userDn = config.bind_dn_template.replaceAll("{username}", username);
     } else {
-      if (!process.env.LDAP_SEARCH_BASE) {
+      if (!config.search_base) {
         throw new HttpError(503, "LDAP misconfigured: set LDAP_BIND_DN_TEMPLATE or LDAP_SEARCH_BASE");
       }
-      if (process.env.LDAP_BIND_USER) {
-        await client.bind(process.env.LDAP_BIND_USER, process.env.LDAP_BIND_PASSWORD ?? "");
+      if (config.bind_user) {
+        await client.bind(config.bind_user, config.bind_password);
       }
-      const filter = (process.env.LDAP_SEARCH_FILTER ?? "(uid={username})").replaceAll("{username}", username);
-      const { searchEntries } = await client.search(process.env.LDAP_SEARCH_BASE, {
+      const filter = (config.search_filter || "(uid={username})").replaceAll("{username}", username);
+      const { searchEntries } = await client.search(config.search_base, {
         filter,
         attributes: ["dn", "cn", "memberOf"],
       });
@@ -149,7 +238,7 @@ export async function ldapAuthenticate(username: string, password: string): Prom
       }
     }
 
-    return { role: mapLdapGroupsToRole(groups), displayName };
+    return { role: mapLdapGroupsToRole(groups, config), displayName, groups, dn: userDn };
   } catch (err) {
     if (err instanceof HttpError) throw err;
     throw new HttpError(401, "Invalid credentials");
@@ -158,13 +247,13 @@ export async function ldapAuthenticate(username: string, password: string): Prom
   }
 }
 
-export function mapLdapGroupsToRole(groups: string[]): Role {
+export function mapLdapGroupsToRole(groups: string[], config = envConfig()): Role {
   const normalized = groups.map((g) => g.toLowerCase());
-  const admin = process.env.LDAP_ADMIN_GROUP?.toLowerCase();
-  const reviewer = process.env.LDAP_REVIEWER_GROUP?.toLowerCase();
+  const admin = config.admin_group?.toLowerCase();
+  const reviewer = config.reviewer_group?.toLowerCase();
   if (admin && normalized.includes(admin)) return "admin";
   if (reviewer && normalized.includes(reviewer)) return "reviewer";
-  return "author";
+  return config.default_role;
 }
 
 // --- Request authentication + role policy ---
@@ -183,6 +272,7 @@ const PUBLIC_PATHS = [
 const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST/, path: /^\/api\/v1\/reviews\/[^/]+\/(approve|reject)$/, min: "reviewer" },
   { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/promote$/, min: "reviewer" },
+  { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/ldap(\/|$)/, min: "admin" },
   { method: /POST|PUT|DELETE/, path: /^\/api\/v1\/(templates|webhooks|subscriptions)(\/|$)/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/sync-jobs\/run$/, min: "admin" },
   { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },

@@ -1,13 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import AdmZip from "adm-zip";
 import { registryToken, selectProjectType, withRegistryAuth } from "./registry.js";
+import { reportManifest, type Manifest } from "./repo.js";
 
 export interface InitOptions {
   server: string;
   token?: string;
   type?: string;
   dir: string;
+  force?: boolean;
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
@@ -23,7 +26,19 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
   const outDir = path.resolve(process.cwd(), opts.dir);
   fs.mkdirSync(outDir, { recursive: true });
-  zip.extractAllTo(outDir, true);
+  const manifestEntry = zip.getEntry(".specregistry.json");
+  if (!manifestEntry) throw new Error("Downloaded bundle did not include .specregistry.json");
+  const nextManifest = JSON.parse(manifestEntry.getData().toString("utf8")) as Manifest;
+  validateSafeExtraction(zip, outDir, opts.force === true);
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue;
+    const target = path.resolve(outDir, entry.entryName);
+    if (!target.startsWith(outDir + path.sep) && target !== outDir) {
+      throw new Error(`Refusing to extract suspicious bundle path: ${entry.entryName}`);
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, entry.getData());
+  }
 
   const entries = zip.getEntries().filter((e) => e.entryName !== ".specregistry.json");
   console.log(`\nWrote ${entries.length} spec file(s) to ${path.relative(process.cwd(), outDir) || "."}/:`);
@@ -33,6 +48,41 @@ export async function runInit(opts: InitOptions): Promise<void> {
   console.log(`\nManifest saved as ${opts.dir}/.specregistry.json (records versions for future syncs).`);
 
   writeMcpConfig(opts.server, projectType.name, registryToken(opts.token));
+  writeRegistryGuide(opts.server, projectType.name, opts.dir, registryToken(opts.token));
+  try {
+    await reportManifest(opts.server, opts.token, nextManifest, opts.dir, "init");
+    console.log("Reported local spec manifest to the registry.");
+  } catch (err) {
+    console.log(`Could not report manifest usage: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function validateSafeExtraction(zip: AdmZip, outDir: string, force: boolean): void {
+  if (force) return;
+  const existingManifestPath = path.join(outDir, ".specregistry.json");
+  const previous = fs.existsSync(existingManifestPath)
+    ? (JSON.parse(fs.readFileSync(existingManifestPath, "utf8")) as Manifest)
+    : undefined;
+  const previousByName = new Map(previous?.specs.map((spec) => [spec.filename, spec.sha256]) ?? []);
+  const conflicts: string[] = [];
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory || entry.entryName === ".specregistry.json") continue;
+    const target = path.resolve(outDir, entry.entryName);
+    if (!fs.existsSync(target)) continue;
+    const currentHash = sha256(fs.readFileSync(target));
+    const previousHash = previousByName.get(entry.entryName);
+    if (!previousHash || previousHash !== currentHash) conflicts.push(entry.entryName);
+  }
+  if (conflicts.length > 0) {
+    throw new Error(
+      `Refusing to overwrite locally modified or unmanaged governed spec files: ${conflicts.join(", ")}. ` +
+        "Move repo-specific drafts outside the governed specs directory or re-run with --force."
+    );
+  }
+}
+
+function sha256(data: Buffer): string {
+  return crypto.createHash("sha256").update(data).digest("hex");
 }
 
 /**
@@ -66,4 +116,43 @@ function writeMcpConfig(server: string, projectType: string, token?: string): vo
     ) + "\n"
   );
   console.log("Wrote .mcp.json — AI agents in this repo can now read specs and file feedback via MCP.");
+}
+
+function writeRegistryGuide(server: string, projectType: string, specDir: string, token?: string): void {
+  const guidePath = path.resolve(process.cwd(), "SPECREGISTRY.md");
+  if (fs.existsSync(guidePath)) {
+    console.log("SPECREGISTRY.md already exists; not overwriting.");
+    return;
+  }
+  fs.writeFileSync(
+    guidePath,
+    `# SpecRegistry Repository Guide
+
+This repository is governed by SpecRegistry.
+
+## Active Spec Set
+
+- Registry: ${server}
+- Project type: ${projectType}
+- Governed specs directory: ${specDir}/
+- Manifest: ${specDir}/.specregistry.json
+
+Before changing code, load the global and project-type specifications listed in the manifest.
+Treat these as the approved source of truth. Generated repo-specific drafts belong outside
+the governed specs directory until they are submitted through the registry review workflow.
+
+## MCP
+
+Use the \`specregistry\` MCP server from \`.mcp.json\`.
+${token ? "Authentication is configured through `SPECREG_TOKEN` in `.mcp.json`.\n" : "If the registry requires auth, add `SPECREG_TOKEN` to `.mcp.json`.\n"}
+Required MCP flow:
+
+1. Call \`get_specs\` for project type \`${projectType}\`.
+2. Use \`search_specs\` for focused questions.
+3. Report ambiguity, contradiction, or outdated guidance with \`report_spec_feedback\`.
+4. Use \`specreg check\` to verify this repo is still using current approved spec versions.
+`,
+    "utf8"
+  );
+  console.log("Wrote SPECREGISTRY.md — agents can discover the active specs and MCP workflow from the repo root.");
 }

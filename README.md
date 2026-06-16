@@ -227,6 +227,13 @@ That writes:
 - `specs/*.md` — governed global + project-type specs.
 - `specs/.specregistry.json` — versions, hashes, and bundle signature metadata.
 - `.mcp.json` — MCP server config for AI agents in that repository.
+- `SPECREGISTRY.md` — root-level guidance that tells humans and agents which manifest,
+  specs directory, registry URL, project type, and MCP flow govern the repository.
+
+`specreg init` and `specreg sync` protect governed files: if a local spec has been edited
+or was not previously managed by the manifest, the CLI refuses to overwrite it unless
+`--force` is passed. Repo-specific generated drafts should stay outside `specs/` until
+they are submitted through the registry review workflow.
 
 Check for drift in CI:
 
@@ -239,6 +246,10 @@ Synchronize when the registry has newer approved specs:
 ```sh
 specreg sync --server https://specs.example.com
 ```
+
+`specreg init`, `specreg check`, and `specreg sync` report the local manifest back to the
+registry. The Settings page shows these repo consumers so admins can see which repositories
+are using which project type, manifest path, spec count, and outdated spec count.
 
 Compile governed specs into agent context files:
 
@@ -525,6 +536,9 @@ Use the LDAP tester in Settings before switching users over.
 - **Agent onboarding packs** — `GET /api/v1/specs/:type/agent-pack` returns a zip with
   `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.mcp.json`, and `SPECREGISTRY_MCP_SKILL.md`.
   `GET /api/v1/ai/mcp-guide/:type` exposes the MCP skill guide directly for agent setup.
+- **Repo consumers** — local manifests reported by `specreg init`, `specreg check`, and
+  `specreg sync` let the Settings page show which repositories are using which spec set
+  and how many reported specs are behind the latest approved versions.
 - **Reverse conformance audit** — `POST /api/v1/ai/audit` (and `specreg audit`) asks
   the configured server LLM whether a codebase snapshot *follows* its governed specs,
   reporting violations with spec/section/file citations. Checks adherence, not just spec currency.

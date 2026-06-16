@@ -10,6 +10,7 @@ import {
   type LlmConfig,
   type McpGuide,
   type ProjectTypeWithCount,
+  type RepoConsumerRow,
   type SubscriptionRow,
   type SyncJobRow,
   type UserRow,
@@ -21,6 +22,7 @@ const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved",
 export default function SettingsPage() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
+  const [consumers, setConsumers] = useState<RepoConsumerRow[]>([]);
   const [jobs, setJobs] = useState<SyncJobRow[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -71,6 +73,7 @@ export default function SettingsPage() {
     Promise.all([
       api.webhooks(),
       api.subscriptions(),
+      api.repoConsumers(),
       api.syncJobs(),
       api.projectTypes(),
       api.users(),
@@ -81,9 +84,10 @@ export default function SettingsPage() {
       api.approvalPolicies(),
       api.auditLog(50),
     ])
-      .then(([w, s, j, t, u, k, l, llmConfig, appKeyConfig, p, a]) => {
+      .then(([w, s, c, j, t, u, k, l, llmConfig, appKeyConfig, p, a]) => {
         setWebhooks(w);
         setSubs(s);
+        setConsumers(c);
         setJobs(j);
         setTypes(t);
         setUsers(u);
@@ -879,6 +883,43 @@ export default function SettingsPage() {
                       Delete
                     </button>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="section">
+        <h2>Repo consumers</h2>
+        {consumers.length === 0 ? (
+          <div className="empty">No repositories have reported a local spec manifest yet.</div>
+        ) : (
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Repo</th>
+                <th>Project type</th>
+                <th>Specs</th>
+                <th>Outdated</th>
+                <th>Manifest</th>
+                <th>Branch</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {consumers.map((c) => (
+                <tr key={c.id}>
+                  <td className="mono">{c.repo}</td>
+                  <td>{c.project_type_name}</td>
+                  <td className="mono">{c.spec_count}</td>
+                  <td>
+                    {c.outdated_count > 0 ? <StatusBadge status="pending" /> : <StatusBadge status="approved" />}
+                    <span className="mono" style={{ marginLeft: 6 }}>{c.outdated_count}</span>
+                  </td>
+                  <td className="mono">{c.manifest_path}</td>
+                  <td className="mono">{c.branch ?? "—"}</td>
+                  <td className="faint">{timeAgo(c.last_seen_at)}</td>
                 </tr>
               ))}
             </tbody>

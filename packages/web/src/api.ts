@@ -72,6 +72,21 @@ export type FeedbackRow = AgentFeedback & {
 };
 export type SubscriptionRow = RepoSubscription & { project_type_name: string };
 export type SyncJobRow = SyncJob & { repo: string; branch: string; filename: string };
+export interface RepoConsumerRow {
+  id: string;
+  repo: string;
+  branch: string | null;
+  commit_sha: string | null;
+  project_type_id: string;
+  project_type_name: string;
+  specs_path: string;
+  manifest_path: string;
+  source: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  spec_count: number;
+  outdated_count: number;
+}
 export interface AnalyticsSummary {
   window_days: number;
   events: Record<string, number>;
@@ -302,6 +317,7 @@ export const api = {
   deleteWebhook: (id: string) => requestVoid(`/api/v1/webhooks/${id}`, { method: "DELETE" }),
 
   subscriptions: () => request<SubscriptionRow[]>("/api/v1/subscriptions"),
+  repoConsumers: () => request<RepoConsumerRow[]>("/api/v1/cli/consumers"),
   createSubscription: (body: { project_type_id: string; repo: string; branch?: string; base_path?: string }) =>
     request<RepoSubscription>("/api/v1/subscriptions", { method: "POST", body: JSON.stringify(body) }),
   deleteSubscription: (id: string) => requestVoid(`/api/v1/subscriptions/${id}`, { method: "DELETE" }),

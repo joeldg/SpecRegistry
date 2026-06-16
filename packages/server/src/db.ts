@@ -142,6 +142,30 @@ CREATE TABLE IF NOT EXISTS sync_jobs (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS repo_consumers (
+  id TEXT PRIMARY KEY,
+  repo TEXT NOT NULL,
+  branch TEXT,
+  commit_sha TEXT,
+  project_type_id TEXT NOT NULL REFERENCES project_types(id),
+  specs_path TEXT NOT NULL DEFAULT 'specs',
+  manifest_path TEXT NOT NULL DEFAULT 'specs/.specregistry.json',
+  source TEXT NOT NULL DEFAULT 'cli',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  UNIQUE (repo, project_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS repo_consumer_specs (
+  consumer_id TEXT NOT NULL REFERENCES repo_consumers(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  version TEXT NOT NULL,
+  project_type TEXT,
+  sha256 TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (consumer_id, filename)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS spec_chunks USING fts5(
   spec_id UNINDEXED,
   section,
@@ -263,6 +287,33 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
     `,
   },
   { version: 9, sql: "ALTER TABLE change_requests ADD COLUMN contradictions TEXT" },
+  {
+    version: 10,
+    sql: `
+      CREATE TABLE IF NOT EXISTS repo_consumers (
+        id TEXT PRIMARY KEY,
+        repo TEXT NOT NULL,
+        branch TEXT,
+        commit_sha TEXT,
+        project_type_id TEXT NOT NULL REFERENCES project_types(id),
+        specs_path TEXT NOT NULL DEFAULT 'specs',
+        manifest_path TEXT NOT NULL DEFAULT 'specs/.specregistry.json',
+        source TEXT NOT NULL DEFAULT 'cli',
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        UNIQUE (repo, project_type_id)
+      );
+      CREATE TABLE IF NOT EXISTS repo_consumer_specs (
+        consumer_id TEXT NOT NULL REFERENCES repo_consumers(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        version TEXT NOT NULL,
+        project_type TEXT,
+        sha256 TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (consumer_id, filename)
+      );
+    `,
+  },
 ];
 
 export function createDb(path: string): Db {

@@ -22,11 +22,11 @@ Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
   --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
   --type <name>     Project type name (skips the interactive prompt)
-  --dir <path>      Spec directory (default: specs)
+  --dir <path>      Spec directory (default: specs; generate --write default: .spec/drafts)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
   --target <t>      compile: claude | agents | cursor (default: claude)
   --write           generate: use configured CLI LLM provider to write generated specs
-  --force           compile: overwrite a non-generated existing file
+  --force           Overwrite protected/generated files where supported
   --ci              audit: exit 1 when findings exist
   -h, --help        Show this help
 `;
@@ -77,6 +77,7 @@ try {
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      force: flags.force === true,
     });
   } else if (command === "generate") {
     await runGenerate({
@@ -84,7 +85,7 @@ try {
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       out: typeof flags.out === "string" ? flags.out : ".spec/prompts",
-      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      dir: typeof flags.dir === "string" ? flags.dir : ".spec/drafts",
       write: flags.write === true,
       force: flags.force === true,
     });

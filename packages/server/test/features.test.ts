@@ -29,6 +29,39 @@ async function findSpec(filename: string, typeName: string) {
 }
 
 describe("sync-check (CLI drift detection)", () => {
+  it("records repository manifest consumers and reports outdated counts", async () => {
+    const report = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/manifest-report",
+      payload: {
+        repo: "github.com/acme/device",
+        branch: "main",
+        commit_sha: "abc123",
+        project_type: "Acme Edge Device",
+        specs_path: "specs",
+        manifest_path: "specs/.specregistry.json",
+        specs: [
+          { filename: "DESIGN.md", version: "0.9.0", project_type: "Acme Edge Device", sha256: "old" },
+          { filename: "GLOBAL_SECURITY.md", version: "1.0.0", project_type: "Global", sha256: "current" },
+        ],
+      },
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).toMatchObject({ ok: true, repo: "github.com/acme/device", specs: 2 });
+
+    const consumers = await app.inject({ method: "GET", url: "/api/v1/cli/consumers" });
+    expect(consumers.statusCode).toBe(200);
+    expect(consumers.json()).toEqual([
+      expect.objectContaining({
+        repo: "github.com/acme/device",
+        project_type_name: "Acme Edge Device",
+        spec_count: 2,
+        outdated_count: 1,
+        manifest_path: "specs/.specregistry.json",
+      }),
+    ]);
+  });
+
   it("reports drift after a spec version bump", async () => {
     const clean = await app.inject({
       method: "POST",

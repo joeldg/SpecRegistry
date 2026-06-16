@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { StubPromptResponse } from "@specregistry/shared";
 import { fetchJson, selectProjectType } from "./registry.js";
+import type { Manifest } from "./repo.js";
 import { scanDirectory } from "./scan.js";
 
 export interface GenerateOptions {
@@ -202,6 +203,7 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
   fs.mkdirSync(outDir, { recursive: true });
   const specDir = path.resolve(root, opts.dir);
   if (opts.write) fs.mkdirSync(specDir, { recursive: true });
+  const governed = opts.write ? governedFilenames(specDir) : new Set<string>();
 
   const written: string[] = [];
   const generated: string[] = [];
@@ -214,6 +216,12 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
 
     if (opts.write) {
       const target = path.join(specDir, stub.target_filename);
+      if (governed.has(stub.target_filename) && !opts.force) {
+        throw new Error(
+          `${path.relative(root, target)} is governed by ${path.relative(root, path.join(specDir, ".specregistry.json"))}. ` +
+            "Generate repo-specific drafts outside the governed specs directory or re-run with --force."
+        );
+      }
       if (fs.existsSync(target) && !opts.force) {
         throw new Error(`${path.relative(root, target)} already exists. Re-run with --force to overwrite it.`);
       }
@@ -238,4 +246,11 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
       `\nNext step: run each prompt through your AI agent to produce the corresponding spec file,\nor re-run with --write and SPECREG_GENERATE_PROVIDER / LLM_PROVIDER configured.`
     );
   }
+}
+
+function governedFilenames(specDir: string): Set<string> {
+  const manifestPath = path.join(specDir, ".specregistry.json");
+  if (!fs.existsSync(manifestPath)) return new Set();
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
+  return new Set(manifest.specs.map((spec) => spec.filename));
 }

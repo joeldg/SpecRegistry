@@ -5,6 +5,7 @@ import { fetchJson } from "./registry.js";
 import { runInit } from "./init.js";
 import { runCompile, savedCompileTargets } from "./compile.js";
 import { runVerify } from "./verify.js";
+import { reportManifest, type Manifest } from "./repo.js";
 
 export interface SyncOptions {
   server: string;
@@ -12,11 +13,6 @@ export interface SyncOptions {
   dir: string;
   /** check: report drift and exit 1; sync: re-pull when drift is found */
   mode: "check" | "sync";
-}
-
-interface Manifest {
-  project_type: string;
-  specs: Array<{ filename: string; version: string; pin?: string }>;
 }
 
 function readManifest(dir: string): Manifest {
@@ -36,6 +32,11 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ project_type: manifest.project_type, specs: manifest.specs }),
   }, opts.token);
+  try {
+    await reportManifest(opts.server, opts.token, manifest, opts.dir, opts.mode);
+  } catch (err) {
+    console.log(`Could not report manifest usage: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   console.log(`Project type: ${result.project_type}`);
   console.log(`  Up to date:     ${result.up_to_date.length}`);

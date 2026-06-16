@@ -39,6 +39,7 @@ Prerequisites:
 
 ```sh
 npm install
+cp .env.example .env
 npm run build
 
 # Development: API on :4000 (auto-seeds Acme demo data on first run)
@@ -53,11 +54,16 @@ Open the dashboard at `http://localhost:5173`. API calls are proxied to
 The development server seeds Acme demo data into `specregistry.db` the first time it
 starts. Delete that file if you want a fresh local registry.
 
+The server loads `.env` automatically for local `npm run dev:server`,
+`npm run seed`, and `node packages/server/dist/index.js` runs. Real process
+environment variables take precedence over values in `.env`.
+
 ### Production-style Node
 
 Production-style: after `npm run build`, `node packages/server/dist/index.js` serves
 both the API and the built web UI on port 4000 (`PORT` / `SPECREG_DB` env vars override
-the defaults; the SQLite file defaults to `./specregistry.db`).
+the defaults; the SQLite file defaults to `./specregistry.db`). Values can also be placed
+in `.env` at the repository root.
 
 ```sh
 npm install

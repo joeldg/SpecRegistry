@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import { buildApp } from "./app.js";
 import { createDb } from "./db.js";
+import { loadServerEnv } from "./env.js";
 import { seed } from "./seed.js";
+
+loadServerEnv();
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.SPECREG_DB ?? path.resolve(here, "../../..", "specregistry.db");

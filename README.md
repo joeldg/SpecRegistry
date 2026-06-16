@@ -619,7 +619,36 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `SPECREG_SERVER` | CLI, MCP, and sample loader registry URL |
 | `SPECREG_TOKEN` | CLI, MCP, and sample loader Bearer/API token for auth-required registries |
 | `SPECREG_PROJECT_TYPE` | MCP default project type |
-| `ANTHROPIC_API_KEY` | CLI `specreg generate --write` local generation |
+| `SPECREG_GENERATE_PROVIDER` | CLI `specreg generate --write` provider: `anthropic`, `openai`, `gemini`, or `openai_compatible` |
+| `SPECREG_GENERATE_MODEL` | CLI generation model override |
+| `SPECREG_GENERATE_BASE_URL` | CLI generation base URL for proxy/local/OpenAI-compatible endpoints |
+| `SPECREG_GENERATE_API_KEY` | CLI generation API key override |
+| `SPECREG_GENERATE_MAX_TOKENS` | CLI generation token budget |
+
+`specreg generate --write` also reads `.env` in the current directory. If
+`SPECREG_GENERATE_*` variables are omitted, it falls back to the matching server-style
+`LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY`, and provider API key variables
+such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GEMINI_API_KEY`.
+
+CLI generation examples:
+
+```dotenv
+SPECREG_GENERATE_PROVIDER=openai
+SPECREG_GENERATE_MODEL=gpt-4.1
+OPENAI_API_KEY=sk-...
+```
+
+```dotenv
+SPECREG_GENERATE_PROVIDER=gemini
+SPECREG_GENERATE_MODEL=gemini-3.5-flash
+GEMINI_API_KEY=...
+```
+
+```dotenv
+SPECREG_GENERATE_PROVIDER=openai_compatible
+SPECREG_GENERATE_MODEL=llama3.1
+SPECREG_GENERATE_BASE_URL=http://localhost:11434/v1
+```
 
 ### Server LLM providers
 

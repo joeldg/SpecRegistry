@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { loadCliEnv } from "./env.js";
 import { runInit } from "./init.js";
 import { runGenerate } from "./generate.js";
 import { runSync } from "./sync.js";
@@ -24,11 +25,13 @@ Options:
   --dir <path>      Spec directory (default: specs)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
   --target <t>      compile: claude | agents | cursor (default: claude)
-  --write           generate: use $ANTHROPIC_API_KEY to write generated specs
+  --write           generate: use configured CLI LLM provider to write generated specs
   --force           compile: overwrite a non-generated existing file
   --ci              audit: exit 1 when findings exist
   -h, --help        Show this help
 `;
+
+loadCliEnv();
 
 interface Args {
   command: string | undefined;

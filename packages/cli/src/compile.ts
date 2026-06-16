@@ -14,6 +14,7 @@ interface CompileResponse {
 
 export interface CompileOptions {
   server: string;
+  token?: string;
   type?: string;
   dir: string;
   target: CompileTarget;
@@ -58,10 +59,12 @@ export function savedCompileTargets(dir: string): CompileTarget[] {
 
 export async function runCompile(opts: CompileOptions): Promise<void> {
   const typeName =
-    opts.type ?? projectTypeFromManifest(opts.dir) ?? (await selectProjectType(opts.server, undefined)).name;
+    opts.type ?? projectTypeFromManifest(opts.dir) ?? (await selectProjectType(opts.server, undefined, opts.token)).name;
 
   const compiled = await fetchJson<CompileResponse>(
-    `${opts.server}/api/v1/specs/${encodeURIComponent(typeName)}/compile?target=${opts.target}`
+    `${opts.server}/api/v1/specs/${encodeURIComponent(typeName)}/compile?target=${opts.target}`,
+    undefined,
+    opts.token
   );
 
   const outPath = path.resolve(process.cwd(), compiled.target_filename);

@@ -5,6 +5,7 @@ import { scanDirectory } from "./scan.js";
 
 export interface AuditOptions {
   server: string;
+  token?: string;
   type?: string;
   dir: string;
   /** exit 1 when findings exist (CI gate) */
@@ -79,7 +80,7 @@ export async function runAudit(opts: AuditOptions): Promise<void> {
   if (!typeName && fs.existsSync(manifestFile)) {
     typeName = (JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { project_type?: string }).project_type;
   }
-  if (!typeName) typeName = (await selectProjectType(opts.server, undefined)).name;
+  if (!typeName) typeName = (await selectProjectType(opts.server, undefined, opts.token)).name;
 
   console.log(`Scanning ${root} ...`);
   const scan = scanDirectory(root);
@@ -90,7 +91,7 @@ export async function runAudit(opts: AuditOptions): Promise<void> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ project_type: typeName, tree: scan.tree, files }),
-  });
+  }, opts.token);
 
   if (findings.length === 0) {
     console.log("\nNo spec violations found in the sampled snapshot.");

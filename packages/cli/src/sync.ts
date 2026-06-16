@@ -8,6 +8,7 @@ import { runVerify } from "./verify.js";
 
 export interface SyncOptions {
   server: string;
+  token?: string;
   dir: string;
   /** check: report drift and exit 1; sync: re-pull when drift is found */
   mode: "check" | "sync";
@@ -34,7 +35,7 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ project_type: manifest.project_type, specs: manifest.specs }),
-  });
+  }, opts.token);
 
   console.log(`Project type: ${result.project_type}`);
   console.log(`  Up to date:     ${result.up_to_date.length}`);
@@ -63,9 +64,16 @@ export async function runSync(opts: SyncOptions): Promise<void> {
 
   console.log("\nDrift detected — pulling latest approved specs...");
   const compileTargets = savedCompileTargets(opts.dir);
-  await runInit({ server: opts.server, type: manifest.project_type, dir: opts.dir });
-  await runVerify({ server: opts.server, dir: opts.dir, quiet: false });
+  await runInit({ server: opts.server, token: opts.token, type: manifest.project_type, dir: opts.dir });
+  await runVerify({ server: opts.server, token: opts.token, dir: opts.dir, quiet: false });
   for (const target of compileTargets) {
-    await runCompile({ server: opts.server, type: manifest.project_type, dir: opts.dir, target, force: true });
+    await runCompile({
+      server: opts.server,
+      token: opts.token,
+      type: manifest.project_type,
+      dir: opts.dir,
+      target,
+      force: true,
+    });
   }
 }

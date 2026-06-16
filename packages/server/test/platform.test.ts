@@ -407,6 +407,7 @@ describe("agent MCP guide", () => {
     expect(guide.project_type).toBe("Acme Edge Device");
     expect(guide.content).toContain("SpecRegistry MCP Skill");
     expect(guide.content).toContain("get_specs");
+    expect(guide.content).toContain("SPECREG_TOKEN");
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });
@@ -423,6 +424,7 @@ describe("agent MCP guide", () => {
     expect(names).toContain(".mcp.json");
     expect(names).toContain("SPECREGISTRY_MCP_SKILL.md");
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("report_spec_feedback");
+    expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("SPECREG_TOKEN");
     const mcp = JSON.parse(zip.readAsText(".mcp.json"));
     expect(mcp.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(mcp.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");

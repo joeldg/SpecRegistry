@@ -194,6 +194,13 @@ cd /path/to/app
 specreg init --server http://localhost:4000 --type "Acme Edge Device"
 ```
 
+For an auth-required registry, pass a login/API token with `--token` or `SPECREG_TOKEN`:
+
+```sh
+SPECREG_TOKEN=sreg_... specreg init --server https://specs.example.com --type "Acme Edge Device"
+specreg check --server https://specs.example.com --token sreg_...
+```
+
 That writes:
 
 - `specs/*.md` — governed global + project-type specs.
@@ -232,9 +239,9 @@ Run an AI conformance audit:
 specreg audit --server https://specs.example.com --type "Web App Standard" --ci
 ```
 
-The current CLI and MCP clients are intended for trusted/internal registries or public
-read workflows. If `SPECREG_AUTH=required`, use the dashboard and direct API calls for
-admin/review operations; token-aware CLI/MCP transport is a natural next hardening step.
+Every CLI command accepts `--token <token>` and also reads `SPECREG_TOKEN`. Use an
+`agent` or `author` API key for repository automation, depending on which server routes
+the workflow needs.
 
 ### AI Agent and MCP Usage
 
@@ -248,12 +255,16 @@ After `specreg init`, MCP-capable agents can use the generated `.mcp.json`:
       "args": [],
       "env": {
         "SPECREG_SERVER": "https://specs.example.com",
-        "SPECREG_PROJECT_TYPE": "Web App Standard"
+        "SPECREG_PROJECT_TYPE": "Web App Standard",
+        "SPECREG_TOKEN": "sreg_..."
       }
     }
   }
 }
 ```
+
+`specreg init` includes `SPECREG_TOKEN` in the generated `.mcp.json` when the token is
+present in the environment or passed with `--token`.
 
 The MCP server exposes these tools:
 
@@ -328,6 +339,20 @@ TOKEN=$(
 )
 
 curl http://localhost:4000/api/v1/auth/me -H "authorization: Bearer $TOKEN"
+```
+
+Create a long-lived API key for CLI, CI, or MCP automation:
+
+```sh
+curl -X POST http://localhost:4000/api/v1/auth/users \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"username":"agent-bot","role":"agent"}'
+
+curl -X POST http://localhost:4000/api/v1/auth/api-keys \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"username":"agent-bot","name":"repo automation"}'
 ```
 
 ### CI Usage
@@ -545,6 +570,15 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks |
 | `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions |
 | `LDAP_URL` (+ `LDAP_*`) | Optional LDAP authentication |
+
+### Client environment variables
+
+| Variable | Used by |
+| --- | --- |
+| `SPECREG_SERVER` | CLI, MCP, and sample loader registry URL |
+| `SPECREG_TOKEN` | CLI, MCP, and sample loader Bearer/API token for auth-required registries |
+| `SPECREG_PROJECT_TYPE` | MCP default project type |
+| `ANTHROPIC_API_KEY` | CLI `specreg generate --write` local generation |
 
 Spec download bundles are ed25519-signed; the keypair is generated on first use and stored
 in the database. `specreg verify` checks bundle provenance against the public key.

@@ -1,20 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import AdmZip from "adm-zip";
-import { selectProjectType } from "./registry.js";
+import { registryToken, selectProjectType, withRegistryAuth } from "./registry.js";
 
 export interface InitOptions {
   server: string;
+  token?: string;
   type?: string;
   dir: string;
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const projectType = await selectProjectType(opts.server, opts.type);
+  const projectType = await selectProjectType(opts.server, opts.type, opts.token);
   console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
 
   const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.name)}/download`;
-  const res = await fetch(url);
+  const res = await fetch(url, withRegistryAuth(undefined, opts.token));
   if (!res.ok) {
     throw new Error(`Download failed: ${res.status} ${res.statusText}`);
   }
@@ -31,14 +32,14 @@ export async function runInit(opts: InitOptions): Promise<void> {
   }
   console.log(`\nManifest saved as ${opts.dir}/.specregistry.json (records versions for future syncs).`);
 
-  writeMcpConfig(opts.server, projectType.name);
+  writeMcpConfig(opts.server, projectType.name, registryToken(opts.token));
 }
 
 /**
  * Drop a .mcp.json so MCP-capable agents (Claude Code etc.) in this repo can query
  * the registry and file feedback natively. Existing files are left untouched.
  */
-function writeMcpConfig(server: string, projectType: string): void {
+function writeMcpConfig(server: string, projectType: string, token?: string): void {
   const mcpPath = path.resolve(process.cwd(), ".mcp.json");
   if (fs.existsSync(mcpPath)) {
     console.log(".mcp.json already exists; not overwriting (add a 'specregistry' server manually if wanted).");
@@ -52,7 +53,11 @@ function writeMcpConfig(server: string, projectType: string): void {
           specregistry: {
             command: "specreg-mcp",
             args: [],
-            env: { SPECREG_SERVER: server, SPECREG_PROJECT_TYPE: projectType },
+            env: {
+              SPECREG_SERVER: server,
+              SPECREG_PROJECT_TYPE: projectType,
+              ...(token ? { SPECREG_TOKEN: token } : {}),
+            },
           },
         },
       },

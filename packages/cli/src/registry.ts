@@ -1,10 +1,26 @@
 import readline from "node:readline/promises";
 import type { ProjectType } from "@specregistry/shared";
 
-export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+export interface RegistryAuthOptions {
+  token?: string;
+}
+
+export function registryToken(token?: string): string | undefined {
+  return token ?? process.env.SPECREG_TOKEN;
+}
+
+export function withRegistryAuth(init: RequestInit = {}, token?: string): RequestInit {
+  const resolved = registryToken(token);
+  if (!resolved) return init;
+  const headers = new Headers(init.headers);
+  if (!headers.has("authorization")) headers.set("authorization", `Bearer ${resolved}`);
+  return { ...init, headers };
+}
+
+export async function fetchJson<T>(url: string, init?: RequestInit, token?: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, withRegistryAuth(init, token));
   } catch {
     throw new Error(`Could not reach the registry server at ${new URL(url).origin}. Is it running?`);
   }
@@ -22,8 +38,8 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
 }
 
 /** Resolve a project type by flag value, or interactively if none was given. */
-export async function selectProjectType(server: string, typeName?: string): Promise<ProjectType> {
-  const all = await fetchJson<ProjectType[]>(`${server}/api/v1/project-types`);
+export async function selectProjectType(server: string, typeName?: string, token?: string): Promise<ProjectType> {
+  const all = await fetchJson<ProjectType[]>(`${server}/api/v1/project-types`, undefined, token);
   const selectable = all.filter((t) => t.scope === "project_type");
   if (selectable.length === 0) {
     throw new Error("The registry has no project types configured yet.");

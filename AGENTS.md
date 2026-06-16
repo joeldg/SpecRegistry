@@ -47,6 +47,7 @@ The API defaults to `http://localhost:4000`. The Vite app defaults to `http://lo
 - Update README/docs when API surface, deployment, or SDD workflow changes.
 - Do not bypass review, approval policy, audit log, or feedback-loop semantics casually.
 - Keep generated agent/MCP artifacts aware of `SPECREG_PUBLIC_URL` for Docker/server deployments.
+- Keep CLI/MCP documentation and generated guidance aware of `SPECREG_TOKEN` for auth-required registries.
 - Leave unrelated local files alone, especially user-specific config.
 
 ## Docker/Public URL
@@ -58,3 +59,10 @@ When generating agent packs or MCP guide content, use the registry's public URL,
 3. `http://localhost:${PORT || 4000}`
 
 In Docker or behind a proxy, set `SPECREG_PUBLIC_URL` to the URL that developer machines and agents can reach.
+
+## CLI/MCP Authentication
+
+The CLI accepts `--token <token>` and reads `SPECREG_TOKEN`. The MCP server also reads
+`SPECREG_TOKEN` and sends it as a Bearer token to the registry. When updating agent packs,
+MCP guide content, or README examples, include this auth path for deployments using
+`SPECREG_AUTH=required`.

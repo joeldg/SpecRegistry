@@ -29,6 +29,8 @@ ${JSON.stringify(mcpConfig(serverUrl, projectType), null, 2)}
 \`\`\`
 
 If the project type is not preconfigured, call \`list_project_types\` first and choose the best match.
+If the registry requires authentication, add \`SPECREG_TOKEN\` to the MCP server \`env\` block. Use a
+login token or long-lived API key with the minimum role needed for the workflow.
 
 ## Required Workflow
 

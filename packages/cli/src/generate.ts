@@ -6,6 +6,7 @@ import { scanDirectory } from "./scan.js";
 
 export interface GenerateOptions {
   server: string;
+  token?: string;
   type?: string;
   out: string;
   dir: string;
@@ -59,7 +60,7 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
     `Found ${scan.fileCount} files. Detected languages: ${scan.languages.join(", ") || "(none)"}`
   );
 
-  const projectType = await selectProjectType(opts.server, opts.type);
+  const projectType = await selectProjectType(opts.server, opts.type, opts.token);
   const response = await fetchJson<StubPromptResponse>(`${opts.server}/api/v1/cli/stub-prompts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -67,7 +68,7 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
       project_type: projectType.name,
       detected_languages: scan.languages,
     }),
-  });
+  }, opts.token);
 
   const outDir = path.resolve(root, opts.out);
   fs.mkdirSync(outDir, { recursive: true });

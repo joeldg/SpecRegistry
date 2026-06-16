@@ -5,6 +5,7 @@ import { fetchJson } from "./registry.js";
 
 export interface VerifyOptions {
   server: string;
+  token?: string;
   dir: string;
   /** print nothing on success */
   quiet?: boolean;
@@ -53,7 +54,11 @@ export async function runVerify(opts: VerifyOptions): Promise<boolean> {
   } else {
     // compile_targets is appended locally by `specreg compile` and is not part of the signed payload.
     const { signature, signature_alg: _alg, compile_targets: _local, ...payload } = manifest;
-    const { public_key } = await fetchJson<{ public_key: string }>(`${opts.server}/api/v1/meta/public-key`);
+    const { public_key } = await fetchJson<{ public_key: string }>(
+      `${opts.server}/api/v1/meta/public-key`,
+      undefined,
+      opts.token
+    );
     const ok = crypto.verify(
       null,
       Buffer.from(JSON.stringify(payload), "utf8"),

@@ -19,6 +19,7 @@ Usage:
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
+  --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
   --type <name>     Project type name (skips the interactive prompt)
   --dir <path>      Spec directory (default: specs)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
@@ -62,6 +63,7 @@ const server =
   (typeof flags.server === "string" ? flags.server : undefined) ??
   process.env.SPECREG_SERVER ??
   "http://localhost:4000";
+const token = typeof flags.token === "string" ? flags.token : process.env.SPECREG_TOKEN;
 
 try {
   if (flags.help || command === undefined || command === "help") {
@@ -69,12 +71,14 @@ try {
   } else if (command === "init") {
     await runInit({
       server,
+      token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
     });
   } else if (command === "generate") {
     await runGenerate({
       server,
+      token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       out: typeof flags.out === "string" ? flags.out : ".spec/prompts",
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
@@ -84,6 +88,7 @@ try {
   } else if (command === "check" || command === "sync") {
     await runSync({
       server,
+      token,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       mode: command,
     });
@@ -94,17 +99,19 @@ try {
     }
     await runCompile({
       server,
+      token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       target: target as CompileTarget,
       force: flags.force === true,
     });
   } else if (command === "verify") {
-    const ok = await runVerify({ server, dir: typeof flags.dir === "string" ? flags.dir : "specs" });
+    const ok = await runVerify({ server, token, dir: typeof flags.dir === "string" ? flags.dir : "specs" });
     if (!ok) process.exit(1);
   } else if (command === "audit") {
     await runAudit({
       server,
+      token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       ci: flags.ci === true,

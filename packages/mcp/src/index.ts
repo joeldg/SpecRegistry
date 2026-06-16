@@ -4,7 +4,8 @@
  * read governed specs, search them, and file feedback without raw HTTP.
  *
  * Env: SPECREG_SERVER (default http://localhost:4000),
- *      SPECREG_PROJECT_TYPE (optional default project type for tools).
+ *      SPECREG_PROJECT_TYPE (optional default project type for tools),
+ *      SPECREG_TOKEN (optional registry Bearer/API token).
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -12,9 +13,12 @@ import { z } from "zod";
 
 const SERVER = process.env.SPECREG_SERVER ?? "http://localhost:4000";
 const DEFAULT_TYPE = process.env.SPECREG_PROJECT_TYPE;
+const TOKEN = process.env.SPECREG_TOKEN;
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${SERVER}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (TOKEN && !headers.has("authorization")) headers.set("authorization", `Bearer ${TOKEN}`);
+  const res = await fetch(`${SERVER}${path}`, { ...init, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {

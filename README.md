@@ -637,7 +637,7 @@ Gemini example:
 
 ```dotenv
 LLM_PROVIDER=gemini
-LLM_MODEL=gemini-2.5-pro
+LLM_MODEL=gemini-3.5-flash
 GEMINI_API_KEY=...
 ```
 

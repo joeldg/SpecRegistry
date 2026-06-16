@@ -285,7 +285,7 @@ export default function SettingsPage() {
                       : llm.provider === "openai"
                         ? "gpt-4.1"
                         : llm.provider === "gemini"
-                          ? "gemini-2.5-pro"
+                          ? "gemini-3.5-flash"
                           : "llama3.1"
                   }
                   value={llm.model}

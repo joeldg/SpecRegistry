@@ -395,11 +395,36 @@ describe("LLM settings", () => {
     await app.inject({
       method: "PUT",
       url: "/api/v1/llm/config",
-      payload: { provider: "gemini", base_url: "https://gemini.test/v1beta", api_key: "gemini-key", model: "gemini-a" },
+      payload: { provider: "gemini", base_url: "https://gemini.test/v1beta", api_key: "gemini-key", model: "gemini-3.5-flash" },
     });
     const gemini = await app.inject({ method: "GET", url: "/api/v1/llm/models" });
-    expect(gemini.json().models).toEqual(["gemini-a"]);
+    expect(gemini.json().models.slice(0, 4)).toEqual([
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite-preview-12-2025",
+      "gemini-3-pro-preview",
+      "gemini-3-pro-image-preview",
+    ]);
+    expect(gemini.json().models).toContain("gemini-a");
+    expect(gemini.json().models).not.toContain("embed-a");
     expect(fetchMock).toHaveBeenLastCalledWith("https://gemini.test/v1beta/models?key=gemini-key");
+  });
+
+  it("lists current Gemini models without an API key", async () => {
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/llm/config",
+      payload: { provider: "gemini", model: "gemini-3.5-flash", clear_api_key: true },
+    });
+    const gemini = await app.inject({ method: "GET", url: "/api/v1/llm/models" });
+    expect(gemini.json().models).toEqual([
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite-preview-12-2025",
+      "gemini-3-pro-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+    ]);
   });
 });
 

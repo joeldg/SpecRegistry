@@ -24,6 +24,29 @@ const KEYS = {
   max_tokens: "llm.max_tokens",
 };
 
+const GEMINI_MODEL_FALLBACKS = [
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite-preview-12-2025",
+  "gemini-3-pro-preview",
+  "gemini-3-pro-image-preview",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+];
+
+function uniqueModels(...groups: string[][]): string[] {
+  const seen = new Set<string>();
+  const models: string[] = [];
+  for (const group of groups) {
+    for (const model of group) {
+      if (!model || seen.has(model)) continue;
+      seen.add(model);
+      models.push(model);
+    }
+  }
+  return models;
+}
+
 function settingMap(db: Db): Map<string, string> {
   return new Map(
     (db.prepare("SELECT key, value FROM settings WHERE key LIKE 'llm.%'").all() as Array<{ key: string; value: string }>).map(
@@ -60,7 +83,7 @@ export function getLlmConfig(db: Db): LlmConfig {
         : normalizedProvider === "openai"
           ? "gpt-4.1"
           : normalizedProvider === "gemini"
-            ? "gemini-2.5-pro"
+            ? "gemini-3.5-flash"
             : "llama3.1"),
     base_url: settings.get(KEYS.base_url) || process.env.LLM_BASE_URL || "",
     api_key:
@@ -210,7 +233,7 @@ export async function listLlmModels(db: Db): Promise<{ provider: LlmProvider; mo
   }
   if (config.provider === "gemini") {
     if (!config.api_key) {
-      return { provider: config.provider, models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro"] };
+      return { provider: config.provider, models: GEMINI_MODEL_FALLBACKS };
     }
     const base = (config.base_url || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
     const res = await fetch(`${base}/models?key=${encodeURIComponent(config.api_key)}`);
@@ -220,7 +243,7 @@ export async function listLlmModels(db: Db): Promise<{ provider: LlmProvider; mo
       .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
       .map((model) => (model.name ?? "").replace(/^models\//, ""))
       .filter(Boolean);
-    return { provider: config.provider, models };
+    return { provider: config.provider, models: uniqueModels(GEMINI_MODEL_FALLBACKS, models) };
   }
 
   const base =

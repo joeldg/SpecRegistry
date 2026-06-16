@@ -10,6 +10,7 @@ import { createChangeRequest } from "../lib/changes.js";
 import { uuid as makeId } from "../db.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { searchSpecs } from "../lib/search.js";
+import { splitSections } from "../lib/sections.js";
 
 export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   // Agent-facing onboarding guide: feed this markdown to an agent so it knows how
@@ -38,8 +39,18 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
          WHERE s.status IN ('published', 'pending_review') AND (pt.id = ? OR pt.scope = 'global')
          ORDER BY pt.scope = 'global' DESC, s.filename`
       )
-      .all(pt.id);
-    return { project_type: pt.name, specs };
+      .all(pt.id) as Array<Spec & { project_type_name: string; project_type_scope: string }>;
+    return {
+      project_type: pt.name,
+      specs: specs.map((spec) => ({
+        ...spec,
+        sections: splitSections(spec.content).map((section) => ({
+          title: section.section,
+          anchor: section.anchor,
+          permalink: `/api/v1/specs/${spec.id}#${section.anchor}`,
+        })),
+      })),
+    };
   });
 
   // Telemetry ingestion: agents flag ambiguities/contradictions for human review.
@@ -91,7 +102,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     return { query: q, results: searchSpecs(app.db, q, pt?.id) };
   });
 
-  // Close the loop: have Claude draft a revision that resolves the feedback,
+  // Close the loop: have the configured server LLM draft a revision that resolves the feedback,
   // then submit it through the normal review workflow as a pending change request.
   app.post("/ai/feedback/:id/draft-fix", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -105,7 +116,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "Spec already has a pending change request; review it first");
     }
 
-    const revised = await draftFix(spec, feedback);
+    const revised = await draftFix(app.db, spec, feedback);
     const cr = createChangeRequest(app.db, {
       spec,
       proposedContent: revised,
@@ -201,7 +212,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const spec = requireSpec(app.db, requireString(body, "spec_id"));
     const task = requireString(body, "task_prompt");
-    const result = await runEfficacy(spec.content, spec.filename, task);
+    const result = await runEfficacy(app.db, spec.content, spec.filename, task);
     const id = makeId();
     app.db
       .prepare(

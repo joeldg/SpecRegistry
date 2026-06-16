@@ -1,12 +1,26 @@
 import { useMemo } from "react";
-import { marked } from "marked";
+import { Renderer, marked } from "marked";
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${status}`}>{status.replace("_", " ")}</span>;
 }
 
 export function Markdown({ content }: { content: string }) {
-  const html = useMemo(() => marked.parse(content, { async: false }) as string, [content]);
+  const html = useMemo(() => {
+    const renderer = new Renderer();
+    renderer.heading = ({ tokens, depth }) => {
+      const text = tokens.map((token) => token.raw).join("");
+      const anchor = text
+        .trim()
+        .toLowerCase()
+        .replace(/[`*_~[\]()]/g, "")
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "intro";
+      return `<h${depth} id="${anchor}">${text}</h${depth}>`;
+    };
+    return marked.parse(content, { async: false, renderer }) as string;
+  }, [content]);
   return <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

@@ -11,8 +11,39 @@ import {
 } from "../lib/auth.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { processSyncJobs } from "../lib/github.js";
+import { publicLlmConfig, runLlmText, saveLlmConfig, type LlmConfig } from "../lib/llm.js";
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  // --- LLM provider settings ---
+
+  app.get("/llm/config", async () => {
+    return publicLlmConfig(app.db);
+  });
+
+  app.put("/llm/config", async (req) => {
+    const body = (req.body ?? {}) as Partial<LlmConfig> & { clear_api_key?: boolean };
+    const saved = publicLlmConfig(app.db, saveLlmConfig(app.db, body));
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "llm.config.updated",
+      target_type: "llm",
+      summary: "LLM configuration updated",
+      detail: { provider: saved.provider, model: saved.model, base_url: saved.base_url, has_api_key: saved.has_api_key },
+    });
+    return saved;
+  });
+
+  app.post("/llm/test", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const prompt = typeof body.prompt === "string" && body.prompt.trim() ? body.prompt.trim() : "Reply with: ok";
+    const result = await runLlmText(app.db, {
+      system: "You are a connectivity test for SpecRegistry. Reply briefly.",
+      user: prompt,
+      maxTokens: 200,
+    });
+    return { ok: true, provider: result.provider, model: result.model, text: result.text };
+  });
+
   // --- LDAP settings ---
 
   app.get("/ldap/config", async () => {

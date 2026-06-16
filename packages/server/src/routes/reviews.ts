@@ -18,6 +18,52 @@ function requireChangeRequest(app: FastifyInstance, id: string): ChangeRequest {
 }
 
 export async function reviewRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/reviews/sla", async (req) => {
+    const query = req.query as { warn_hours?: string; breach_hours?: string };
+    const warnHours = Math.max(1, Number(query.warn_hours ?? 24) || 24);
+    const breachHours = Math.max(warnHours, Number(query.breach_hours ?? 72) || 72);
+    const nowMs = Date.now();
+    const rows = app.db
+      .prepare(
+        `SELECT cr.id, cr.spec_id, cr.proposed_by, cr.version_delta, cr.summary, cr.created_at,
+                s.filename, s.current_version, pt.name AS project_type_name,
+                COALESCE((
+                  SELECT ap.min_approvals
+                  FROM approval_policies ap
+                  WHERE (ap.project_type_id IS NULL OR ap.project_type_id = s.project_type_id)
+                    AND (ap.filename_glob = '*' OR s.filename LIKE REPLACE(ap.filename_glob, '*', '%'))
+                  ORDER BY ap.project_type_id IS NOT NULL DESC, LENGTH(ap.filename_glob) DESC
+                  LIMIT 1
+                ), 1) AS required_approvals,
+                (SELECT COUNT(*) FROM review_approvals ra WHERE ra.change_request_id = cr.id) AS approval_count
+         FROM change_requests cr
+         JOIN specs s ON s.id = cr.spec_id
+         JOIN project_types pt ON pt.id = s.project_type_id
+         WHERE cr.status = 'pending'
+         ORDER BY cr.created_at ASC`
+      )
+      .all() as Array<Record<string, unknown> & { created_at: string; required_approvals: number; approval_count: number }>;
+    const queue = rows.map((row) => {
+      const ageHours = Math.max(0, (nowMs - Date.parse(row.created_at)) / 3600000);
+      const sla_status = ageHours >= breachHours ? "breached" : ageHours >= warnHours ? "warning" : "ok";
+      return {
+        ...row,
+        age_hours: Math.round(ageHours * 10) / 10,
+        remaining_approvals: Math.max(0, Number(row.required_approvals) - Number(row.approval_count)),
+        sla_status,
+      };
+    });
+    return {
+      warn_hours: warnHours,
+      breach_hours: breachHours,
+      pending_count: queue.length,
+      warning_count: queue.filter((row) => row.sla_status === "warning").length,
+      breached_count: queue.filter((row) => row.sla_status === "breached").length,
+      oldest_age_hours: queue[0]?.age_hours ?? 0,
+      queue,
+    };
+  });
+
   app.get("/reviews", async (req) => {
     const { status } = req.query as { status?: string };
     const base = `

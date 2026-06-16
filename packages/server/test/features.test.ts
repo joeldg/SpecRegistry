@@ -271,9 +271,15 @@ describe("git push-back", () => {
 });
 
 describe("AI draft-fix", () => {
-  it("returns 503 without an Anthropic API key", async () => {
+  it("returns 503 without a configured LLM provider", async () => {
     const previous = process.env.ANTHROPIC_API_KEY;
+    const previousProvider = process.env.LLM_PROVIDER;
+    const previousBase = process.env.LLM_BASE_URL;
+    const previousKey = process.env.LLM_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.LLM_PROVIDER;
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_API_KEY;
     try {
       const specs = await getJson("/api/v1/specs");
       const fb = (
@@ -292,7 +298,53 @@ describe("AI draft-fix", () => {
       expect(res.statusCode).toBe(503);
     } finally {
       if (previous !== undefined) process.env.ANTHROPIC_API_KEY = previous;
+      if (previousProvider !== undefined) process.env.LLM_PROVIDER = previousProvider;
+      if (previousBase !== undefined) process.env.LLM_BASE_URL = previousBase;
+      if (previousKey !== undefined) process.env.LLM_API_KEY = previousKey;
     }
+  });
+});
+
+describe("LLM settings", () => {
+  it("saves OpenAI-compatible local provider settings and tests the connection", async () => {
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/llm/config",
+      payload: {
+        provider: "openai_compatible",
+        model: "local-model",
+        base_url: "http://llm.internal/v1",
+        api_key: "local-secret",
+        max_tokens: 2048,
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({
+      provider: "openai_compatible",
+      model: "local-model",
+      base_url: "http://llm.internal/v1",
+      max_tokens: 2048,
+      has_api_key: true,
+    });
+    expect(saved.json()).not.toHaveProperty("api_key");
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), {
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const test = await app.inject({ method: "POST", url: "/api/v1/llm/test", payload: { prompt: "ping" } });
+    expect(test.statusCode).toBe(200);
+    expect(test.json()).toMatchObject({ ok: true, provider: "openai_compatible", model: "local-model", text: "ok" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://llm.internal/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer local-secret" }),
+      })
+    );
   });
 });
 

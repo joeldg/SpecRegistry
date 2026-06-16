@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SpecSummary } from "@specregistry/shared";
-import { api, type AnalyticsSummary, type FeedbackRow, type ReviewRow } from "../api";
+import { api, type AnalyticsSummary, type FeedbackRow, type ReviewRow, type ReviewSlaSummary } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 export default function Dashboard() {
@@ -9,16 +9,18 @@ export default function Dashboard() {
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [usage, setUsage] = useState<AnalyticsSummary>();
+  const [sla, setSla] = useState<ReviewSlaSummary>();
   const [error, setError] = useState<string>();
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.specs(), api.reviews("pending"), api.feedback("open"), api.analytics()])
-      .then(([s, r, f, u]) => {
+    Promise.all([api.specs(), api.reviews("pending"), api.feedback("open"), api.analytics(), api.reviewSla()])
+      .then(([s, r, f, u, sl]) => {
         setSpecs(s);
         setReviews(r);
         setFeedback(f);
         setUsage(u);
+        setSla(sl);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -45,6 +47,10 @@ export default function Dashboard() {
         <div className={`card${reviews.length ? " alert" : ""}`}>
           <div className="metric">{reviews.length}</div>
           <div className="label">Pending reviews</div>
+        </div>
+        <div className={`card${sla?.breached_count ? " alert" : ""}`}>
+          <div className="metric">{sla?.oldest_age_hours ?? 0}h</div>
+          <div className="label">Oldest pending review</div>
         </div>
         <div className={`card${feedback.length ? " alert" : ""}`}>
           <div className="metric">{feedback.length}</div>
@@ -133,6 +139,14 @@ export default function Dashboard() {
 
       <div className="section">
         <h2>Pending reviews</h2>
+        {sla && sla.pending_count > 0 && (
+          <div className={`card${sla.breached_count || sla.warning_count ? " alert" : ""}`} style={{ marginBottom: 12 }}>
+            <div className="label">Review SLA</div>
+            <div>
+              {sla.breached_count} breached · {sla.warning_count} warning · thresholds {sla.warn_hours}h/{sla.breach_hours}h
+            </div>
+          </div>
+        )}
         {reviews.length === 0 ? (
           <div className="empty">Review queue is clear.</div>
         ) : (
@@ -144,20 +158,28 @@ export default function Dashboard() {
                 <th>Delta</th>
                 <th>Proposed by</th>
                 <th>Summary</th>
+                <th>SLA</th>
                 <th>When</th>
               </tr>
             </thead>
             <tbody>
-              {reviews.map((r) => (
+              {reviews.map((r) => {
+                const row = sla?.queue.find((item) => item.id === r.id);
+                return (
                 <tr key={r.id} className="click" onClick={() => navigate(`/reviews/${r.id}`)}>
                   <td className="mono">{r.filename}</td>
                   <td>{r.project_type_name}</td>
                   <td className="mono">{r.version_delta}</td>
                   <td>{r.proposed_by}</td>
                   <td className="dim">{r.summary ?? "—"}</td>
+                  <td>
+                    <StatusBadge status={row?.sla_status ?? "ok"} />
+                    {row ? <span className="faint"> {row.age_hours}h</span> : null}
+                  </td>
                   <td className="faint">{timeAgo(r.created_at)}</td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         )}

@@ -61,6 +61,12 @@ export interface ChangeRequest {
   reviewed_at: string | null;
   /** Version published as a result of approval, if any */
   resulting_version: string | null;
+  /** JSON compatibility analysis captured at submission time */
+  compatibility?: string | null;
+  /** JSON lint report captured at submission time */
+  lint?: string | null;
+  /** JSON contradiction report captured at submission time */
+  contradictions?: string | null;
   created_at: string;
 }
 

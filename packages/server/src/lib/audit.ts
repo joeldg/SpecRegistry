@@ -1,10 +1,8 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { ProjectType } from "@specregistry/shared";
 import type { Db } from "../db.js";
 import { HttpError } from "../helpers.js";
 import { bundleSpecs } from "./compile.js";
-
-const MODEL = "claude-opus-4-8";
+import { getLlmConfig, runLlmText } from "./llm.js";
 
 export interface AuditFinding {
   severity: "high" | "medium" | "low";
@@ -20,12 +18,6 @@ export interface AuditInput {
   files: Array<{ path: string; content: string }>;
 }
 
-function requireApiKey(): void {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new HttpError(503, "This feature requires ANTHROPIC_API_KEY to be configured on the server");
-  }
-}
-
 /** Pull a JSON object out of a model response, tolerating code fences and prose. */
 export function extractJson<T>(text: string): T {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
@@ -36,25 +28,12 @@ export function extractJson<T>(text: string): T {
   return JSON.parse(candidate.slice(start, end + 1)) as T;
 }
 
-async function runClaude(system: string, user: string, maxTokens = 16000): Promise<string> {
-  const client = new Anthropic();
-  const stream = client.messages.stream({
-    model: MODEL,
-    max_tokens: maxTokens,
-    thinking: { type: "adaptive" },
-    system,
-    messages: [{ role: "user", content: user }],
-  });
-  const message = await stream.finalMessage();
-  return message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+async function runConfiguredLlm(db: Db, system: string, user: string, maxTokens = 16000): Promise<string> {
+  return (await runLlmText(db, { system, user, maxTokens })).text;
 }
 
 /** Reverse conformance: does this codebase follow its governed specs? */
 export async function auditCodebase(db: Db, pt: ProjectType, input: AuditInput): Promise<AuditFinding[]> {
-  requireApiKey();
   const specs = bundleSpecs(db, pt.id);
   const specBlock = specs
     .map((s) => `<spec filename="${s.filename}" version="${s.current_version}">\n${s.content}\n</spec>`)
@@ -90,7 +69,7 @@ ${input.tree}
 ### Selected files
 ${fileBlock}`;
 
-  const raw = await runClaude(system, user);
+  const raw = await runConfiguredLlm(db, system, user);
   const parsed = extractJson<{ findings?: AuditFinding[] }>(raw);
   return Array.isArray(parsed.findings) ? parsed.findings : [];
 }
@@ -108,16 +87,16 @@ export interface EfficacyResult {
  * context, then grade both against the spec's requirements. Measures whether the
  * spec actually changes agent output.
  */
-export async function runEfficacy(specContent: string, specFilename: string, task: string): Promise<EfficacyResult> {
-  requireApiKey();
+export async function runEfficacy(db: Db, specContent: string, specFilename: string, task: string): Promise<EfficacyResult> {
   const baseSystem = "You are an engineer completing the task you are given. Be concrete and produce real output (code, config, or a plan as appropriate). Keep it under 600 words.";
   const [withSpec, withoutSpec] = await Promise.all([
-    runClaude(
+    runConfiguredLlm(
+      db,
       `${baseSystem}\n\nYou MUST follow this governing specification (${specFilename}):\n\n${specContent}`,
       task,
       4000
     ),
-    runClaude(baseSystem, task, 4000),
+    runConfiguredLlm(db, baseSystem, task, 4000),
   ]);
 
   const judgeSystem = `You are grading how well two anonymous responses to the same task adhere to a governing
@@ -136,13 +115,14 @@ ${withSpec}
 ${withoutSpec}`;
 
   const verdict = extractJson<{ score_a: number; score_b: number; rationale: string }>(
-    await runClaude(judgeSystem, judgeUser, 4000)
+    await runConfiguredLlm(db, judgeSystem, judgeUser, 4000)
   );
+  const config = getLlmConfig(db);
   return {
     score_with: verdict.score_a,
     score_without: verdict.score_b,
     improved: verdict.score_a > verdict.score_b,
     rationale: verdict.rationale,
-    model: MODEL,
+    model: config.model,
   };
 }

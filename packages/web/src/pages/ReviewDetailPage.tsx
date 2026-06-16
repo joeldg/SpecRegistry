@@ -16,6 +16,22 @@ interface LintReport {
   ok: boolean;
 }
 
+interface ContradictionReport {
+  ok: boolean;
+  finding_count: number;
+  findings: Array<{
+    severity: string;
+    proposed_section: string;
+    proposed_statement: string;
+    conflicting_spec_id: string;
+    conflicting_filename: string;
+    conflicting_project_type_name: string;
+    conflicting_section: string;
+    conflicting_statement: string;
+    reason: string;
+  }>;
+}
+
 function parseJson<T>(value: unknown): T | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -136,7 +152,8 @@ export default function ReviewDetailPage() {
       {(() => {
         const compat = parseJson<CompatReport>((review as unknown as Record<string, unknown>).compatibility);
         const lint = parseJson<LintReport>((review as unknown as Record<string, unknown>).lint);
-        if (!compat && !lint) return null;
+        const contradictions = parseJson<ContradictionReport>((review as unknown as Record<string, unknown>).contradictions);
+        if (!compat && !lint && !contradictions) return null;
         return (
           <div className="section">
             <h2>Automated checks</h2>
@@ -158,6 +175,34 @@ export default function ReviewDetailPage() {
                   )}
                   {compat.added_sections.length > 0 && (
                     <div className="dim">Adds sections: {compat.added_sections.join(", ")}</div>
+                  )}
+                </div>
+              )}
+              {contradictions && (
+                <div className={`card${contradictions.ok ? "" : " alert"}`}>
+                  <div className="label">Cross-spec contradictions</div>
+                  {contradictions.ok ? (
+                    <div>
+                      No contradictory normative statements found <span className="badge approved">ok</span>
+                    </div>
+                  ) : (
+                    <div>
+                      {contradictions.finding_count} possible conflict(s) <span className="badge rejected">review</span>
+                      {contradictions.findings.slice(0, 3).map((finding, index) => (
+                        <div key={`${finding.conflicting_spec_id}-${index}`} className="dim" style={{ marginTop: 8 }}>
+                          <div>
+                            Proposed <span className="mono">{finding.proposed_section}</span>: {finding.proposed_statement}
+                          </div>
+                          <div>
+                            Conflicts with{" "}
+                            <Link to={`/specs/${finding.conflicting_spec_id}`} style={{ textDecoration: "underline" }}>
+                              {finding.conflicting_filename}
+                            </Link>{" "}
+                            <span className="mono">{finding.conflicting_section}</span>: {finding.conflicting_statement}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}

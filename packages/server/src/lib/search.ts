@@ -1,5 +1,6 @@
 import type { Spec } from "@specregistry/shared";
 import type { Db } from "../db.js";
+import { sectionAnchor, splitSections } from "./sections.js";
 
 export interface SearchResult {
   spec_id: string;
@@ -8,33 +9,16 @@ export interface SearchResult {
   project_type_name: string;
   current_version: string;
   section: string;
+  section_anchor: string;
+  permalink: string;
   excerpt: string;
-}
-
-/** Split markdown into sections at h1–h3 boundaries for chunked indexing. */
-function splitSections(content: string): Array<{ section: string; text: string }> {
-  const chunks: Array<{ section: string; text: string }> = [];
-  let current = { section: "(intro)", text: "" };
-  let inFence = false;
-  for (const line of content.split("\n")) {
-    if (line.trimStart().startsWith("```")) inFence = !inFence;
-    const match = !inFence && /^#{1,3}\s+(.+?)\s*$/.exec(line);
-    if (match) {
-      if (current.text.trim()) chunks.push(current);
-      current = { section: match[1], text: "" };
-    } else {
-      current.text += line + "\n";
-    }
-  }
-  if (current.text.trim()) chunks.push(current);
-  return chunks;
 }
 
 export function reindexSpec(db: Db, spec: Pick<Spec, "id" | "content">): void {
   db.prepare("DELETE FROM spec_chunks WHERE spec_id = ?").run(spec.id);
   const insert = db.prepare("INSERT INTO spec_chunks (spec_id, section, content) VALUES (?, ?, ?)");
   for (const chunk of splitSections(spec.content)) {
-    insert.run(spec.id, chunk.section, chunk.text.trim());
+    insert.run(spec.id, chunk.section, chunk.text);
   }
 }
 
@@ -63,7 +47,7 @@ export function searchSpecs(db: Db, query: string, projectTypeId?: string, limit
   const params: unknown[] = [fts];
   if (projectTypeId) params.push(projectTypeId);
   params.push(limit);
-  return db
+  const rows = db
     .prepare(
       `SELECT c.spec_id, s.filename, s.project_type_id, pt.name AS project_type_name,
               s.current_version, c.section,
@@ -75,5 +59,9 @@ export function searchSpecs(db: Db, query: string, projectTypeId?: string, limit
        ORDER BY rank
        LIMIT ?`
     )
-    .all(...params) as SearchResult[];
+    .all(...params) as Array<Omit<SearchResult, "section_anchor" | "permalink">>;
+  return rows.map((row) => {
+    const anchor = sectionAnchor(row.section);
+    return { ...row, section_anchor: anchor, permalink: `/api/v1/specs/${row.spec_id}#${anchor}` };
+  });
 }

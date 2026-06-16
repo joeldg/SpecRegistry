@@ -61,12 +61,15 @@ Every governed repository should follow this workflow.
 
 4. **Implement**
    Work proceeds against the active spec set. When specs are unclear, agents should call `report_spec_feedback` rather than guess.
+   Search and agent-spec responses include section anchors/permalinks so feedback and audit findings can cite the exact governing section.
 
 5. **Audit**
    Use reverse conformance audit (`specreg audit` or `POST /api/v1/ai/audit`) to check whether the implementation follows the governed specs.
+   Server-side LLM features should use the configured provider for the deployment: Anthropic, an OpenAI-compatible gateway, or a local/network model endpoint.
 
 6. **Review Evidence**
-   Reviewers should inspect diffs, lint, compatibility, approval policy, recorded approvers, feedback clusters, audit findings, and audit log entries.
+   Reviewers should inspect diffs, lint, compatibility, contradiction reports, approval policy, recorded approvers, feedback clusters, audit findings, and audit log entries.
+   The review SLA summary highlights pending changes that are approaching or past the configured age thresholds.
 
 7. **Improve Specs**
    If implementation problems arise from unclear or conflicting specs, update specs through the review workflow. Do not patch around bad guidance silently.
@@ -316,6 +319,8 @@ Useful SDD metrics include:
 | Review latency | How long spec changes wait for approval |
 | Approval policy misses | Reviews blocked by missing required approvers |
 | Stale load-bearing specs | Old specs still frequently read or searched |
+| Contradiction findings | Proposed guidance that appears to reverse existing specs |
+| Section citation coverage | Whether feedback and audits point to exact spec sections |
 
 SpecRegistry exposes operational Prometheus metrics at `GET /metrics`. These include
 registry counts such as `specregistry_specs_total`, `specregistry_reviews_total`,
@@ -323,6 +328,11 @@ registry counts such as `specregistry_specs_total`, `specregistry_reviews_total`
 `specregistry_audit_events_total`, and `specregistry_oldest_pending_review_age_seconds`.
 In Docker deployments, the optional Grafana Alloy profile can scrape these metrics and
 remote-write them to a Grafana Cloud or Prometheus-compatible endpoint.
+
+LLM provider settings are part of tokenomics. Local or network OpenAI-compatible endpoints
+can reduce spend and keep prompts inside an internal network; hosted providers may provide
+stronger reasoning for high-value audits and efficacy checks. The Settings page exposes the
+active provider, model, base URL, token budget, and connectivity test.
 
 ## Review Guidance
 

@@ -306,7 +306,7 @@ function EfficacyPanel({
         </div>
         <span className="faint">
           Generates a response with and without this spec in context, then grades both for spec adherence.
-          Requires ANTHROPIC_API_KEY on the server; takes ~a minute.
+          Requires a configured server LLM provider; takes ~a minute.
         </span>
       </div>
       {spec.efficacy_runs.length > 0 && (

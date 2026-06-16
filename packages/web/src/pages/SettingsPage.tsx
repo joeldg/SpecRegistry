@@ -6,6 +6,7 @@ import {
   type ApiKeyRow,
   type ApprovalPolicyRow,
   type LdapConfig,
+  type LlmConfig,
   type McpGuide,
   type ProjectTypeWithCount,
   type SubscriptionRow,
@@ -24,12 +25,14 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [ldap, setLdap] = useState<LdapConfig>();
+  const [llm, setLlm] = useState<LlmConfig>();
   const [mcpGuide, setMcpGuide] = useState<McpGuide>();
   const [policies, setPolicies] = useState<ApprovalPolicyRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditLogRow[]>([]);
   const [error, setError] = useState<string>();
   const [issuedToken, setIssuedToken] = useState<string>();
   const [ldapNotice, setLdapNotice] = useState<string>();
+  const [llmNotice, setLlmNotice] = useState<string>();
 
   const [hookUrl, setHookUrl] = useState("");
   const [hookFormat, setHookFormat] = useState("json");
@@ -47,6 +50,8 @@ export default function SettingsPage() {
   const [ldapTestUsername, setLdapTestUsername] = useState("");
   const [ldapTestPassword, setLdapTestPassword] = useState("");
   const [ldapGroups, setLdapGroups] = useState("");
+  const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmTestPrompt, setLlmTestPrompt] = useState("Reply with ok.");
   const [mcpTypeName, setMcpTypeName] = useState("");
   const [policyTypeId, setPolicyTypeId] = useState("");
   const [policyGlob, setPolicyGlob] = useState("*.md");
@@ -62,10 +67,11 @@ export default function SettingsPage() {
       api.users(),
       api.apiKeys(),
       api.ldapConfig(),
+      api.llmConfig(),
       api.approvalPolicies(),
       api.auditLog(50),
     ])
-      .then(([w, s, j, t, u, k, l, p, a]) => {
+      .then(([w, s, j, t, u, k, l, llmConfig, p, a]) => {
         setWebhooks(w);
         setSubs(s);
         setJobs(j);
@@ -73,6 +79,7 @@ export default function SettingsPage() {
         setUsers(u);
         setKeys(k);
         setLdap(l);
+        setLlm(llmConfig);
         setPolicies(p);
         setAuditRows(a);
         setSubTypeId((current) => current || t[0]?.id || "");
@@ -233,6 +240,120 @@ export default function SettingsPage() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="section">
+        <h2>LLM provider</h2>
+        {llm && (
+          <>
+            {llmNotice && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                {llmNotice}
+              </div>
+            )}
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="form-row">
+                <select
+                  value={llm.provider}
+                  onChange={(e) => setLlm({ ...llm, provider: e.target.value as LlmConfig["provider"] })}
+                >
+                  <option value="anthropic">Anthropic</option>
+                  <option value="openai_compatible">OpenAI-compatible / local</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder={llm.provider === "anthropic" ? "claude-opus-4-8" : "llama3.1"}
+                  value={llm.model}
+                  style={{ minWidth: 220 }}
+                  onChange={(e) => setLlm({ ...llm, model: e.target.value })}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={llm.max_tokens}
+                  style={{ width: 120 }}
+                  onChange={(e) => setLlm({ ...llm, max_tokens: Number(e.target.value) })}
+                />
+                <button
+                  className="primary"
+                  onClick={() =>
+                    act(async () => {
+                      const saved = await api.updateLlmConfig({
+                        provider: llm.provider,
+                        model: llm.model,
+                        base_url: llm.base_url,
+                        max_tokens: llm.max_tokens,
+                        api_key: llmApiKey || undefined,
+                      });
+                      setLlm(saved);
+                      setLlmApiKey("");
+                      setLlmNotice("LLM settings saved.");
+                    })
+                  }
+                >
+                  Save LLM
+                </button>
+              </div>
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder={
+                    llm.provider === "anthropic"
+                      ? "Optional proxy base URL"
+                      : "http://localhost:11434/v1 or http://llm-gateway.internal/v1"
+                  }
+                  value={llm.base_url}
+                  style={{ flex: 1, minWidth: 360 }}
+                  onChange={(e) => setLlm({ ...llm, base_url: e.target.value })}
+                />
+                <input
+                  type="password"
+                  placeholder={llm.has_api_key ? "Stored API key" : "API key, optional for local"}
+                  value={llmApiKey}
+                  onChange={(e) => setLlmApiKey(e.target.value)}
+                />
+                {llm.has_api_key && (
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      act(async () => {
+                        const saved = await api.updateLlmConfig({ clear_api_key: true });
+                        setLlm(saved);
+                        setLlmNotice("LLM API key cleared.");
+                      })
+                    }
+                  >
+                    Clear key
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="card">
+              <div className="form-row">
+                <input
+                  type="text"
+                  placeholder="Test prompt"
+                  value={llmTestPrompt}
+                  style={{ flex: 1, minWidth: 320 }}
+                  onChange={(e) => setLlmTestPrompt(e.target.value)}
+                />
+                <button
+                  onClick={() =>
+                    act(async () => {
+                      const result = await api.testLlm(llmTestPrompt);
+                      setLlmNotice(`LLM test ok: ${result.provider}/${result.model} -> ${result.text.slice(0, 160)}`);
+                    })
+                  }
+                >
+                  Test LLM
+                </button>
+              </div>
+              <div className="faint">
+                OpenAI-compatible mode supports local/network services such as Ollama, LM Studio, vLLM, LocalAI, or an internal LLM gateway.
+              </div>
+            </div>
+          </>
         )}
       </div>
 

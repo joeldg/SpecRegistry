@@ -85,7 +85,7 @@ export async function runAudit(opts: AuditOptions): Promise<void> {
   console.log(`Scanning ${root} ...`);
   const scan = scanDirectory(root);
   const files = collectFiles(root);
-  console.log(`Auditing ${files.length} sampled file(s) against the "${typeName}" spec set (this calls Claude — may take a minute)...`);
+  console.log(`Auditing ${files.length} sampled file(s) against the "${typeName}" spec set (this calls the server LLM — may take a minute)...`);
 
   const { findings } = await fetchJson<{ findings: AuditFinding[] }>(`${opts.server}/api/v1/ai/audit`, {
     method: "POST",

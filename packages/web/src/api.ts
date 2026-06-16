@@ -47,6 +47,24 @@ export type ReviewDetail = ChangeRequest & {
     required_reviewers: string[];
   };
 };
+export interface ReviewSlaSummary {
+  warn_hours: number;
+  breach_hours: number;
+  pending_count: number;
+  warning_count: number;
+  breached_count: number;
+  oldest_age_hours: number;
+  queue: Array<
+    Pick<ReviewRow, "id" | "spec_id" | "filename" | "project_type_name" | "proposed_by" | "version_delta" | "summary" | "created_at"> & {
+      current_version: string;
+      approval_count: number;
+      required_approvals: number;
+      remaining_approvals: number;
+      age_hours: number;
+      sla_status: "ok" | "warning" | "breached";
+    }
+  >;
+}
 export type FeedbackRow = AgentFeedback & {
   filename: string;
   current_version: string;
@@ -72,6 +90,8 @@ export interface SearchHit {
   project_type_name: string;
   current_version: string;
   section: string;
+  section_anchor: string;
+  permalink: string;
   excerpt: string;
 }
 export interface UserRow {
@@ -102,6 +122,13 @@ export interface LdapConfig {
   reviewer_group: string;
   default_role: "admin" | "reviewer" | "author" | "agent";
   has_bind_password: boolean;
+}
+export interface LlmConfig {
+  provider: "anthropic" | "openai_compatible";
+  model: string;
+  base_url: string;
+  max_tokens: number;
+  has_api_key: boolean;
 }
 export interface McpGuide {
   filename: string;
@@ -229,6 +256,7 @@ export const api = {
 
   reviews: (status?: string) =>
     request<ReviewRow[]>(`/api/v1/reviews${status ? `?status=${status}` : ""}`),
+  reviewSla: () => request<ReviewSlaSummary>("/api/v1/reviews/sla"),
   review: (id: string) => request<ReviewDetail>(`/api/v1/reviews/${id}`),
   approveReview: (id: string, reviewed_by: string, channel?: "stable" | "beta") =>
     request<ChangeRequest>(`/api/v1/reviews/${id}/approve`, {
@@ -308,6 +336,14 @@ export const api = {
     request<{ role: string; groups: string[] }>("/api/v1/ldap/role-preview", {
       method: "POST",
       body: JSON.stringify({ groups }),
+    }),
+  llmConfig: () => request<LlmConfig>("/api/v1/llm/config"),
+  updateLlmConfig: (body: Partial<Omit<LlmConfig, "has_api_key">> & { api_key?: string; clear_api_key?: boolean }) =>
+    request<LlmConfig>("/api/v1/llm/config", { method: "PUT", body: JSON.stringify(body) }),
+  testLlm: (prompt?: string) =>
+    request<{ ok: boolean; provider: string; model: string; text: string }>("/api/v1/llm/test", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
     }),
   mcpGuide: (projectType?: string) =>
     request<McpGuide>(`/api/v1/ai/mcp-guide${projectType ? `/${encodeURIComponent(projectType)}` : ""}`),

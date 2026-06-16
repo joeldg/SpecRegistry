@@ -2,7 +2,6 @@
 
 ## Governance
 
-- Review SLA dashboard for old pending reviews and stale reviewer queues.
 - Spec ownership with CODEOWNERS-style owners per project type and filename.
 - Dry-run publish preview showing affected repos, webhooks, generated agent files, and sync jobs.
 - Spec diff risk scoring for security-sensitive or compatibility-heavy changes.
@@ -10,8 +9,6 @@
 ## Quality and Safety
 
 - Spec lint rules beyond headings: required examples, prohibited ambiguity terms, required non-goals, and required operational sections.
-- Contradiction detector across global and project-type specs before publish.
-- Section-level permalinks for exact citations in feedback and audit findings.
 - Spec dependency map showing references, overrides, and supersession.
 
 ## Developer Workflow

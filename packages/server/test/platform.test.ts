@@ -180,6 +180,41 @@ describe("approval policies", () => {
   });
 });
 
+describe("review SLA and contradiction checks", () => {
+  it("summarizes pending review SLA age and remaining approvals", async () => {
+    const spec = await findSpec("API.md", "Acme Edge Device");
+    const cr = await submitCr(spec.id, "# API SLA check\n", "patch");
+    app.db
+      .prepare("UPDATE change_requests SET created_at = ? WHERE id = ?")
+      .run(new Date(Date.now() - 80 * 3600 * 1000).toISOString(), cr.id);
+
+    const sla = await getJson(app, "/api/v1/reviews/sla?warn_hours=24&breach_hours=72");
+    expect(sla.pending_count).toBeGreaterThanOrEqual(1);
+    expect(sla.breached_count).toBeGreaterThanOrEqual(1);
+    const row = sla.queue.find((item: any) => item.id === cr.id);
+    expect(row.sla_status).toBe("breached");
+    expect(row.remaining_approvals).toBe(1);
+  });
+
+  it("records possible cross-spec contradictions on change requests", async () => {
+    const global = await findSpec("GLOBAL_SECURITY.md", "Global");
+    const globalDetail = await getJson(app, `/api/v1/specs/${global.id}`);
+    expect(globalDetail.content).toContain("TLS");
+
+    const spec = await findSpec("API.md", "Acme Edge Device");
+    const cr = await submitCr(
+      spec.id,
+      `${spec.filename}\n\n## Transport\nNetwork services must not default to TLS 1.2+ and deny-by-default firewall rules.\n`,
+      "minor"
+    );
+    const detail = await getJson(app, `/api/v1/reviews/${cr.id}`);
+    const contradictions = JSON.parse(detail.contradictions);
+    expect(contradictions.ok).toBe(false);
+    expect(contradictions.findings[0].conflicting_filename).toBe("GLOBAL_SECURITY.md");
+    expect(contradictions.findings[0].proposed_anchor).toBe("transport");
+  });
+});
+
 describe("drift severity & pins", () => {
   it("classifies drift and flags versions outside the caret pin", async () => {
     const spec = await findSpec("STRUCTURE.md", "Acme Firmware");
@@ -557,9 +592,15 @@ describe("inbound GitHub sync", () => {
 });
 
 describe("AI endpoints without a key", () => {
-  it("efficacy and audit return 503 when ANTHROPIC_API_KEY is missing", async () => {
+  it("efficacy and audit return 503 when no LLM provider is configured", async () => {
     const previous = process.env.ANTHROPIC_API_KEY;
+    const previousProvider = process.env.LLM_PROVIDER;
+    const previousBase = process.env.LLM_BASE_URL;
+    const previousKey = process.env.LLM_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.LLM_PROVIDER;
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_API_KEY;
     try {
       const spec = await findSpec("API.md", "Acme Edge Device");
       const efficacy = await app.inject({
@@ -576,6 +617,9 @@ describe("AI endpoints without a key", () => {
       expect(audit.statusCode).toBe(503);
     } finally {
       if (previous !== undefined) process.env.ANTHROPIC_API_KEY = previous;
+      if (previousProvider !== undefined) process.env.LLM_PROVIDER = previousProvider;
+      if (previousBase !== undefined) process.env.LLM_BASE_URL = previousBase;
+      if (previousKey !== undefined) process.env.LLM_API_KEY = previousKey;
     }
   });
 });

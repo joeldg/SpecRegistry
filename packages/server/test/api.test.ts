@@ -265,6 +265,18 @@ describe("AI feedback loop", () => {
   });
 });
 
+describe("section citations", () => {
+  it("returns section anchors in agent specs and search results", async () => {
+    const specs = await getJson("/api/v1/ai/specs/Acme%20Edge%20Device");
+    const apiSpec = specs.specs.find((s: any) => s.filename === "API.md");
+    expect(apiSpec.sections.some((section: any) => section.anchor === "transport")).toBe(true);
+
+    const search = await getJson("/api/v1/ai/search?q=transport&project_type=Acme%20Edge%20Device");
+    expect(search.results[0]).toHaveProperty("section_anchor");
+    expect(search.results[0].permalink).toContain(`/api/v1/specs/${search.results[0].spec_id}#`);
+  });
+});
+
 describe("CLI support endpoints", () => {
   it("returns a zip with global + project-type specs and a manifest", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/download" });

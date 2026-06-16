@@ -15,7 +15,7 @@ Usage:
   specreg sync      Like check, but pulls the latest approved specs when drift is found
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
-  specreg audit     Ask Claude whether this codebase violates its governed specs
+  specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)

@@ -1,6 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { AgentFeedback, Spec } from "@specregistry/shared";
-import { HttpError } from "../helpers.js";
+import type { Db } from "../db.js";
+import { runLlmText } from "./llm.js";
 
 const SYSTEM = `You are a technical specification editor for SpecRegistry, a system that governs
 versioned Markdown specification documents. You will receive the current published content of a
@@ -15,12 +15,7 @@ Rules:
 - Make the smallest change that fully resolves the feedback; do not rewrite unrelated sections.
 - If the feedback identifies a contradiction, resolve it decisively in the direction that best fits the rest of the document.`;
 
-export async function draftFix(spec: Spec, feedback: AgentFeedback): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new HttpError(503, "AI draft-fix requires ANTHROPIC_API_KEY to be configured on the server");
-  }
-  const client = new Anthropic();
-
+export async function draftFix(db: Db, spec: Spec, feedback: AgentFeedback): Promise<string> {
   const userMessage = `## Specification: ${spec.filename} (v${spec.current_version})
 
 <specification>
@@ -36,22 +31,10 @@ ${feedback.context_code_snippet ? `- Code context:\n\`\`\`\n${feedback.context_c
 
 ${feedback.description}`;
 
-  const stream = client.messages.stream({
-    model: "claude-opus-4-8",
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
+  const { text } = await runLlmText(db, {
     system: SYSTEM,
-    messages: [{ role: "user", content: userMessage }],
+    user: userMessage,
+    maxTokens: 16000,
   });
-  const message = await stream.finalMessage();
-
-  const revised = message.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
-  if (!revised) {
-    throw new HttpError(502, `Model returned no revision (stop_reason: ${message.stop_reason})`);
-  }
-  return revised;
+  return text;
 }

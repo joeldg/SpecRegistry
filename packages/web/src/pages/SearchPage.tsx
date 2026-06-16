@@ -79,7 +79,12 @@ export default function SearchPage() {
                     <span className="faint">v{hit.current_version}</span>
                   </td>
                   <td>{hit.project_type_name}</td>
-                  <td>{hit.section}</td>
+                  <td>
+                    <Link to={`/specs/${hit.spec_id}#${hit.section_anchor}`} style={{ textDecoration: "underline" }}>
+                      {hit.section}
+                    </Link>
+                    <div className="faint mono">{hit.permalink}</div>
+                  </td>
                   <td className="dim">{hit.excerpt}</td>
                 </tr>
               ))}

@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS change_requests (
   resulting_version TEXT,
   compatibility TEXT,
   lint TEXT,
+  contradictions TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -261,6 +262,7 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_audit_log_time ON audit_log(created_at);
     `,
   },
+  { version: 9, sql: "ALTER TABLE change_requests ADD COLUMN contradictions TEXT" },
 ];
 
 export function createDb(path: string): Db {

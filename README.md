@@ -167,7 +167,7 @@ Use the web dashboard to manage the registry:
 - Submit, review, approve, reject, and promote change requests.
 - Triage AI feedback clusters.
 - Configure templates, webhooks, repo subscriptions, approval policies, users, API keys, and LDAP.
-- Inspect usage analytics, audit log entries, efficacy runs, and SDD metrics.
+- Inspect usage analytics, review SLA risk, audit log entries, efficacy runs, and SDD metrics.
 
 Typical local URLs:
 
@@ -283,7 +283,8 @@ curl -o agent-pack.zip http://localhost:4000/api/v1/specs/Web%20App%20Standard/a
 ```
 
 Agents should read specs before implementation, search when they need narrower guidance,
-and report feedback instead of guessing when a spec is ambiguous, contradictory, or stale.
+cite returned section permalinks when reporting findings, and report feedback instead of
+guessing when a spec is ambiguous, contradictory, or stale.
 
 ### API Usage
 
@@ -375,8 +376,8 @@ jobs:
       - run: node packages/cli/dist/index.js check --server https://specs.example.com
 ```
 
-Use `specreg audit --ci` when you want Claude-backed implementation conformance checks.
-That requires `ANTHROPIC_API_KEY` on the registry server.
+Use `specreg audit --ci` when you want LLM-backed implementation conformance checks.
+That requires a server LLM provider configured through Settings or environment variables.
 
 ### Sample Data
 
@@ -469,19 +470,26 @@ Use the LDAP tester in Settings before switching users over.
   spec ambiguities/contradictions to `POST /api/v1/ai/feedback`, which appear as
   alerts on the dashboard and on the affected spec until triaged. Repeated complaints
   are clustered by spec/type/text at `GET /api/v1/ai/feedback/clusters`. From any
-  feedback item, **Draft AI fix** sends the spec + complaint to Claude (`claude-opus-4-8`,
-  requires `ANTHROPIC_API_KEY` on the server) and opens the revision as a normal
+  feedback item, **Draft AI fix** sends the spec + complaint to the configured server LLM
+  and opens the revision as a normal
   pending change request — the review workflow stays the safety gate.
 - **Templates & conformance lint** — per-filename templates define required sections;
   every change request is linted against them and new drafts scaffold from the
   template body. Lint results and a heading-based **compatibility report** (removed
   sections ⇒ major, added ⇒ minor) are stored on the change request and shown in review.
+- **Contradiction checks** — change requests also store a deterministic cross-spec
+  contradiction report. Proposed normative statements are compared with published global
+  and project-type specs so reviewers can see possible conflicts before approval.
 - **Distribution** — `specreg check` gates CI on spec drift; repo subscriptions open
   GitHub PRs with updated specs on approval (set `GITHUB_TOKEN` on the server);
   webhooks (JSON or Slack format) fire on publish/review/feedback events.
 - **Search & analytics** — `GET /api/v1/ai/search?q=` serves section-level FTS5 hits
   to agents and the Search page; usage events (pulls, agent reads, searches, drift
   checks) roll up on the dashboard, including stale-but-published spec detection.
+  Search and agent spec responses include stable section anchors/permalinks for exact citations.
+- **Review SLA** — `GET /api/v1/reviews/sla` summarizes pending review age, warnings,
+  breached reviews, and remaining approvals. The dashboard surfaces the oldest pending
+  review and breached/warning counts.
 - **Prometheus metrics** — `GET /metrics` exposes SDD and runtime governance metrics
   including spec counts, review states, feedback, usage events, sync jobs, users,
   approval policies, audit events, and efficacy runs. Docker Compose includes an
@@ -494,8 +502,8 @@ Use the LDAP tester in Settings before switching users over.
   `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.mcp.json`, and `SPECREGISTRY_MCP_SKILL.md`.
   `GET /api/v1/ai/mcp-guide/:type` exposes the MCP skill guide directly for agent setup.
 - **Reverse conformance audit** — `POST /api/v1/ai/audit` (and `specreg audit`) asks
-  Claude whether a codebase snapshot *follows* its governed specs, reporting violations
-  with spec/section/file citations. Checks adherence, not just spec currency.
+  the configured server LLM whether a codebase snapshot *follows* its governed specs,
+  reporting violations with spec/section/file citations. Checks adherence, not just spec currency.
 - **Spec efficacy testing** — `POST /api/v1/ai/efficacy` runs a task with and without
   the spec in context and grades both, measuring whether a spec actually changes agent
   output ("earns its tokens" vs "no lift").
@@ -524,6 +532,7 @@ GET  /api/v1/specs                      POST /api/v1/specs
 GET  /api/v1/specs/:id                  PUT  /api/v1/specs/:id          (drafts only)
 POST /api/v1/specs/:id/publish          GET  /api/v1/specs/:type/download   (zip)
 POST /api/v1/specs/review               GET  /api/v1/reviews[?status=]
+GET  /api/v1/reviews/sla
 POST /api/v1/reviews/:id/approve        POST /api/v1/reviews/:id/reject
 GET  /api/v1/ai/specs/:projectType      POST /api/v1/ai/feedback
 GET  /api/v1/ai/feedback[?status=]      POST /api/v1/ai/feedback/:id/status
@@ -540,6 +549,7 @@ GET  /api/v1/analytics/summary          POST /api/v1/auth/login · GET /api/v1/a
 GET/POST /api/v1/auth/users             GET/POST/DELETE /api/v1/auth/api-keys
 GET/PUT /api/v1/ldap/config             POST /api/v1/ldap/test · POST /api/v1/ldap/role-preview
 GET  /api/v1/audit-log
+GET/PUT /api/v1/llm/config             POST /api/v1/llm/test
 POST /api/v1/integrations/github/webhook   POST /api/v1/integrations/slack/actions
 GET  /metrics
 ```
@@ -565,7 +575,12 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `SPECREG_PUBLIC_URL` | Externally reachable URL used in agent packs and MCP guides |
 | `SPECREG_AUTH=required` | Require auth on all non-public routes |
 | `SPECREG_ADMIN_PASSWORD` | Seeded admin password (default `admin`) |
-| `ANTHROPIC_API_KEY` | AI draft-fix, audit, and efficacy |
+| `ANTHROPIC_API_KEY` | Anthropic key fallback for server LLM features |
+| `LLM_PROVIDER` | Server LLM provider: `anthropic` or `openai_compatible` |
+| `LLM_MODEL` | Server LLM model name |
+| `LLM_BASE_URL` | Anthropic proxy or OpenAI-compatible local/network endpoint |
+| `LLM_API_KEY` | Server LLM API key; optional for some local endpoints |
+| `LLM_MAX_TOKENS` | Default server LLM token budget |
 | `GITHUB_TOKEN` | Git push-back PRs + inbound webhook file fetch |
 | `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks |
 | `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions |
@@ -579,6 +594,40 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `SPECREG_TOKEN` | CLI, MCP, and sample loader Bearer/API token for auth-required registries |
 | `SPECREG_PROJECT_TYPE` | MCP default project type |
 | `ANTHROPIC_API_KEY` | CLI `specreg generate --write` local generation |
+
+### Server LLM providers
+
+Server-side LLM features include AI draft-fix, reverse conformance audit, and spec efficacy
+tests. Configure them on the Settings page or with environment variables.
+
+Anthropic example:
+
+```dotenv
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-4-8
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Local or network OpenAI-compatible example:
+
+```dotenv
+LLM_PROVIDER=openai_compatible
+LLM_MODEL=llama3.1
+LLM_BASE_URL=http://ollama.internal:11434/v1
+LLM_API_KEY=
+```
+
+From Docker Compose on macOS/Windows, use `host.docker.internal` to reach a model server
+running on the host:
+
+```dotenv
+LLM_PROVIDER=openai_compatible
+LLM_MODEL=llama3.1
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+```
+
+OpenAI-compatible mode works with services such as Ollama, LM Studio, vLLM, LocalAI, or an
+internal gateway that exposes `/chat/completions`.
 
 Spec download bundles are ed25519-signed; the keypair is generated on first use and stored
 in the database. `specreg verify` checks bundle provenance against the public key.

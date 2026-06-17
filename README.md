@@ -188,6 +188,59 @@ API and production UI: http://localhost:4000
 Metrics: http://localhost:4000/metrics
 ```
 
+## Project Quickstart
+
+Use this flow when bringing SpecRegistry into a new or existing repository.
+
+1. **Create or choose a project type in the registry.**
+   Open the dashboard, create the shared project type that matches the repository, and add
+   any global or project-type specs that should govern this kind of work.
+
+2. **Initialize the repository.**
+   From the project root, pull the approved spec bundle, write the local manifest, create
+   MCP config, and optionally install suggested Google style guides:
+
+   ```sh
+   specreg init --server http://localhost:4000 --type "Acme Edge Device"
+   ```
+
+3. **Generate or edit repo-specific draft specs.**
+   For an existing codebase, let the CLI scan the project and create draft material under
+   `.spec/drafts/`. For a new project, write the specs you want to submit there directly.
+
+   ```sh
+   specreg generate --write --server http://localhost:4000 --type "Acme Edge Device"
+   ```
+
+4. **Submit drafts to the registry.**
+   This creates project-scoped drafts or review requests so they can become governed specs.
+   Use `--publish` for newly-created drafts you want to publish immediately, and `--force`
+   when you intentionally want to resubmit/overwrite local generated draft material.
+
+   ```sh
+   specreg submit-drafts --server http://localhost:4000 --type "Acme Edge Device" --publish --force
+   ```
+
+5. **Approve and publish reviews in the dashboard.**
+   Open [http://localhost:5173/reviews](http://localhost:5173/reviews), inspect diffs,
+   compatibility reports, lint findings, and risk notes, then approve/publish the reviews
+   that should become governed source of truth.
+
+6. **Pull the approved versions locally.**
+   After the registry publishes the specs, sync the local `specs/` directory and manifest.
+
+   ```sh
+   specreg sync --server http://localhost:4000
+   ```
+
+7. **Compile agent context.**
+   Rebuild `CLAUDE.md`, `AGENTS.md`, or `.cursorrules` from the approved local spec set.
+   `specreg sync` also auto-compiles targets that were previously remembered.
+
+   ```sh
+   specreg compile --server http://localhost:4000 --target claude
+   ```
+
 ### Developer CLI
 
 Build the workspace before using the CLI. During local development, link the CLI and MCP

@@ -18,6 +18,38 @@ export interface SpecGap {
   evidence: string[];
 }
 
+export interface AutomationSpecInput {
+  id: string;
+  filename: string;
+  content: string;
+  current_version: string;
+  project_type_name?: string;
+}
+
+export interface ClassifiedSection {
+  spec_id: string;
+  filename: string;
+  section: string;
+  classification: "invariant" | "acceptance_criteria" | "example" | "non_goal" | "operational" | "security" | "reference" | "directive";
+  reason: string;
+  approx_tokens: number;
+}
+
+export interface TaskPlan {
+  task: string;
+  applicable_specs: Array<{ spec_id: string; filename: string; reason: string; priority: number }>;
+  sections: ClassifiedSection[];
+  missing_specs: SpecGap[];
+  acceptance_criteria: string[];
+}
+
+export interface ContextSelection {
+  token_budget: number;
+  estimated_tokens: number;
+  selected_sections: ClassifiedSection[];
+  omitted_sections: ClassifiedSection[];
+}
+
 export const PURPOSE_TEMPLATES: SpecPurposeTemplate[] = [
   {
     id: "api-contract",
@@ -383,4 +415,227 @@ export function deterministicSpecDraft(input: {
 ${input.tree.slice(0, 4000) || "(no tree provided)"}
 \`\`\`
 `;
+}
+
+function approxTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function keywordScore(text: string, query: string): number {
+  const words = query
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/)
+    .filter((word) => word.length > 2);
+  const lower = text.toLowerCase();
+  return words.reduce((score, word) => score + (lower.includes(word) ? 1 : 0), 0);
+}
+
+function splitMarkdownSections(content: string): Array<{ section: string; text: string }> {
+  const sections: Array<{ section: string; text: string }> = [];
+  let current = { section: "(intro)", text: "" };
+  for (const line of content.split("\n")) {
+    const match = /^#{1,3}\s+(.+?)\s*$/.exec(line);
+    if (match) {
+      if (current.text.trim()) sections.push({ ...current, text: current.text.trim() });
+      current = { section: match[1], text: "" };
+    } else {
+      current.text += `${line}\n`;
+    }
+  }
+  if (current.text.trim()) sections.push({ ...current, text: current.text.trim() });
+  return sections;
+}
+
+export function classifySpecSections(specs: AutomationSpecInput[]): ClassifiedSection[] {
+  const rows: ClassifiedSection[] = [];
+  for (const spec of specs) {
+    for (const section of splitMarkdownSections(spec.content)) {
+      const haystack = `${spec.filename} ${section.section} ${section.text}`.toLowerCase();
+      const classification: ClassifiedSection["classification"] =
+        /ai agent directives?|agent directives?|operating rules/.test(haystack)
+          ? "directive"
+          : /non[- ]?goals?|out of scope/.test(haystack)
+            ? "non_goal"
+            : /acceptance|criteria|must pass|required evidence|ci gates/.test(haystack)
+              ? "acceptance_criteria"
+              : /security|auth|secret|token|privacy|permission|role/.test(haystack)
+                ? "security"
+                : /observability|metrics|logs|traces|alerts|rollback|failure|deployment/.test(haystack)
+                  ? "operational"
+                  : /example|sample|for instance/.test(haystack)
+                    ? "example"
+                    : /reference|schema|map|table|contract|endpoint|resource/.test(haystack)
+                      ? "reference"
+                      : "invariant";
+      rows.push({
+        spec_id: spec.id,
+        filename: spec.filename,
+        section: section.section,
+        classification,
+        reason: `Matched ${classification.replace("_", " ")} signals in section content.`,
+        approx_tokens: approxTokens(`${section.section}\n${section.text}`),
+      });
+    }
+  }
+  return rows;
+}
+
+export function planTaskContext(input: {
+  task: string;
+  tree: string;
+  specs: AutomationSpecInput[];
+  existingSpecs?: string[];
+  tokenBudget?: number;
+}): TaskPlan & { context_selection: ContextSelection } {
+  const classified = classifySpecSections(input.specs);
+  const applicable = input.specs
+    .map((spec) => {
+      const score = keywordScore(`${spec.filename}\n${spec.content}`, input.task);
+      return {
+        spec_id: spec.id,
+        filename: spec.filename,
+        reason: score > 0 ? "Task terms match spec content." : "Included as governed context.",
+        priority: score,
+      };
+    })
+    .filter((row) => row.priority > 0)
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 8);
+  const sections = classified
+    .map((section) => ({
+      ...section,
+      score:
+        keywordScore(`${section.filename} ${section.section}`, input.task) +
+        (section.classification === "directive" ? 3 : 0) +
+        (section.classification === "acceptance_criteria" ? 2 : 0) +
+        (section.classification === "security" ? 1 : 0),
+    }))
+    .sort((a, b) => b.score - a.score || a.approx_tokens - b.approx_tokens);
+  const context_selection = optimizeContext({
+    sections,
+    tokenBudget: input.tokenBudget ?? 2000,
+  });
+  return {
+    task: input.task,
+    applicable_specs: applicable,
+    sections: sections.slice(0, 12).map(({ score: _score, ...section }) => section),
+    missing_specs: detectSpecGaps({ tree: input.tree, existingSpecs: input.existingSpecs }),
+    acceptance_criteria: [
+      "Implementation cites the governed spec sections it follows.",
+      "Tests or evidence cover each affected acceptance/directive section.",
+      "Any missing or conflicting spec guidance is filed as feedback before implementation.",
+    ],
+    context_selection,
+  };
+}
+
+export function optimizeContext(input: {
+  sections: Array<ClassifiedSection & { score?: number }>;
+  tokenBudget: number;
+}): ContextSelection {
+  const selected: ClassifiedSection[] = [];
+  const omitted: ClassifiedSection[] = [];
+  let used = 0;
+  for (const section of input.sections) {
+    const clean: ClassifiedSection = {
+      spec_id: section.spec_id,
+      filename: section.filename,
+      section: section.section,
+      classification: section.classification,
+      reason: section.reason,
+      approx_tokens: section.approx_tokens,
+    };
+    if (used + clean.approx_tokens <= input.tokenBudget) {
+      selected.push(clean);
+      used += clean.approx_tokens;
+    } else {
+      omitted.push(clean);
+    }
+  }
+  return { token_budget: input.tokenBudget, estimated_tokens: used, selected_sections: selected, omitted_sections: omitted };
+}
+
+export function ticketChecklist(input: { task: string; plan: TaskPlan }): string {
+  const specs = input.plan.applicable_specs.map((spec) => `- [ ] Review \`${spec.filename}\` (${spec.reason})`).join("\n");
+  const criteria = input.plan.acceptance_criteria.map((criterion) => `- [ ] ${criterion}`).join("\n");
+  const missing = input.plan.missing_specs.map((gap) => `- [ ] Resolve spec gap: \`${gap.filename}\` (${gap.reason})`).join("\n");
+  return `# Implementation Checklist
+
+## Task
+
+${input.task}
+
+## Governing Specs
+
+${specs || "- [ ] No direct spec match found; run spec gap detection before implementation."}
+
+## Acceptance Criteria
+
+${criteria}
+
+## Missing Spec Work
+
+${missing || "- [x] No missing spec gaps detected from supplied evidence."}
+
+## PR Evidence
+
+- [ ] Summary cites relevant spec sections.
+- [ ] Tests or audit evidence are attached.
+- [ ] Spec feedback was filed for unclear or conflicting guidance.
+`;
+}
+
+export function auditPromptForSpec(spec: AutomationSpecInput): string {
+  const classified = classifySpecSections([spec]);
+  const focus = classified
+    .filter((section) => ["directive", "acceptance_criteria", "security", "operational"].includes(section.classification))
+    .map((section) => `- ${section.section} (${section.classification})`)
+    .join("\n");
+  return `Audit an implementation for conformance with ${spec.filename}@${spec.current_version}.
+
+Focus sections:
+${focus || "- All normative sections"}
+
+Return JSON findings with: severity, spec_section, file_path, evidence, and recommendation.
+Flag literal compliance that misses the stated intent.`;
+}
+
+export function improvementSuggestions(input: {
+  specs: AutomationSpecInput[];
+  feedback?: Array<{ spec_id: string; error_type: string; description: string; status: string }>;
+  roi?: Array<{ spec_id: string; roi_score: number; open_feedback: number }>;
+}): Array<{ spec_id: string; filename: string; suggestion: string; reason: string; priority: number }> {
+  const suggestions = [];
+  for (const spec of input.specs) {
+    const classified = classifySpecSections([spec]);
+    const feedback = (input.feedback ?? []).filter((item) => item.spec_id === spec.id && item.status !== "resolved");
+    const roi = (input.roi ?? []).find((item) => item.spec_id === spec.id);
+    if (!classified.some((section) => section.classification === "non_goal")) {
+      suggestions.push({ spec_id: spec.id, filename: spec.filename, suggestion: "Add explicit non-goals.", reason: "Agents need boundaries to avoid over-implementation.", priority: 2 });
+    }
+    if (!classified.some((section) => section.classification === "example")) {
+      suggestions.push({ spec_id: spec.id, filename: spec.filename, suggestion: "Add good and bad examples.", reason: "Examples improve LLM interpretation and review consistency.", priority: 2 });
+    }
+    if (feedback.length > 0) {
+      suggestions.push({ spec_id: spec.id, filename: spec.filename, suggestion: "Clarify sections tied to open feedback.", reason: `${feedback.length} unresolved feedback item(s).`, priority: 3 });
+    }
+    if (roi && roi.roi_score < 1) {
+      suggestions.push({ spec_id: spec.id, filename: spec.filename, suggestion: "Shorten or split low-ROI content.", reason: "Token cost appears high relative to measured lift and usage.", priority: 1 });
+    }
+  }
+  return suggestions.sort((a, b) => b.priority - a.priority || a.filename.localeCompare(b.filename));
+}
+
+export function composeSpecPack(input: {
+  name: string;
+  purposes: SpecPurposeTemplate[];
+}): { name: string; specs: Array<{ filename: string; content: string; purpose_id: string }> } {
+  return {
+    name: input.name,
+    specs: input.purposes.map((purpose) => ({
+      filename: purpose.filename,
+      purpose_id: purpose.id,
+      content: purpose.content_template,
+    })),
+  };
 }

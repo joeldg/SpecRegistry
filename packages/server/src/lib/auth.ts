@@ -280,6 +280,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST|PUT|DELETE/, path: /^\/api\/v1\/(templates|webhooks|subscriptions|approval-policies)(\/|$)/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/spec-generation\/draft$/, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/spec-generation\/preview$/, min: "author" },
+  { method: /POST/, path: /^\/api\/v1\/automation\//, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/sync-jobs\/run$/, min: "admin" },
   { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/api-keys(\/|$)/, min: "admin" },

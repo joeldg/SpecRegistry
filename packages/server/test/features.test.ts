@@ -753,4 +753,77 @@ describe("LLM spec automation", () => {
     expect(draft.statusCode).toBe(201);
     expect(draft.json()).toMatchObject({ filename: "SECURITY_PRIVACY.md", status: "draft" });
   });
+
+  it("plans tasks, generates checklists, classifies sections, optimizes context, and composes packs", async () => {
+    const task = "Change API authentication and add observable failure handling";
+    const plan = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/task-plan",
+      payload: { project_type: "Acme Edge Device", task, tree: "src/routes/api.ts\nsrc/auth/session.ts", token_budget: 500 },
+    });
+    expect(plan.statusCode).toBe(200);
+    expect(plan.json().acceptance_criteria.length).toBeGreaterThan(0);
+    expect(plan.json().context_selection.estimated_tokens).toBeLessThanOrEqual(500);
+
+    const ticket = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/ticket",
+      payload: { project_type: "Acme Edge Device", task },
+    });
+    expect(ticket.statusCode).toBe(200);
+    expect(ticket.json().markdown).toContain("Implementation Checklist");
+
+    const classifier = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/section-classifier",
+      payload: { project_type: "Acme Edge Device" },
+    });
+    expect(classifier.statusCode).toBe(200);
+    expect(classifier.json().sections.length).toBeGreaterThan(0);
+
+    const budget = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/context-budget",
+      payload: { project_type: "Acme Edge Device", task, token_budget: 300 },
+    });
+    expect(budget.statusCode).toBe(200);
+    expect(budget.json().estimated_tokens).toBeLessThanOrEqual(300);
+
+    const spec = await findSpec("API.md", "Acme Edge Device");
+    const auditPrompt = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/audit-prompt",
+      payload: { spec_id: spec.id },
+    });
+    expect(auditPrompt.statusCode).toBe(200);
+    expect(auditPrompt.json().prompt).toContain("Audit an implementation");
+
+    const suggestions = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/improvement-suggestions",
+      payload: { project_type: "Acme Edge Device" },
+    });
+    expect(suggestions.statusCode).toBe(200);
+    expect(suggestions.json().suggestions.length).toBeGreaterThan(0);
+
+    const pack = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/spec-pack",
+      payload: { name: "Smoke Pack", purposes: ["api-contract", "test-strategy"] },
+    });
+    expect(pack.statusCode).toBe(200);
+    expect(pack.json().specs.map((s: any) => s.filename)).toEqual(["API.md", "TEST_STRATEGY.md"]);
+  });
+
+  it("exposes automation flags and blocks disabled features", async () => {
+    const flags = await getJson("/api/v1/automation/features");
+    expect(flags.gap_detection).toBe(true);
+    vi.stubEnv("SPECREG_AUTOMATION_TASK_PLANNER", "false");
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/task-plan",
+      payload: { project_type: "Acme Edge Device", task: "x" },
+    });
+    expect(blocked.statusCode).toBe(403);
+  });
 });

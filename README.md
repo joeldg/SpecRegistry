@@ -559,6 +559,10 @@ Use the LDAP tester in Settings before switching users over.
 - **LLM spec automation** — the Generate Specs workbench detects missing governance specs
   from repo evidence, uses purpose-based templates for common spec types, generates prompts
   or server-LLM drafts, and creates reviewed registry drafts rather than publishing directly.
+  It also provides task planning, spec-aware PR/ticket checklists, generated audit prompts,
+  section classification, context budget optimization, improvement suggestions, and spec
+  pack composition. Automation features are individually flaggable, and LLM-backed variants
+  run only when requested and enabled.
 - **Review SLA** — `GET /api/v1/reviews/sla` summarizes pending review age, warnings,
   breached reviews, and remaining approvals. The dashboard surfaces the oldest pending
   review and breached/warning counts.
@@ -625,6 +629,10 @@ GET  /api/v1/specs/:type/agent-pack     GET/POST/DELETE /api/v1/approval-policie
 GET  /api/v1/spec-ownership             GET /api/v1/specs/dependency-map
 GET  /api/v1/spec-purposes              POST /api/v1/spec-gaps
 POST /api/v1/spec-generation/preview    POST /api/v1/spec-generation/draft
+GET  /api/v1/automation/features        POST /api/v1/automation/task-plan
+POST /api/v1/automation/ticket          POST /api/v1/automation/section-classifier
+POST /api/v1/automation/context-budget  POST /api/v1/automation/audit-prompt
+POST /api/v1/automation/improvement-suggestions   POST /api/v1/automation/spec-pack
 GET  /api/v1/specs/:type/download[?channel=beta]   GET /api/v1/meta/public-key
 POST /api/v1/cli/stub-prompts           POST /api/v1/cli/sync-check
 GET/POST/PUT/DELETE /api/v1/templates   GET/POST/DELETE /api/v1/webhooks
@@ -668,6 +676,17 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `LLM_BASE_URL` | Anthropic proxy or OpenAI-compatible local/network endpoint |
 | `LLM_API_KEY` | Server LLM API key; optional for some local endpoints |
 | `LLM_MAX_TOKENS` | Default server LLM token budget |
+| `SPECREG_AUTOMATION_ENABLED` | Master flag for automation APIs and workbench controls |
+| `SPECREG_AUTOMATION_GAP_DETECTION` | Enable spec gap detection |
+| `SPECREG_AUTOMATION_GENERATION` | Enable spec generation preview/draft creation |
+| `SPECREG_AUTOMATION_LLM_GENERATION` | Enable requested LLM-backed automation variants |
+| `SPECREG_AUTOMATION_TASK_PLANNER` | Enable task planning |
+| `SPECREG_AUTOMATION_TICKET_GENERATOR` | Enable PR/ticket checklist generation |
+| `SPECREG_AUTOMATION_MAINTENANCE` | Enable improvement suggestions |
+| `SPECREG_AUTOMATION_PACK_COMPOSER` | Enable spec pack composition |
+| `SPECREG_AUTOMATION_AUDIT_PROMPTS` | Enable generated audit prompts |
+| `SPECREG_AUTOMATION_SECTION_CLASSIFIER` | Enable section classification |
+| `SPECREG_AUTOMATION_CONTEXT_OPTIMIZER` | Enable context budget optimization |
 | `GITHUB_TOKEN` | Git push-back PRs + inbound webhook file fetch; fallback if not saved in Settings |
 | `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks; fallback if not saved in Settings |
 | `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions; fallback if not saved in Settings |

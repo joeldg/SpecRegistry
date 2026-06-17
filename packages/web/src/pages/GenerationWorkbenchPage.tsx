@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   api,
   getAuthor,
+  type AutomationFlags,
   type GenerationPreview,
   type ProjectTypeWithCount,
   type SpecGap,
   type SpecPurposeTemplate,
+  type TaskPlan,
 } from "../api";
 
 const SAMPLE_TREE = `src/
@@ -31,13 +33,21 @@ function detectedLanguages(tree: string): string[] {
 export default function GenerationWorkbenchPage() {
   const [projectTypes, setProjectTypes] = useState<ProjectTypeWithCount[]>([]);
   const [purposes, setPurposes] = useState<SpecPurposeTemplate[]>([]);
+  const [features, setFeatures] = useState<AutomationFlags>();
   const [projectType, setProjectType] = useState("");
   const [purposeId, setPurposeId] = useState("");
   const [tree, setTree] = useState(SAMPLE_TREE);
   const [extraContext, setExtraContext] = useState("");
+  const [task, setTask] = useState("Implement secure API session handling with observable failures.");
+  const [tokenBudget, setTokenBudget] = useState(1200);
   const [useLlm, setUseLlm] = useState(false);
   const [gaps, setGaps] = useState<SpecGap[]>([]);
   const [preview, setPreview] = useState<GenerationPreview>();
+  const [plan, setPlan] = useState<TaskPlan>();
+  const [ticket, setTicket] = useState("");
+  const [suggestions, setSuggestions] = useState<Array<{ filename: string; suggestion: string; reason: string }>>([]);
+  const [pack, setPack] = useState<Array<{ filename: string; purpose_id: string }>>([]);
+  const [auditPrompt, setAuditPrompt] = useState("");
   const [content, setContent] = useState("");
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -45,11 +55,12 @@ export default function GenerationWorkbenchPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.projectTypes(), api.specPurposes()])
-      .then(([types, nextPurposes]) => {
+    Promise.all([api.projectTypes(), api.specPurposes(), api.automationFeatures()])
+      .then(([types, nextPurposes, nextFeatures]) => {
         const selectable = types.filter((type) => type.scope === "project_type");
         setProjectTypes(selectable);
         setPurposes(nextPurposes);
+        setFeatures(nextFeatures);
         setProjectType(selectable[0]?.name ?? "");
         setPurposeId(nextPurposes[0]?.id ?? "");
       })
@@ -120,6 +131,47 @@ export default function GenerationWorkbenchPage() {
     }
   }
 
+  async function runPlanner() {
+    if (!projectType) return;
+    setBusy("planner");
+    setError(undefined);
+    try {
+      const [nextPlan, nextTicket] = await Promise.all([
+        api.taskPlan({ project_type: projectType, task, tree, token_budget: tokenBudget, use_llm: useLlm }),
+        api.ticketChecklist({ project_type: projectType, task, tree, use_llm: useLlm }),
+      ]);
+      setPlan(nextPlan);
+      setTicket(nextTicket.markdown);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  async function runMaintenance() {
+    if (!projectType) return;
+    setBusy("maintenance");
+    setError(undefined);
+    try {
+      const [nextSuggestions, nextPack] = await Promise.all([
+        api.improvementSuggestions({ project_type: projectType, use_llm: useLlm }),
+        api.specPack({ name: `${projectType} Starter Pack`, purposes: purposes.map((purpose) => purpose.id), use_llm: useLlm }),
+      ]);
+      setSuggestions(nextSuggestions.suggestions.slice(0, 8));
+      setPack(nextPack.specs);
+      const specId = plan?.applicable_specs[0]?.spec_id;
+      if (specId) {
+        const prompt = await api.auditPrompt(specId, useLlm);
+        setAuditPrompt(prompt.prompt);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -130,6 +182,14 @@ export default function GenerationWorkbenchPage() {
       </div>
       {error && <div className="error-banner">{error}</div>}
       {notice && <div className="notice-banner">{notice}</div>}
+      {features && !features.enabled && <div className="error-banner">Automation features are disabled for this deployment.</div>}
+      {features && (
+        <div className="toolbar">
+          {Object.entries(features).map(([key, enabled]) => (
+            <span key={key} className={`badge ${enabled ? "approved" : "rejected"}`}>{key}</span>
+          ))}
+        </div>
+      )}
 
       <div className="split">
         <div className="section">
@@ -141,7 +201,7 @@ export default function GenerationWorkbenchPage() {
                   <option key={type.id} value={type.name}>{type.name}</option>
                 ))}
               </select>
-              <button onClick={detectGaps} disabled={!projectType || busy === "gaps"}>
+              <button onClick={detectGaps} disabled={!features?.gap_detection || !projectType || busy === "gaps"}>
                 {busy === "gaps" ? "Detecting..." : "Detect gaps"}
               </button>
             </div>
@@ -191,7 +251,7 @@ export default function GenerationWorkbenchPage() {
               <label className="faint">
                 <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} /> Use server LLM
               </label>
-              <button className="primary" onClick={generate} disabled={!purposeId || busy === "generate"}>
+              <button className="primary" onClick={generate} disabled={!features?.generation || !purposeId || busy === "generate" || (useLlm && !features?.llm_generation)}>
                 {busy === "generate" ? "Generating..." : "Generate"}
               </button>
             </div>
@@ -226,6 +286,81 @@ export default function GenerationWorkbenchPage() {
           )}
         </div>
       </div>
+
+      <div className="section">
+        <h2>Task Automation</h2>
+        <div className="card">
+          <div className="form-row">
+            <input type="text" value={task} onChange={(e) => setTask(e.target.value)} style={{ flex: 1, minWidth: 320 }} />
+            <input
+              type="number"
+              value={tokenBudget}
+              onChange={(e) => setTokenBudget(Math.max(100, Number(e.target.value) || 1200))}
+              style={{ width: 120 }}
+            />
+            <button onClick={runPlanner} disabled={!features?.task_planner || !projectType || busy === "planner" || (useLlm && !features?.llm_generation)}>
+              {busy === "planner" ? "Planning..." : "Plan task"}
+            </button>
+            <button onClick={runMaintenance} disabled={!features?.maintenance || !projectType || busy === "maintenance" || (useLlm && !features?.llm_generation)}>
+              {busy === "maintenance" ? "Loading..." : "Maintenance"}
+            </button>
+          </div>
+          {plan && (
+            <div className="report-grid">
+              <div>
+                <div className="label">Applicable specs</div>
+                {plan.applicable_specs.length === 0 ? (
+                  <div className="dim">No direct matches.</div>
+                ) : (
+                  plan.applicable_specs.map((spec) => (
+                    <div key={spec.spec_id} className="dim"><span className="mono">{spec.filename}</span> · priority {spec.priority}</div>
+                  ))
+                )}
+                <div className="label" style={{ marginTop: 12 }}>Context budget</div>
+                <div className="mono">{plan.context_selection.estimated_tokens}/{plan.context_selection.token_budget} tokens</div>
+                {plan.context_selection.selected_sections.slice(0, 6).map((section) => (
+                  <div key={`${section.filename}-${section.section}`} className="dim">
+                    {section.filename} · {section.section} · {section.classification}
+                  </div>
+                ))}
+                {plan.llm_notes && <pre className="diff" style={{ padding: 12, marginTop: 10 }}>{plan.llm_notes}</pre>}
+              </div>
+              <div>
+                <div className="label">PR/ticket checklist</div>
+                <pre className="diff" style={{ padding: 12, maxHeight: 260 }}>{ticket}</pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(suggestions.length > 0 || pack.length > 0 || auditPrompt) && (
+        <div className="section">
+          <h2>Automation Maintenance</h2>
+          <div className="report-grid">
+            <div className="card">
+              <div className="label">Spec improvement suggestions</div>
+              {suggestions.map((item, index) => (
+                <div key={`${item.filename}-${index}`} className="dim">
+                  <span className="mono">{item.filename}</span>: {item.suggestion} {item.reason}
+                </div>
+              ))}
+            </div>
+            <div className="card">
+              <div className="label">Spec pack composer</div>
+              {pack.slice(0, 10).map((item) => (
+                <div key={item.purpose_id} className="dim"><span className="mono">{item.filename}</span> · {item.purpose_id}</div>
+              ))}
+            </div>
+          </div>
+          {auditPrompt && (
+            <details style={{ marginTop: 12 }}>
+              <summary className="faint">Generated audit prompt</summary>
+              <pre className="diff" style={{ padding: 12 }}>{auditPrompt}</pre>
+            </details>
+          )}
+        </div>
+      )}
     </>
   );
 }

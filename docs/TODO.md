@@ -5,13 +5,13 @@
 - [x] Spec gap detector that scans repo metadata and identifies missing governance specs.
 - [x] Spec generation workbench for generating reviewed draft specs from repo scans, pasted trees, uploaded manifests, existing spec packs, or project type templates.
 - [x] Purpose-based spec templates for API contracts, database schemas, test strategies, deployment/runbooks, observability, security/privacy, and agent operating rules.
-- [ ] Agent task planner that returns applicable specs, sections, missing specs, and acceptance criteria for a ticket or task.
-- [ ] Spec-aware PR/ticket generator that produces implementation checklists from governing specs.
-- [ ] Spec improvement suggestions based on feedback clusters, weak efficacy, audit findings, and low token ROI.
-- [ ] Spec pack composer for reusable global and project-type packs such as AI-SDD, SaaS backend, embedded systems, web app, and data platform packs.
-- [ ] Generated audit prompts per spec for reverse conformance checks.
-- [ ] Spec section classifier for invariants, acceptance criteria, examples, non-goals, operational requirements, security requirements, and reference detail.
-- [ ] Context budget optimizer that selects the highest-value specs/sections for an agent task under a token budget.
+- [x] Agent task planner that returns applicable specs, sections, missing specs, and acceptance criteria for a ticket or task.
+- [x] Spec-aware PR/ticket generator that produces implementation checklists from governing specs.
+- [x] Spec improvement suggestions based on feedback clusters, weak efficacy, audit findings, and low token ROI.
+- [x] Spec pack composer for reusable global and project-type packs such as AI-SDD, SaaS backend, embedded systems, web app, and data platform packs.
+- [x] Generated audit prompts per spec for reverse conformance checks.
+- [x] Spec section classifier for invariants, acceptance criteria, examples, non-goals, operational requirements, security requirements, and reference detail.
+- [x] Context budget optimizer that selects the highest-value specs/sections for an agent task under a token budget.
 
 ## Governance
 

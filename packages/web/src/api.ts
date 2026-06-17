@@ -191,6 +191,36 @@ export interface GenerationPreview {
   model: string | null;
   provider: string | null;
 }
+export interface TaskPlan {
+  task: string;
+  applicable_specs: Array<{ spec_id: string; filename: string; reason: string; priority: number }>;
+  sections: Array<{ spec_id: string; filename: string; section: string; classification: string; reason: string; approx_tokens: number }>;
+  missing_specs: SpecGap[];
+  acceptance_criteria: string[];
+  context_selection: {
+    token_budget: number;
+    estimated_tokens: number;
+    selected_sections: Array<{ filename: string; section: string; classification: string; approx_tokens: number }>;
+    omitted_sections: Array<{ filename: string; section: string; classification: string; approx_tokens: number }>;
+  };
+  llm_notes?: string;
+  model?: string;
+  provider?: string;
+}
+export type AutomationFlags = Record<
+  | "enabled"
+  | "gap_detection"
+  | "generation"
+  | "llm_generation"
+  | "task_planner"
+  | "ticket_generator"
+  | "maintenance"
+  | "pack_composer"
+  | "audit_prompts"
+  | "section_classifier"
+  | "context_optimizer",
+  boolean
+>;
 export interface SearchHit {
   spec_id: string;
   filename: string;
@@ -517,6 +547,7 @@ export const api = {
   updateProjectType: (id: string, body: Record<string, unknown>) =>
     request<ProjectType>(`/api/v1/project-types/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   specPurposes: () => request<SpecPurposeTemplate[]>("/api/v1/spec-purposes"),
+  automationFeatures: () => request<AutomationFlags>("/api/v1/automation/features"),
   specGaps: (body: { project_type: string; tree: string; detected_languages?: string[]; existing_specs?: string[] }) =>
     request<{ project_type: string; gaps: SpecGap[] }>("/api/v1/spec-gaps", { method: "POST", body: JSON.stringify(body) }),
   generationPreview: (body: {
@@ -534,6 +565,29 @@ export const api = {
     content: string;
     updated_by: string;
   }) => request<Spec>("/api/v1/spec-generation/draft", { method: "POST", body: JSON.stringify(body) }),
+  taskPlan: (body: { project_type: string; task: string; tree?: string; token_budget?: number; use_llm?: boolean }) =>
+    request<TaskPlan>("/api/v1/automation/task-plan", { method: "POST", body: JSON.stringify(body) }),
+  ticketChecklist: (body: { project_type: string; task: string; tree?: string; use_llm?: boolean }) =>
+    request<{ markdown: string; plan: TaskPlan }>("/api/v1/automation/ticket", { method: "POST", body: JSON.stringify(body) }),
+  sectionClassifier: (body: { project_type: string }) =>
+    request<{ sections: TaskPlan["sections"] }>("/api/v1/automation/section-classifier", { method: "POST", body: JSON.stringify(body) }),
+  contextBudget: (body: { project_type: string; task?: string; token_budget: number }) =>
+    request<TaskPlan["context_selection"]>("/api/v1/automation/context-budget", { method: "POST", body: JSON.stringify(body) }),
+  auditPrompt: (spec_id: string, use_llm?: boolean) =>
+    request<{ spec_id: string; filename: string; prompt: string }>("/api/v1/automation/audit-prompt", {
+      method: "POST",
+      body: JSON.stringify({ spec_id, use_llm }),
+    }),
+  improvementSuggestions: (body: { project_type: string; use_llm?: boolean }) =>
+    request<{ suggestions: Array<{ spec_id: string; filename: string; suggestion: string; reason: string; priority: number }>; llm_notes?: string }>(
+      "/api/v1/automation/improvement-suggestions",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+  specPack: (body: { name?: string; purposes?: string[]; use_llm?: boolean }) =>
+    request<{ name: string; specs: Array<{ filename: string; content: string; purpose_id: string }>; readme?: string }>("/api/v1/automation/spec-pack", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 const AUTHOR_KEY = "specregistry.author";

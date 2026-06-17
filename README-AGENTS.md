@@ -19,7 +19,7 @@ flowchart TD
   C --> D["Agent starts with CLAUDE.md or AGENTS.md"]
   D --> E["Agent calls MCP get_specs before coding"]
   E --> F["Agent searches specs with search_specs as needed"]
-  F --> G{"Spec is clear and current?"}
+  F --> G{"Decision gate: clear, complete, consistent, current?"}
   G -->|Yes| H["Agent implements against governed specs"]
   G -->|No| I["Agent calls report_spec_feedback"]
   I --> J["Registry stores open agent_feedback"]
@@ -30,6 +30,54 @@ flowchart TD
   N --> O["Previously remembered compile targets auto-regenerate"]
   O --> D
 ```
+
+## Clarity and Currency Decision Gate
+
+The "clear and current" step is not a model vibe check. It is an explicit gate the agent
+must evaluate before it treats a spec as enough authority to proceed.
+
+An agent may proceed only when all four conditions are true:
+
+| Condition | The agent asks | Proceed when | File feedback when |
+| --- | --- | --- | --- |
+| Clear | "Can I identify the required behavior without choosing between multiple reasonable interpretations?" | The relevant section gives a single actionable rule, requirement, or acceptance criterion. | The spec uses vague language, leaves a key decision open, or could reasonably support more than one implementation. |
+| Complete | "Do I have enough information to implement and test this task?" | Inputs, outputs, boundaries, non-goals, failure behavior, and acceptance expectations are sufficient for the change. | The spec names the feature but omits necessary details such as status codes, data shape, ownership, security behavior, or test expectations. |
+| Consistent | "Do all governing specs that apply to this task agree?" | Global, project-type, and project-scoped specs can all be followed at the same time. | Two specs, two sections, or a spec and a project override require incompatible behavior. |
+| Current | "Does the spec still match the codebase, platform, dependencies, APIs, and project reality I can observe?" | Referenced files, APIs, commands, architecture, and operational assumptions still exist or are intentionally targeted future state. | The spec points to removed APIs, renamed files, obsolete workflows, old provider/model names, stale infrastructure, or behavior the registry has superseded. |
+
+The agent should gather evidence before deciding:
+
+1. Load the applicable spec set with `get_specs`, including `SPECREG_REPO` so project-scoped
+   overrides are visible.
+2. Search for task terms with `search_specs`, including API names, filenames, domain terms,
+   security concerns, and failure modes.
+3. Compare global, project-type, and project-scoped guidance. Project-scoped specs can
+   refine a project type, but unresolved conflict still needs feedback.
+4. Inspect nearby implementation context only enough to determine whether the spec is
+   stale or incomplete.
+5. If the agent cannot name the governing rule and the acceptance expectation in plain
+   language, it should file feedback instead of filling the gap from intuition.
+
+This gate is deliberately conservative. A spec can be followed perfectly and still produce
+the wrong implementation if it does not encode the user's intent. The feedback loop exists
+to catch those cases early, while the implementation decision is still traceable.
+
+Use this stop/proceed rule:
+
+```text
+Proceed only when the agent can say:
+"For this task, spec <filename>@<version> section <section> requires <behavior>,
+and the implementation will satisfy it by <specific action/test>."
+
+File feedback when the agent has to say:
+"I need to assume/choose/guess whether <decision> should be <option A> or <option B>."
+```
+
+When filing feedback, the agent should state which gate failed:
+
+- `ambiguity`: the Clear or Complete condition failed.
+- `contradiction`: the Consistent condition failed.
+- `outdated`: the Current condition failed.
 
 ## Local Files
 
@@ -193,4 +241,3 @@ Authorization: Bearer <token>
 - Report unclear guidance once with enough evidence for a reviewer to act.
 - Follow current published specs until a reviewed change is published.
 - Run or recommend `specreg sync` after spec updates so local context catches up.
-

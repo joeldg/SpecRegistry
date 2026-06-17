@@ -556,6 +556,9 @@ Use the LDAP tester in Settings before switching users over.
   Reports also show dependency-map and token-ROI panels.
   The page also includes an AI reporting test bench for synthetic feedback plus audit
   and efficacy smoke tests against the configured LLM provider.
+- **LLM spec automation** — the Generate Specs workbench detects missing governance specs
+  from repo evidence, uses purpose-based templates for common spec types, generates prompts
+  or server-LLM drafts, and creates reviewed registry drafts rather than publishing directly.
 - **Review SLA** — `GET /api/v1/reviews/sla` summarizes pending review age, warnings,
   breached reviews, and remaining approvals. The dashboard surfaces the oldest pending
   review and breached/warning counts.
@@ -620,6 +623,8 @@ POST /api/v1/ai/regression-suite        GET /api/v1/ai/token-roi
 POST /api/v1/specs/:id/promote          GET  /api/v1/specs/:type/compile?target=
 GET  /api/v1/specs/:type/agent-pack     GET/POST/DELETE /api/v1/approval-policies
 GET  /api/v1/spec-ownership             GET /api/v1/specs/dependency-map
+GET  /api/v1/spec-purposes              POST /api/v1/spec-gaps
+POST /api/v1/spec-generation/preview    POST /api/v1/spec-generation/draft
 GET  /api/v1/specs/:type/download[?channel=beta]   GET /api/v1/meta/public-key
 POST /api/v1/cli/stub-prompts           POST /api/v1/cli/sync-check
 GET/POST/PUT/DELETE /api/v1/templates   GET/POST/DELETE /api/v1/webhooks

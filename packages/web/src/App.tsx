@@ -13,6 +13,7 @@ import ProjectTypesPage from "./pages/ProjectTypesPage";
 import SearchPage from "./pages/SearchPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import SettingsPage from "./pages/SettingsPage";
+import GenerationWorkbenchPage from "./pages/GenerationWorkbenchPage";
 
 export default function App() {
   const [author, setAuthorState] = useState(getAuthor());
@@ -41,6 +42,9 @@ export default function App() {
         </NavLink>
         <NavLink to="/reports" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
           Reports
+        </NavLink>
+        <NavLink to="/generate" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
+          Generate Specs
         </NavLink>
         <NavLink to="/search" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
           Search
@@ -97,6 +101,7 @@ export default function App() {
           <Route path="/reviews/:id" element={<ReviewDetailPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/generate" element={<GenerationWorkbenchPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/project-types" element={<ProjectTypesPage />} />
           <Route path="/templates" element={<TemplatesPage />} />

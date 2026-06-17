@@ -697,3 +697,60 @@ describe("AI feedback governance", () => {
     expect(trends.runs).toEqual([]);
   });
 });
+
+describe("LLM spec automation", () => {
+  it("detects missing spec gaps and creates generated drafts from purpose templates", async () => {
+    const purposes = await getJson("/api/v1/spec-purposes");
+    expect(purposes.find((purpose: any) => purpose.id === "database-schema")).toMatchObject({
+      filename: "DATABASE_SCHEMA.md",
+    });
+
+    const gaps = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-gaps",
+      payload: {
+        project_type: "Acme Edge Device",
+        tree: "src/routes/api.ts\nsrc/db/schema.sql\nsrc/auth/session.ts\ntests/api.test.ts\ndocker-compose.yml",
+        detected_languages: ["TypeScript", "SQL"],
+        existing_specs: ["API.md"],
+      },
+    });
+    expect(gaps.statusCode).toBe(200);
+    expect(gaps.json().gaps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ purpose_id: "database-schema", filename: "DATABASE_SCHEMA.md" }),
+        expect.objectContaining({ purpose_id: "security-privacy", filename: "SECURITY_PRIVACY.md" }),
+      ])
+    );
+
+    const preview = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/preview",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "security-privacy",
+        tree: "src/auth/session.ts\nsrc/routes/api.ts",
+        detected_languages: ["TypeScript"],
+      },
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({
+      filename: "SECURITY_PRIVACY.md",
+      provider: null,
+    });
+    expect(preview.json().content).toContain("## AI Agent Directives");
+
+    const draft = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/draft",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "security-privacy",
+        content: preview.json().content,
+        updated_by: "automation-test",
+      },
+    });
+    expect(draft.statusCode).toBe(201);
+    expect(draft.json()).toMatchObject({ filename: "SECURITY_PRIVACY.md", status: "draft" });
+  });
+});

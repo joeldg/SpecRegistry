@@ -164,6 +164,33 @@ export interface DependencyMap {
   edges: Array<{ from_spec_id: string; from_filename: string; to_spec_id: string | null; to_filename: string; relation: string }>;
   unresolved: Array<{ from_filename: string; to_filename: string; relation: string }>;
 }
+export interface SpecPurposeTemplate {
+  id: string;
+  filename: string;
+  title: string;
+  description: string;
+  required_sections: string[];
+  prompt: string;
+  content_template: string;
+  signals: string[];
+}
+export interface SpecGap {
+  purpose_id: string;
+  filename: string;
+  title: string;
+  reason: string;
+  confidence: number;
+  evidence: string[];
+}
+export interface GenerationPreview {
+  project_type: string;
+  purpose: SpecPurposeTemplate;
+  filename: string;
+  prompt: string;
+  content: string;
+  model: string | null;
+  provider: string | null;
+}
 export interface SearchHit {
   spec_id: string;
   filename: string;
@@ -489,6 +516,24 @@ export const api = {
     }),
   updateProjectType: (id: string, body: Record<string, unknown>) =>
     request<ProjectType>(`/api/v1/project-types/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  specPurposes: () => request<SpecPurposeTemplate[]>("/api/v1/spec-purposes"),
+  specGaps: (body: { project_type: string; tree: string; detected_languages?: string[]; existing_specs?: string[] }) =>
+    request<{ project_type: string; gaps: SpecGap[] }>("/api/v1/spec-gaps", { method: "POST", body: JSON.stringify(body) }),
+  generationPreview: (body: {
+    project_type: string;
+    purpose: string;
+    tree: string;
+    detected_languages?: string[];
+    extra_context?: string;
+    use_llm?: boolean;
+  }) => request<GenerationPreview>("/api/v1/spec-generation/preview", { method: "POST", body: JSON.stringify(body) }),
+  createGeneratedDraft: (body: {
+    project_type: string;
+    purpose: string;
+    filename?: string;
+    content: string;
+    updated_by: string;
+  }) => request<Spec>("/api/v1/spec-generation/draft", { method: "POST", body: JSON.stringify(body) }),
 };
 
 const AUTHOR_KEY = "specregistry.author";

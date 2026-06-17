@@ -37,6 +37,18 @@ const SUMMARY_SELECT = `
   LEFT JOIN repo_consumers rc ON rc.id = s.project_id
 `;
 
+function projectFromQuery(
+  app: FastifyInstance,
+  ptId: string,
+  query: { project_id?: string; repo?: string }
+) {
+  return query.project_id
+    ? requireProjectConsumer(app.db, query.project_id, ptId)
+    : query.repo
+      ? findProjectConsumer(app.db, query.repo, ptId)
+      : undefined;
+}
+
 export async function specRoutes(app: FastifyInstance): Promise<void> {
   // List all global and project-type specs (summaries, no markdown body).
   app.get("/specs", async (req) => {
@@ -206,29 +218,31 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
   // Compile the governed spec set into an agent context file (CLAUDE.md / AGENTS.md / .cursorrules).
   app.get("/specs/:key/compile", async (req) => {
     const { key } = req.params as { key: string };
-    const { target, channel } = req.query as { target?: string; channel?: string };
+    const { target, channel, project_id, repo } = req.query as { target?: string; channel?: string; project_id?: string; repo?: string };
     const pt = requireProjectType(app.db, key);
+    const project = projectFromQuery(app, pt.id, { project_id, repo });
     const compileTarget = (target ?? "claude") as CompileTarget;
     if (!["claude", "agents", "cursor"].includes(compileTarget)) {
       throw new HttpError(400, "target must be one of: claude, agents, cursor");
     }
     recordUsage(app.db, "download", pt.id, `compile:${compileTarget}`);
-    return compileBundle(app.db, pt, compileTarget, channel ?? "stable");
+    return compileBundle(app.db, pt, compileTarget, channel ?? "stable", project?.id);
   });
 
   // One-click agent onboarding pack: generated agent files, MCP config, and MCP skill guide.
   app.get("/specs/:key/agent-pack", async (req, reply) => {
     const { key } = req.params as { key: string };
-    const { channel } = req.query as { channel?: string };
+    const { channel, project_id, repo } = req.query as { channel?: string; project_id?: string; repo?: string };
     const pt = requireProjectType(app.db, key);
+    const project = projectFromQuery(app, pt.id, { project_id, repo });
     const zip = new AdmZip();
     for (const target of ["claude", "agents", "cursor"] as const) {
-      const compiled = compileBundle(app.db, pt, target, channel ?? "stable");
+      const compiled = compileBundle(app.db, pt, target, channel ?? "stable", project?.id);
       zip.addFile(compiled.target_filename, Buffer.from(compiled.content, "utf8"));
     }
     const serverUrl = publicUrl(req);
-    zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt), null, 2) + "\n", "utf8"));
-    zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt), "utf8"));
+    zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt, project?.repo), null, 2) + "\n", "utf8"));
+    zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt, project?.repo), "utf8"));
     recordUsage(app.db, "download", pt.id, "agent-pack");
     reply
       .header("content-type", "application/zip")

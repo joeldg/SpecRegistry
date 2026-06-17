@@ -102,7 +102,9 @@ hand-editing generated governance files, an `Agent Decision Gate` section that d
 clear/complete/consistent/current, and the approved spec contents. They should not be
 hand-edited. When `specreg compile` runs, the target is remembered in
 `specs/.specregistry.json`; later `specreg sync` regenerates remembered targets after
-pulling newer approved specs.
+pulling newer approved specs. The CLI passes the current repo identity to the compile API
+so project-scoped specs and overrides are included in `CLAUDE.md`, `AGENTS.md`, and
+`.cursorrules`.
 
 ## MCP Tools
 

@@ -108,6 +108,25 @@ describe("sync-check (CLI drift detection)", () => {
     expect(search.project).toBe("github.com/acme/device");
     expect(search.results[0]).toMatchObject({ filename: "API.md", effective_scope: "project" });
 
+    const baseCompiled = await getJson("/api/v1/specs/Acme%20Edge%20Device/compile?target=claude");
+    expect(baseCompiled.content).toContain("Acme Edge Device — Management API");
+    expect(baseCompiled.content).not.toContain("Project-only API");
+
+    const projectCompiled = await getJson(
+      "/api/v1/specs/Acme%20Edge%20Device/compile?target=claude&repo=github.com%2Facme%2Fdevice"
+    );
+    expect(projectCompiled.content).toContain("Project-only API");
+    expect(projectCompiled.content).not.toContain("Acme Edge Device — Management API");
+
+    const packRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack?repo=github.com%2Facme%2Fdevice",
+    });
+    expect(packRes.statusCode).toBe(200);
+    const pack = new AdmZip(Buffer.from(packRes.rawPayload));
+    expect(pack.readAsText("CLAUDE.md")).toContain("Project-only API");
+    expect(pack.readAsText(".mcp.json")).toContain("github.com/acme/device");
+
     const drift = await app.inject({
       method: "POST",
       url: "/api/v1/cli/sync-check",

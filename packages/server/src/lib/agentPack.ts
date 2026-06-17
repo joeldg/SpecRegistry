@@ -1,6 +1,6 @@
 import type { ProjectType } from "@specregistry/shared";
 
-export function mcpConfig(serverUrl: string, projectType?: ProjectType) {
+export function mcpConfig(serverUrl: string, projectType?: ProjectType, repo = "owner/repo") {
   return {
     mcpServers: {
       specregistry: {
@@ -9,14 +9,14 @@ export function mcpConfig(serverUrl: string, projectType?: ProjectType) {
         env: {
           SPECREG_SERVER: serverUrl,
           ...(projectType ? { SPECREG_PROJECT_TYPE: projectType.name } : {}),
-          SPECREG_REPO: "owner/repo",
+          SPECREG_REPO: repo,
         },
       },
     },
   };
 }
 
-export function mcpSkillMarkdown(serverUrl: string, projectType?: ProjectType): string {
+export function mcpSkillMarkdown(serverUrl: string, projectType?: ProjectType, repo = "owner/repo"): string {
   return `# SpecRegistry MCP Skill
 
 Use this skill when working in a repository governed by SpecRegistry.
@@ -26,7 +26,7 @@ Use this skill when working in a repository governed by SpecRegistry.
 Add this server to the repository's MCP configuration:
 
 \`\`\`json
-${JSON.stringify(mcpConfig(serverUrl, projectType), null, 2)}
+${JSON.stringify(mcpConfig(serverUrl, projectType, repo), null, 2)}
 \`\`\`
 
 If the project type is not preconfigured, call \`list_project_types\` first and choose the best match.

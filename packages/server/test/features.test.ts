@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { seed } from "../src/seed.js";
+import { sanitizeDraftFixOutput } from "../src/lib/aifix.js";
 
 let app: FastifyInstance;
 
@@ -27,6 +28,44 @@ async function findSpec(filename: string, typeName: string) {
   const specs = await getJson("/api/v1/specs");
   return specs.find((s: any) => s.filename === filename && s.project_type_name === typeName);
 }
+
+describe("AI draft-fix output sanitation", () => {
+  it("removes model reasoning before the revised markdown document", () => {
+    const current = "# Global Security\n\n## Scope\n\nAll projects.\n";
+    const raw = `*   The agent feedback mentions: reports:test-fixture.
+*   Looking at the current spec GLOBAL_SECURITY.md:
+    *   Scope: All projects.
+*   I should preserve the structure.
+
+# Global Security
+
+## Scope
+
+All projects.
+
+## Requirements
+
+Use TLS.`;
+    const cleaned = sanitizeDraftFixOutput(raw, current);
+    expect(cleaned).toBe("# Global Security\n\n## Scope\n\nAll projects.\n\n## Requirements\n\nUse TLS.");
+    expect(cleaned).not.toContain("agent feedback mentions");
+    expect(cleaned).not.toContain("Looking at the current spec");
+  });
+
+  it("strips think tags and markdown fences from model output", () => {
+    const current = "# API\n\n## Requirements\n\nExisting.\n";
+    const raw = `<think>I will reason here.</think>
+
+\`\`\`markdown
+# API
+
+## Requirements
+
+Existing. Clarified.
+\`\`\``;
+    expect(sanitizeDraftFixOutput(raw, current)).toBe("# API\n\n## Requirements\n\nExisting. Clarified.");
+  });
+});
 
 describe("sync-check (CLI drift detection)", () => {
   it("records repository manifest consumers and reports outdated counts", async () => {
@@ -591,7 +630,7 @@ describe("LLM settings", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ choices: [{ message: { content: "" }, finish_reason: "stop" }] }), {
+        new Response(JSON.stringify({ choices: [{ message: { content: "", reasoning_content: "hidden reasoning" }, finish_reason: "stop" }] }), {
           headers: { "content-type": "application/json" },
         })
       )

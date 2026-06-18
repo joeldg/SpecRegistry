@@ -95,9 +95,6 @@ function textFromOpenAiChoice(body: unknown): string {
     if (text) return text;
   }
   if (typeof first.text === "string" && first.text.trim()) return first.text.trim();
-  if (typeof first.message?.reasoning_content === "string" && first.message.reasoning_content.trim()) {
-    return first.message.reasoning_content.trim();
-  }
   return "";
 }
 

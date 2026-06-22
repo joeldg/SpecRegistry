@@ -37,10 +37,14 @@ export async function fetchJson<T>(url: string, init?: RequestInit, token?: stri
   return (await res.json()) as T;
 }
 
+export async function listProjectTypes(server: string, token?: string): Promise<ProjectType[]> {
+  const all = await fetchJson<ProjectType[]>(`${server}/api/v1/project-types`, undefined, token);
+  return all.filter((type) => type.scope === "project_type");
+}
+
 /** Resolve a project type by flag value, or interactively if none was given. */
 export async function selectProjectType(server: string, typeName?: string, token?: string): Promise<ProjectType> {
-  const all = await fetchJson<ProjectType[]>(`${server}/api/v1/project-types`, undefined, token);
-  const selectable = all.filter((t) => t.scope === "project_type");
+  const selectable = await listProjectTypes(server, token);
   if (selectable.length === 0) {
     throw new Error("The registry has no project types configured yet.");
   }

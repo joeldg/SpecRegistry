@@ -11,7 +11,7 @@ import { runAudit } from "./audit.js";
 const HELP = `specreg — SpecRegistry developer CLI
 
 Usage:
-  specreg init      Pull approved specs for a project type into ./specs/
+  specreg init      Walk through a new project setup, or pull a premade project type
   specreg generate  Scan this codebase and fetch LLM prompts to generate missing specs
   specreg submit-drafts  Submit generated draft specs into the registry workflow
   specreg check     Compare local specs to the registry; exit 1 on drift (CI gate)
@@ -23,7 +23,7 @@ Usage:
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
   --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
-  --type <name>     Project type name (skips the interactive prompt)
+  --type <name>     Premade project type name (skips the new-project walkthrough)
   --dir <path>      Spec directory (default: specs; generate --write default: .spec/drafts)
   --styleguides <s> init: suggested | all | none | comma ids (default: interactive/suggested)
   --styleguide-dir <path> init: local Google guide directory (default: .spec/styleguides)

@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import AdmZip from "adm-zip";
-import { registryToken, selectProjectType, withRegistryAuth } from "./registry.js";
+import type { Spec } from "@specregistry/shared";
+import { fetchJson, registryToken, selectProjectType, withRegistryAuth } from "./registry.js";
 import { repoIdentity, reportManifest, type Manifest } from "./repo.js";
 import { installGoogleStyleGuides, type InstalledStyleGuide } from "./styleguides.js";
+import { renderProjectProfile, runProjectSetupWizard, type ProjectProfile } from "./projectWizard.js";
 
 export interface InitOptions {
   server: string;
@@ -17,7 +19,11 @@ export interface InitOptions {
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const projectType = await selectProjectType(opts.server, opts.type, opts.token);
+  const setup = opts.type
+    ? { projectType: await selectProjectType(opts.server, opts.type, opts.token), profile: undefined }
+    : await runProjectSetupWizard(opts.server, opts.token);
+  const { projectType, profile } = setup;
+  if (profile) assertProjectProfileTargetsAvailable(profile, opts.force === true);
   console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
 
   const identity = repoIdentity();
@@ -57,6 +63,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
       selection: opts.styleguides,
       dir: opts.styleguideDir,
       force: opts.force,
+      suggestedLanguages: profile?.languages,
     });
   } catch (err) {
     console.log(`Could not install Google style guides: ${err instanceof Error ? err.message : String(err)}`);
@@ -64,12 +71,76 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
   writeMcpConfig(opts.server, projectType.name, identity.repo, registryToken(opts.token));
   writeRegistryGuide(opts.server, projectType.name, identity.repo, opts.dir, registryToken(opts.token), styleGuides, opts.styleguideDir);
+  let projectId: string | undefined;
   try {
     const reported = await reportManifest(opts.server, opts.token, nextManifest, opts.dir, "init");
+    projectId = reported.project_id;
     console.log("Reported local spec manifest to the registry.");
     console.log(`Project scope: ${reported.project_id}`);
   } catch (err) {
     console.log(`Could not report manifest usage: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (profile) {
+    writeProjectProfile(profile, projectType.name);
+    if (projectId) {
+      await submitProjectProfile(opts.server, opts.token, projectType.id, projectId, profile, projectType.name);
+    } else {
+      console.log("The local project profile draft was preserved but could not be submitted without a reported project scope.");
+    }
+  }
+}
+
+function assertProjectProfileTargetsAvailable(profile: ProjectProfile, force: boolean): void {
+  if (!profile.project_name.trim()) throw new Error("Project profile requires a project name.");
+  if (force) return;
+  const targets = [
+    path.resolve(process.cwd(), ".spec/project-profile.json"),
+    path.resolve(process.cwd(), ".spec/drafts/PROJECT_PROFILE.md"),
+  ];
+  const existing = targets.filter((target) => fs.existsSync(target));
+  if (existing.length > 0) {
+    throw new Error(
+      `Refusing to overwrite existing project profile files: ${existing.map((target) => path.relative(process.cwd(), target)).join(", ")}. ` +
+        "Re-run with --force to replace them."
+    );
+  }
+}
+
+function writeProjectProfile(profile: ProjectProfile, projectType: string): void {
+  const profilePath = path.resolve(process.cwd(), ".spec/project-profile.json");
+  const draftPath = path.resolve(process.cwd(), ".spec/drafts/PROJECT_PROFILE.md");
+  fs.mkdirSync(path.dirname(profilePath), { recursive: true });
+  fs.mkdirSync(path.dirname(draftPath), { recursive: true });
+  fs.writeFileSync(profilePath, JSON.stringify({ ...profile, project_type: projectType }, null, 2) + "\n", "utf8");
+  fs.writeFileSync(draftPath, renderProjectProfile(profile, projectType), "utf8");
+  console.log("Wrote .spec/project-profile.json and .spec/drafts/PROJECT_PROFILE.md.");
+}
+
+async function submitProjectProfile(
+  server: string,
+  token: string | undefined,
+  projectTypeId: string,
+  projectId: string,
+  profile: ProjectProfile,
+  projectType: string
+): Promise<void> {
+  try {
+    const created = await fetchJson<Spec>(`${server}/api/v1/specs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        project_type_id: projectTypeId,
+        project_id: projectId,
+        filename: "PROJECT_PROFILE.md",
+        content: renderProjectProfile(profile, projectType),
+        updated_by: process.env.USER || "specreg-init",
+      }),
+    }, token);
+    console.log(`Submitted PROJECT_PROFILE.md as project-scoped draft ${created.id}.`);
+    console.log("Review and publish it in SpecRegistry before treating the profile as governed guidance.");
+  } catch (err) {
+    console.log(`Could not submit PROJECT_PROFILE.md automatically: ${err instanceof Error ? err.message : String(err)}`);
+    console.log("The local draft is preserved; run specreg submit-drafts to send it through the registry workflow.");
   }
 }
 

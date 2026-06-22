@@ -48,7 +48,13 @@ The loop is broken when work happens without a manifest, agents use ungoverned c
 Every governed repository should follow this workflow.
 
 1. **Initialize**
-   Run `specreg init` for the correct project type. This pulls approved specs, writes `specs/.specregistry.json`, and creates MCP configuration when possible.
+   For a new project, run interactive `specreg init` and complete the structured project
+   walkthrough. It captures intended technology and operating constraints, attaches the repo
+   to an existing or newly-created project type, pulls approved baseline specs, and submits a
+   project-scoped `PROJECT_PROFILE.md` draft for review. For an established/premade baseline
+   or non-interactive automation, use `specreg init --type <name>`.
+   Initialization writes `specs/.specregistry.json`, MCP configuration, and agent discovery
+   guidance. Questionnaire answers are not governed until the project profile is reviewed and published.
    For auth-required registries, pass `--token <token>` or set `SPECREG_TOKEN`; `specreg init` carries that token into the generated MCP configuration.
    Init also scans the repository and offers a suggested multi-select of Google style
    guides from `https://google.github.io/styleguide/`, including `/docguide` for

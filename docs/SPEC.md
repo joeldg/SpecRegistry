@@ -47,9 +47,15 @@ The system ensures that both human developers and AI agents operate against unif
 A command-line interface deployed to developer environments to synchronize local codebases with the central registry.
 
 * **Scenario A: New Directory Scaffolding (`specreg init`)**
-    1. Interactive prompt walks the user through selecting the Industry/Organization and Project Type.
-    2. Pulls the latest approved markdown specs for that type from the server.
-    3. Populates a local `.spec/` or `specs/` directory with the files.
+    1. Interactive setup defaults to a comprehensive new-project profile covering product
+       shape, languages, frameworks, platforms, data, interfaces, runtime, infrastructure,
+       identity, messaging, observability, testing, delivery, security, and constraints.
+    2. The user selects an existing/premade project type or creates a reusable project type.
+       Passing `--type` skips the walkthrough for automation and established projects.
+    3. Pulls the latest approved Markdown specs for that type from the server.
+    4. Writes the governed bundle and manifest, MCP discovery files, a structured local
+       profile, and a project-scoped `PROJECT_PROFILE.md` draft.
+    5. Reports the concrete project and submits the profile as a draft without bypassing review.
 * **Scenario B: Existing Directory Discovery (`specreg generate`)**
     1. Scans the existing directory structure and files.
     2. Sends structural metadata to the server.

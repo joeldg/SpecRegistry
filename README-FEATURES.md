@@ -57,7 +57,16 @@ Why it matters: agents and CI can confirm that local specs came from the registr
 
 ### `specreg init`
 
-Initializes a repository with approved specs, writes `specs/.specregistry.json`, creates agent context files, and can install advisory Google style guides.
+Interactive initialization defaults to a comprehensive new-project walkthrough covering
+intent, users, application shapes, languages, frameworks, platforms, data stores, APIs,
+runtimes, infrastructure, identity, messaging, observability, testing, delivery, security,
+environments, constraints, and non-goals. Listed choices accept custom typed values.
+
+The walkthrough attaches the concrete repository to an existing/premade project type or
+creates a reusable type, downloads approved baseline specs, writes a machine-readable
+project profile and `PROJECT_PROFILE.md` draft, and submits that profile as a project-scoped
+draft for review. `--type <name>` skips the walkthrough for automation and existing projects.
+Selected languages also inform advisory Google style-guide suggestions in otherwise empty repos.
 
 ### `specreg check` and `specreg sync`
 

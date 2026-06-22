@@ -7,6 +7,7 @@ export interface StyleGuideInstallOptions {
   selection?: string;
   dir: string;
   force?: boolean;
+  suggestedLanguages?: string[];
 }
 
 interface StyleGuideSource {
@@ -126,7 +127,8 @@ export interface InstalledStyleGuide {
 
 export async function installGoogleStyleGuides(opts: StyleGuideInstallOptions): Promise<InstalledStyleGuide[]> {
   const scan = scanDirectory(process.cwd(), 5, 80);
-  const suggested = suggestedGuideIds(scan.languages);
+  const detectedLanguages = [...new Set([...scan.languages, ...(opts.suggestedLanguages ?? [])])];
+  const suggested = suggestedGuideIds(detectedLanguages);
   const selected = await resolveSelection(opts.selection, suggested);
   if (selected.length === 0) {
     console.log("\nNo Google style guides selected.");
@@ -182,7 +184,7 @@ export async function installGoogleStyleGuides(opts: StyleGuideInstallOptions): 
       {
         provider: "google-styleguide",
         fetched_at: fetchedAt,
-        detected_languages: scan.languages,
+        detected_languages: detectedLanguages,
         selected: installed,
       },
       null,

@@ -8,6 +8,8 @@ missing layer that keeps generated work aligned with what you actually intended:
 Markdown specs (`DESIGN.md`, `STRUCTURE.md`, `API.md`, and more) become governed context
 that humans can review, developers can sync, and agents can load before they touch code.
 
+![SpecRegistry Dashboard](docs/pictures/dashboard.jpeg)
+
 The full product specification lives in [docs/SPEC.md](docs/SPEC.md). The operating model
 for Spec Driven Development, observability, and token economics lives in
 [docs/SDD_TOKENOMICS.md](docs/SDD_TOKENOMICS.md).

@@ -1,11 +1,27 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Spec, StubPrompt, StubPromptResponse, SyncCheckResponse } from "@specregistry/shared";
-import { findProjectConsumer, requireProjectType, requireString } from "../helpers.js";
+import { findProjectConsumer, HttpError, requireProjectType, requireString } from "../helpers.js";
 import { recordUsage } from "../lib/events.js";
 import { now, uuid } from "../db.js";
 import { diagnoseManifest } from "../lib/manifestDiagnostics.js";
 
 export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/cli/download", async (req, reply) => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const repoRoot = path.resolve(here, "../../../..");
+    const tgzPath = path.resolve(repoRoot, "specregistry-cli-0.1.0.tgz");
+    if (!fs.existsSync(tgzPath)) {
+      throw new HttpError(404, "CLI tarball not found. Please build and pack it on the server first.");
+    }
+    const stream = fs.createReadStream(tgzPath);
+    reply.header("content-type", "application/gzip");
+    reply.header("content-disposition", "attachment; filename=specregistry-cli-0.1.0.tgz");
+    return reply.send(stream);
+  });
+
   app.post("/cli/manifest-report", async (req) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const pt = requireProjectType(app.db, requireString(body, "project_type"));

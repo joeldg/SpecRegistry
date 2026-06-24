@@ -58,6 +58,43 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="section">
+        <h2>Developer Quickstart</h2>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12, background: "linear-gradient(135deg, var(--bg-raised) 0%, rgba(94, 106, 210, 0.04) 100%)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h3 style={{ margin: "0 0 4px 0", fontSize: 13, textTransform: "none", letterSpacing: "normal", color: "var(--text)" }}>Install SpecRegistry CLI</h3>
+              <p className="dim" style={{ margin: 0, fontSize: 12 }}>Install the command-line tool directly from this server to initialize repositories and check spec drift.</p>
+            </div>
+            <a className="btn primary" href="/api/v1/cli/download" style={{ textDecoration: "none" }}>
+              Download CLI Tarball
+            </a>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="faint" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.5px" }}>Quick Install Command</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+              <input 
+                type="text" 
+                readOnly 
+                value={`npm install -g ${window.location.origin}/api/v1/cli/download`} 
+                style={{ flex: 1, fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "6px 10px" }}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(`npm install -g ${window.location.origin}/api/v1/cli/download`);
+                  alert("Copied to clipboard!");
+                }}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {usage && (
         <div className="section">
           <h2>Usage — last {usage.window_days} days</h2>

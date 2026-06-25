@@ -1,6 +1,7 @@
 import type { Db } from "./db.js";
 import { now, uuid } from "./db.js";
 import { createUser } from "./lib/auth.js";
+import { auditPromptForSpec } from "./lib/specAutomation.js";
 
 const DESIGN_STUB = `You are an expert software architect. Analyze the provided file structure and codebase context:
 [CONTEXT]
@@ -108,10 +109,16 @@ function seedDefaultProjectTypes(db: Db): number {
 function insertPublishedSpec(db: Db, projectTypeId: string, spec: SeedSpec): void {
   const id = uuid();
   const ts = now();
+  const auditPrompt = auditPromptForSpec({
+    id,
+    filename: spec.filename,
+    content: spec.content,
+    current_version: "1.0.0",
+  });
   db.prepare(
-    `INSERT INTO specs (id, project_type_id, filename, current_version, status, content, updated_by, created_at, updated_at)
-     VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', ?, ?)`
-  ).run(id, projectTypeId, spec.filename, spec.content, ts, ts);
+    `INSERT INTO specs (id, project_type_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+     VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', ?, ?, ?)`
+  ).run(id, projectTypeId, spec.filename, spec.content, auditPrompt, ts, ts);
   db.prepare(
     `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at)
      VALUES (?, ?, '1.0.0', ?, 'seed', ?)`
@@ -185,6 +192,22 @@ function seedAdmin(db: Db): void {
 export function seed(db: Db): boolean {
   seedTemplates(db);
   seedAdmin(db);
+  // Backfill missing audit prompts for existing specs (runs once after migration 15)
+  const missing = db.prepare("SELECT COUNT(*) AS n FROM specs WHERE audit_prompt IS NULL OR audit_prompt = ''").get() as { n: number };
+  if (missing.n > 0) {
+    const specs = db.prepare("SELECT id, filename, content, current_version FROM specs WHERE audit_prompt IS NULL OR audit_prompt = ''").all() as Array<{
+      id: string;
+      filename: string;
+      content: string;
+      current_version: string;
+    }>;
+    const update = db.prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?");
+    for (const spec of specs) {
+      const prompt = auditPromptForSpec(spec);
+      update.run(prompt, now(), spec.id);
+    }
+  }
+
   const existing = db.prepare("SELECT COUNT(*) AS n FROM project_types").get() as { n: number };
   if (existing.n > 0) {
     seedDefaultProjectTypes(db);

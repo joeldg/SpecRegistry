@@ -697,15 +697,20 @@ export const api = {
     request<{ sections: TaskPlan["sections"] }>("/api/v1/automation/section-classifier", { method: "POST", body: JSON.stringify(body) }),
   contextBudget: (body: { project_type: string; task?: string; token_budget: number }) =>
     request<TaskPlan["context_selection"]>("/api/v1/automation/context-budget", { method: "POST", body: JSON.stringify(body) }),
-  auditPrompt: (spec_id: string, use_llm?: boolean) =>
+  auditPrompt: (spec_id: string, use_llm?: boolean, custom_guidance?: string) =>
     request<{ spec_id: string; filename: string; prompt: string }>("/api/v1/automation/audit-prompt", {
       method: "POST",
-      body: JSON.stringify({ spec_id, use_llm }),
+      body: JSON.stringify({ spec_id, use_llm, custom_guidance }),
     }),
-  auditPromptGet: (spec_id: string, use_llm?: boolean) =>
+  auditPromptGet: (spec_id: string) =>
     request<{ spec_id: string; filename: string; version: string; prompt: string; model: string | null; provider: string | null }>(
-      `/api/v1/automation/audit-prompt/${encodeURIComponent(spec_id)}${use_llm ? "?use_llm=true" : ""}`
+      `/api/v1/automation/audit-prompt/${encodeURIComponent(spec_id)}`
     ),
+  updateAuditPrompt: (spec_id: string, prompt: string) =>
+    requestVoid(`/api/v1/automation/audit-prompt/${encodeURIComponent(spec_id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ prompt }),
+    }),
   auditPrompts: (project_type?: string) =>
     request<{ project_type: string | null; prompts: Array<{ spec_id: string; filename: string; version: string; prompt: string }> }>(
       `/api/v1/automation/audit-prompts${project_type ? `?project_type=${encodeURIComponent(project_type)}` : ""}`

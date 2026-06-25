@@ -73,13 +73,20 @@ function governedSpecs(app: FastifyInstance, projectTypeName: string): Automatio
   }));
 }
 
-async function buildAuditPrompt(app: FastifyInstance, spec: AutomationSpecInput, useLlm: boolean) {
+const MAX_GUIDANCE_LENGTH = 2000;
+
+async function buildAuditPrompt(app: FastifyInstance, spec: AutomationSpecInput, useLlm: boolean, customGuidance?: string) {
   let prompt = auditPromptForSpec(spec);
   if (useLlm) {
     requireFeature("llm_generation");
+    let userMsg = prompt;
+    if (customGuidance && customGuidance.trim()) {
+      const trimmed = customGuidance.trim().slice(0, MAX_GUIDANCE_LENGTH);
+      userMsg += `\n\nCustom Guidance / Specific Focus:\n${trimmed}`;
+    }
     const llm = await runLlmText(app.db, {
-      system: "You improve reverse-conformance audit prompts. Output only the improved prompt.",
-      user: prompt,
+      system: "You improve reverse-conformance audit prompts. Integrate the user's custom guidance and focus into the prompt if provided. Output only the improved prompt.",
+      user: userMsg,
       maxTokens: 2500,
       route: "audit",
     });
@@ -166,12 +173,18 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     if (duplicate) throw new HttpError(409, `Spec ${filename} already exists for ${pt.name}`);
     const id = uuid();
     const ts = now();
+    const auditPrompt = auditPromptForSpec({
+      id,
+      filename,
+      content,
+      current_version: "0.1.0",
+    });
     app.db
       .prepare(
-        `INSERT INTO specs (id, project_type_id, project_id, filename, current_version, status, content, updated_by, created_at, updated_at)
-         VALUES (?, ?, NULL, ?, '0.1.0', 'draft', ?, ?, ?, ?)`
+        `INSERT INTO specs (id, project_type_id, project_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, NULL, ?, '0.1.0', 'draft', ?, ?, ?, ?, ?)`
       )
-      .run(id, pt.id, filename, content, updatedBy, ts, ts);
+      .run(id, pt.id, filename, content, updatedBy, auditPrompt, ts, ts);
     recordAudit(app.db, {
       actor: actorFrom(req, updatedBy),
       action: "spec.generated_draft",
@@ -254,18 +267,57 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const specId = requireString(body, "spec_id");
     const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as AutomationSpecInput | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
-    const result = await buildAuditPrompt(app, spec, body.use_llm === true);
+    const customGuidance = typeof body.custom_guidance === "string" ? body.custom_guidance : undefined;
+    const result = await buildAuditPrompt(app, spec, body.use_llm === true, customGuidance);
+    
+    // Save generated prompt to database
+    app.db
+      .prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?")
+      .run(result.prompt, now(), spec.id);
+
     return { spec_id: spec.id, filename: spec.filename, ...result };
   });
 
   app.get("/automation/audit-prompt/:specId", async (req) => {
     requireFeature("audit_prompts");
     const { specId } = req.params as { specId: string };
-    const { use_llm } = req.query as { use_llm?: string };
+    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as (AutomationSpecInput & { audit_prompt?: string | null }) | undefined;
+    if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
+
+    // Read-only: return the saved prompt or generate a deterministic baseline (no DB write)
+    const prompt = spec.audit_prompt || auditPromptForSpec(spec);
+    return {
+      spec_id: spec.id,
+      filename: spec.filename,
+      version: spec.current_version,
+      prompt,
+      model: null,
+      provider: null,
+    };
+  });
+
+  app.put("/automation/audit-prompt/:specId", async (req) => {
+    requireFeature("audit_prompts");
+    const { specId } = req.params as { specId: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const prompt = requireString(body, "prompt");
     const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as AutomationSpecInput | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
-    const result = await buildAuditPrompt(app, spec, use_llm === "true" || use_llm === "1");
-    return { spec_id: spec.id, filename: spec.filename, version: spec.current_version, ...result };
+
+    app.db
+      .prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?")
+      .run(prompt, now(), spec.id);
+
+    recordAudit(app.db, {
+      actor: actorFrom(req, "audit-prompt"),
+      action: "spec.audit_prompt_updated",
+      target_type: "spec",
+      target_id: spec.id,
+      summary: `Audit prompt updated for ${spec.filename}`,
+      detail: undefined,
+    });
+
+    return { success: true, spec_id: spec.id, prompt };
   });
 
   app.get("/automation/audit-prompts", async (req) => {

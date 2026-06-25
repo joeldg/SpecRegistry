@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
 import type { Spec, SpecVersion, VersionDelta } from "@specregistry/shared";
 import { now, uuid } from "../db.js";
+import { auditPromptForSpec } from "../lib/specAutomation.js";
 import {
   HttpError,
   findProjectType,
@@ -165,12 +166,18 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
 
     const id = uuid();
     const ts = now();
+    const auditPrompt = auditPromptForSpec({
+      id,
+      filename,
+      content,
+      current_version: "0.1.0",
+    });
     app.db
       .prepare(
-        `INSERT INTO specs (id, project_type_id, project_id, filename, current_version, status, content, updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, '0.1.0', 'draft', ?, ?, ?, ?)`
+        `INSERT INTO specs (id, project_type_id, project_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, ?, ?, '0.1.0', 'draft', ?, ?, ?, ?, ?)`
       )
-      .run(id, pt.id, project?.id ?? null, filename, content, updatedBy, ts, ts);
+      .run(id, pt.id, project?.id ?? null, filename, content, updatedBy, auditPrompt, ts, ts);
     reply.code(201);
     return requireSpec(app.db, id);
   });

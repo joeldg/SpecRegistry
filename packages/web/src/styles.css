@@ -565,3 +565,30 @@ textarea.editor {
 }
 
 .feedback-desc { max-width: 480px; }
+
+.audit-textarea {
+  width: 100%;
+  min-height: 250px;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.audit-guidance-input {
+  flex: 1;
+  min-width: 240px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}

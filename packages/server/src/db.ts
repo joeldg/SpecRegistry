@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS specs (
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'pending_review', 'published')),
   content TEXT NOT NULL,
   updated_by TEXT NOT NULL,
+  audit_prompt TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -409,6 +410,10 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         updated_at TEXT NOT NULL
       );
     `,
+  },
+  {
+    version: 15,
+    sql: "ALTER TABLE specs ADD COLUMN audit_prompt TEXT"
   },
 ];
 

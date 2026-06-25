@@ -87,6 +87,13 @@ export default function GenerationWorkbenchPage() {
     }
   }
 
+  useEffect(() => {
+    if (projectType) {
+      detectGaps();
+    }
+  }, [projectType]);
+
+
   async function generate() {
     if (!projectType || !purposeId) return;
     setBusy("generate");
@@ -184,12 +191,44 @@ export default function GenerationWorkbenchPage() {
       {notice && <div className="notice-banner">{notice}</div>}
       {features && !features.enabled && <div className="error-banner">Automation features are disabled for this deployment.</div>}
       {features && (
-        <div className="toolbar">
-          {Object.entries(features).map(([key, enabled]) => (
-            <span key={key} className={`badge ${enabled ? "approved" : "rejected"}`}>{key}</span>
-          ))}
-        </div>
+        <details className="card" style={{ marginBottom: 20 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", userSelect: "none" }}>
+            <span>💡 Automation Feature Guide & Status Flags</span>
+            <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--text-faint)" }}>(Click to expand)</span>
+          </summary>
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px", fontSize: "12px", lineHeight: "1.4" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.enabled ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>enabled</span>
+              <span style={{ color: "var(--text-dim)" }}>Global activation switch for the SpecRegistry Automation and LLM orchestration engine.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.gap_detection ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>gap_detection</span>
+              <span style={{ color: "var(--text-dim)" }}>Scans repository files and directory paths against spec templates to identify missing specs.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.generation ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>generation</span>
+              <span style={{ color: "var(--text-dim)" }}>Drafts new specification documents using rule-based templates or LLM prompts.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.llm_generation ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>llm_generation</span>
+              <span style={{ color: "var(--text-dim)" }}>Uses active LLM providers (Gemini/Anthropic/OpenAI) to generate intelligent documents.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.task_planner ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>task_planner</span>
+              <span style={{ color: "var(--text-dim)" }}>Analyzes user tasks and optimizes context by selecting relevant spec sections.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.ticket_generator ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>ticket_generator</span>
+              <span style={{ color: "var(--text-dim)" }}>Generates spec-conformance checklists for task tickets and PR descriptions.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.maintenance ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>maintenance</span>
+              <span style={{ color: "var(--text-dim)" }}>Evaluates specification quality, generates audit prompts, and suggests upgrades.</span>
+            </div>
+          </div>
+        </details>
       )}
+
 
       <div className="split">
         <div className="section">

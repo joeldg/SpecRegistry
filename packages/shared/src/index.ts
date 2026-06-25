@@ -27,6 +27,7 @@ export interface Spec {
   status: SpecStatus;
   content: string;
   updated_by: string;
+  audit_prompt?: string | null;
   created_at: string;
   updated_at: string;
 }

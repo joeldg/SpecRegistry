@@ -161,7 +161,9 @@ For the full metric catalog and source queries, see
 
 1. Start the server by using the local, Node, or Docker path above.
 2. Open the dashboard.
-3. If `SPECREG_AUTH=required`, sign in as `admin` with `SPECREG_ADMIN_PASSWORD`.
+3. Sign in with the default admin account: **username `admin`, password `admin`**.
+   Override the default password with `SPECREG_ADMIN_PASSWORD` in `.env` or the environment.
+   Change the password after first login via **Settings → Users → Reset password**.
 4. Create or edit project types. Use one global project type for organization-wide specs.
 5. Add spec files such as `DESIGN.md`, `STRUCTURE.md`, `API.md`, or domain-specific docs.
 6. Publish initial drafts once they are ready to become governed contracts.

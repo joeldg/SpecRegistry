@@ -159,9 +159,10 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       FROM agent_feedback f
       JOIN specs s ON s.id = f.spec_id
       JOIN project_types pt ON pt.id = s.project_type_id
+      WHERE s.deleted_at IS NULL
     `;
     if (status) {
-      return app.db.prepare(`${base} WHERE f.status = ? ORDER BY f.created_at DESC`).all(status);
+      return app.db.prepare(`${base} AND f.status = ? ORDER BY f.created_at DESC`).all(status);
     }
     return app.db.prepare(`${base} ORDER BY f.created_at DESC`).all();
   });
@@ -174,7 +175,8 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
          FROM agent_feedback f
          JOIN specs s ON s.id = f.spec_id
          JOIN project_types pt ON pt.id = s.project_type_id
-         ${status ? "WHERE f.status = ?" : ""}
+         WHERE s.deleted_at IS NULL
+         ${status ? "AND f.status = ?" : ""}
          ORDER BY f.created_at DESC`
       )
       .all(...(status ? [status] : [])) as Array<AgentFeedback & { filename: string; project_type_name: string }>;
@@ -294,7 +296,8 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT er.*, s.filename
          FROM efficacy_runs er JOIN specs s ON s.id = er.spec_id
-         ${spec_id ? "WHERE er.spec_id = ?" : ""}
+         WHERE s.deleted_at IS NULL
+         ${spec_id ? "AND er.spec_id = ?" : ""}
          ORDER BY er.created_at ASC`
       )
       .all(...(spec_id ? [spec_id] : []));
@@ -312,7 +315,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         `SELECT s.*
          FROM specs s
          LEFT JOIN agent_feedback af ON af.spec_id = s.id AND af.status = 'open'
-         WHERE s.status = 'published'
+         WHERE s.status = 'published' AND s.deleted_at IS NULL
          GROUP BY s.id
          ORDER BY COUNT(af.id) DESC, s.updated_at ASC
          LIMIT ?`
@@ -363,7 +366,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
          LEFT JOIN usage_events ue ON ue.project_type_id = s.project_type_id
          LEFT JOIN agent_feedback af ON af.spec_id = s.id
          LEFT JOIN efficacy_runs er ON er.spec_id = s.id
-         WHERE s.status = 'published'
+         WHERE s.status = 'published' AND s.deleted_at IS NULL
          GROUP BY s.id
          ORDER BY usage_events DESC, open_feedback DESC, chars DESC`
       )

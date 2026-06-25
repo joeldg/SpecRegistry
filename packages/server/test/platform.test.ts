@@ -5,13 +5,14 @@ import AdmZip from "adm-zip";
 import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { seed } from "../src/seed.js";
+import { buildAdminTestApp } from "./helpers.js";
 
 let app: FastifyInstance;
 
 beforeEach(async () => {
   const db = createDb(":memory:");
   seed(db);
-  app = await buildApp(db);
+  app = await buildAdminTestApp(db);
 });
 
 afterEach(async () => {
@@ -384,6 +385,25 @@ describe("auth & roles", () => {
     }
   });
 
+  it("requires authentication for policy-protected routes even when global auth is optional", async () => {
+    const db = createDb(":memory:");
+    seed(db);
+    const optionalAuth = await buildApp(db, { authRequired: false });
+    try {
+      const publicSpecs = await optionalAuth.inject({ method: "GET", url: "/api/v1/specs" });
+      expect(publicSpecs.statusCode).toBe(200);
+
+      const protectedWrite = await optionalAuth.inject({
+        method: "POST",
+        url: "/api/v1/webhooks",
+        payload: { url: "https://hooks.example.com/specs", events: [] },
+      });
+      expect(protectedWrite.statusCode).toBe(401);
+    } finally {
+      await optionalAuth.close();
+    }
+  });
+
   it("enforces per-project-type required reviewers", async () => {
     const types = await getJson(app, "/api/v1/project-types");
     const web = types.find((t: any) => t.name === "Web App Standard");
@@ -395,10 +415,27 @@ describe("auth & roles", () => {
 
     const spec = await findSpec("STRUCTURE.md", "Web App Standard");
     const cr = await submitCr(spec.id, "# v2\n", "patch");
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/users",
+      payload: { username: "random-person", role: "reviewer", password: "pw" },
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/users",
+      payload: { username: "security-team", role: "reviewer", password: "pw" },
+    });
+    const randomToken = (
+      await app.inject({ method: "POST", url: "/api/v1/auth/api-keys", payload: { username: "random-person" } })
+    ).json().token;
+    const securityToken = (
+      await app.inject({ method: "POST", url: "/api/v1/auth/api-keys", payload: { username: "security-team" } })
+    ).json().token;
 
     const wrongReviewer = await app.inject({
       method: "POST",
       url: `/api/v1/reviews/${cr.id}/approve`,
+      headers: { authorization: `Bearer ${randomToken}` },
       payload: { reviewed_by: "random-person" },
     });
     expect(wrongReviewer.statusCode).toBe(403);
@@ -406,6 +443,7 @@ describe("auth & roles", () => {
     const rightReviewer = await app.inject({
       method: "POST",
       url: `/api/v1/reviews/${cr.id}/approve`,
+      headers: { authorization: `Bearer ${securityToken}` },
       payload: { reviewed_by: "security-team" },
     });
     expect(rightReviewer.statusCode).toBe(200);

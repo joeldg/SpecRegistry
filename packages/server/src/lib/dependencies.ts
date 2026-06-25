@@ -19,10 +19,10 @@ export function dependencyMap(db: Db, projectTypeId?: string, projectId?: string
   const params: unknown[] = [];
   let filter = "";
   if (projectId) {
-    filter = "WHERE s.project_id = ? OR (s.project_id IS NULL AND (s.project_type_id = (SELECT project_type_id FROM repo_consumers WHERE id = ?) OR pt.scope = 'global'))";
+    filter = "AND (s.project_id = ? OR (s.project_id IS NULL AND (s.project_type_id = (SELECT project_type_id FROM repo_consumers WHERE id = ?) OR pt.scope = 'global')))";
     params.push(projectId, projectId);
   } else if (projectTypeId) {
-    filter = "WHERE s.project_id IS NULL AND (s.project_type_id = ? OR pt.scope = 'global')";
+    filter = "AND s.project_id IS NULL AND (s.project_type_id = ? OR pt.scope = 'global')";
     params.push(projectTypeId);
   }
   const specs = db
@@ -31,6 +31,7 @@ export function dependencyMap(db: Db, projectTypeId?: string, projectId?: string
        FROM specs s
        JOIN project_types pt ON pt.id = s.project_type_id
        LEFT JOIN repo_consumers rc ON rc.id = s.project_id
+       WHERE s.deleted_at IS NULL
        ${filter}
        ORDER BY pt.scope = 'global' DESC, pt.name, s.filename`
     )

@@ -229,7 +229,7 @@ export function semanticIndexStatus(db: Db) {
     .prepare(
       `SELECT COUNT(*) AS n
        FROM spec_chunks c JOIN specs s ON s.id = c.spec_id
-       WHERE s.status != 'draft'`
+       WHERE s.status != 'draft' AND s.deleted_at IS NULL`
     )
     .get() as { n: number };
   return {

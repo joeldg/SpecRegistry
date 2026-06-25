@@ -85,7 +85,7 @@ export function searchSpecs(db: Db, query: string, projectTypeId?: string, limit
        JOIN specs s ON s.id = c.spec_id
        JOIN project_types pt ON pt.id = s.project_type_id
        LEFT JOIN repo_consumers rc ON rc.id = s.project_id
-       WHERE spec_chunks MATCH ? ${filter}
+       WHERE spec_chunks MATCH ? AND s.deleted_at IS NULL ${filter}
        ORDER BY rank
        LIMIT ?`
     )
@@ -106,10 +106,10 @@ function scopedRows(db: Db, projectTypeId?: string, projectId?: string) {
   let filter = "";
   const params: unknown[] = [];
   if (projectTypeId && projectId) {
-    filter = "WHERE s.project_id = ? OR (s.project_id IS NULL AND (pt.id = ? OR pt.scope = 'global'))";
+    filter = "AND (s.project_id = ? OR (s.project_id IS NULL AND (pt.id = ? OR pt.scope = 'global')))";
     params.push(projectId, projectTypeId);
   } else if (projectTypeId) {
-    filter = "WHERE s.project_id IS NULL AND (pt.id = ? OR pt.scope = 'global')";
+    filter = "AND s.project_id IS NULL AND (pt.id = ? OR pt.scope = 'global')";
     params.push(projectTypeId);
   }
   return db
@@ -125,6 +125,7 @@ function scopedRows(db: Db, projectTypeId?: string, projectId?: string) {
        FROM specs s
        JOIN project_types pt ON pt.id = s.project_type_id
        LEFT JOIN repo_consumers rc ON rc.id = s.project_id
+       WHERE s.deleted_at IS NULL
        ${filter}`
     )
     .all(...params) as Array<Omit<SearchResult, "section" | "section_anchor" | "permalink" | "excerpt">>;

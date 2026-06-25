@@ -39,7 +39,6 @@ const SUMMARY_SELECT = `
   FROM specs s
   JOIN project_types pt ON pt.id = s.project_type_id
   LEFT JOIN repo_consumers rc ON rc.id = s.project_id
-  WHERE s.deleted_at IS NULL
 `;
 
 function projectFromQuery(
@@ -61,16 +60,16 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     if (project_id) {
       const project = requireProjectConsumer(app.db, project_id);
       return app.db
-        .prepare(`${SUMMARY_SELECT} WHERE s.project_id = ? OR (s.project_id IS NULL AND (s.project_type_id = ? OR pt.scope = 'global')) ORDER BY CASE effective_scope WHEN 'global' THEN 0 WHEN 'project_type' THEN 1 ELSE 2 END, s.filename`)
+        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND (s.project_id = ? OR (s.project_id IS NULL AND (s.project_type_id = ? OR pt.scope = 'global'))) ORDER BY CASE effective_scope WHEN 'global' THEN 0 WHEN 'project_type' THEN 1 ELSE 2 END, s.filename`)
         .all(project.id, project.project_type_id);
     }
     if (project_type_id) {
       return app.db
-        .prepare(`${SUMMARY_SELECT} WHERE s.project_type_id = ? ORDER BY s.filename`)
+        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND s.project_type_id = ? ORDER BY s.filename`)
         .all(project_type_id);
     }
     return app.db
-      .prepare(`${SUMMARY_SELECT} ORDER BY pt.scope = 'global' DESC, pt.name, s.filename`)
+      .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL ORDER BY pt.scope = 'global' DESC, pt.name, s.filename`)
       .all();
   });
 
@@ -161,8 +160,8 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     if (!pt) throw new HttpError(404, `Unknown project type: ${projectTypeId}`);
     const project = projectId ? requireProjectConsumer(app.db, projectId, pt.id) : undefined;
     const duplicate = project
-      ? app.db.prepare("SELECT id FROM specs WHERE project_id = ? AND filename = ? AND deleted_at IS NULL").get(project.id, filename)
-      : app.db.prepare("SELECT id FROM specs WHERE project_type_id = ? AND project_id IS NULL AND filename = ? AND deleted_at IS NULL").get(pt.id, filename);
+      ? app.db.prepare("SELECT id FROM specs WHERE project_id = ? AND filename = ?").get(project.id, filename)
+      : app.db.prepare("SELECT id FROM specs WHERE project_type_id = ? AND project_id IS NULL AND filename = ?").get(pt.id, filename);
     if (duplicate) throw new HttpError(409, `Spec ${filename} already exists for ${pt.name}`);
 
     const id = uuid();
@@ -405,6 +404,10 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(id) as Spec | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${id}`);
     if (!spec.deleted_at) throw new HttpError(400, "Spec is not deleted");
+    const conflict = spec.project_id
+      ? app.db.prepare("SELECT id FROM specs WHERE project_id = ? AND filename = ? AND deleted_at IS NULL").get(spec.project_id, spec.filename)
+      : app.db.prepare("SELECT id FROM specs WHERE project_type_id = ? AND project_id IS NULL AND filename = ? AND deleted_at IS NULL").get(spec.project_type_id, spec.filename);
+    if (conflict) throw new HttpError(409, `Cannot restore ${spec.filename}; an active spec with that filename already exists`);
 
     const ts = now();
     app.db.prepare("UPDATE specs SET deleted_at = NULL, updated_at = ? WHERE id = ?").run(ts, id);

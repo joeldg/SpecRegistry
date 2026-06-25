@@ -8,7 +8,7 @@ export async function projectTypeRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT pt.*, COUNT(s.id) AS spec_count
          FROM project_types pt
-         LEFT JOIN specs s ON s.project_type_id = pt.id
+         LEFT JOIN specs s ON s.project_type_id = pt.id AND s.deleted_at IS NULL
          GROUP BY pt.id
          ORDER BY pt.scope = 'global' DESC, pt.name`
       )

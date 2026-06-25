@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { seed } from "../src/seed.js";
 import { sanitizeDraftFixOutput } from "../src/lib/aifix.js";
+import { buildAdminTestApp } from "./helpers.js";
 
 let app: FastifyInstance;
 
 beforeEach(async () => {
   const db = createDb(":memory:");
   seed(db);
-  app = await buildApp(db);
+  app = await buildAdminTestApp(db);
 });
 
 afterEach(async () => {

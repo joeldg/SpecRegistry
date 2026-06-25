@@ -110,7 +110,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
       stringArray(body.existing_specs).length > 0
         ? stringArray(body.existing_specs)
         : (app.db
-            .prepare("SELECT filename FROM specs WHERE project_type_id = ? OR project_type_id IN (SELECT id FROM project_types WHERE scope = 'global')")
+            .prepare("SELECT filename FROM specs WHERE deleted_at IS NULL AND (project_type_id = ? OR project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))")
             .all(pt.id) as Array<{ filename: string }>).map((row) => row.filename);
     recordUsage(app.db, "stub_prompts", pt.id, "spec-gaps");
     return {
@@ -194,7 +194,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
       detail: { project_type: pt.name, purpose: purpose.id },
     });
     reply.code(201);
-    return app.db.prepare("SELECT * FROM specs WHERE id = ?").get(id) as Spec;
+    return app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(id) as Spec;
   });
 
   app.post("/automation/task-plan", async (req) => {
@@ -265,7 +265,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     requireFeature("audit_prompts");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const specId = requireString(body, "spec_id");
-    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as AutomationSpecInput | undefined;
+    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(specId) as AutomationSpecInput | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
     const customGuidance = typeof body.custom_guidance === "string" ? body.custom_guidance : undefined;
     const result = await buildAuditPrompt(app, spec, body.use_llm === true, customGuidance);
@@ -281,7 +281,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/automation/audit-prompt/:specId", async (req) => {
     requireFeature("audit_prompts");
     const { specId } = req.params as { specId: string };
-    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as (AutomationSpecInput & { audit_prompt?: string | null }) | undefined;
+    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(specId) as (AutomationSpecInput & { audit_prompt?: string | null }) | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
 
     // Read-only: return the saved prompt or generate a deterministic baseline (no DB write)
@@ -301,7 +301,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const { specId } = req.params as { specId: string };
     const body = (req.body ?? {}) as Record<string, unknown>;
     const prompt = requireString(body, "prompt");
-    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ?").get(specId) as AutomationSpecInput | undefined;
+    const spec = app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(specId) as AutomationSpecInput | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
 
     app.db
@@ -355,6 +355,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
          FROM specs s
          LEFT JOIN agent_feedback af ON af.spec_id = s.id
          LEFT JOIN efficacy_runs er ON er.spec_id = s.id
+         WHERE s.deleted_at IS NULL
          GROUP BY s.id`
       )
       .all() as Array<{ spec_id: string; open_feedback: number; avg_lift: number }>;

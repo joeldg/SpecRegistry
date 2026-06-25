@@ -22,6 +22,13 @@ Where it appears:
 - `POST /api/v1/reviews/:id/approve`
 - `POST /api/v1/reviews/:id/reject`
 
+### Admin Soft Delete and Restore
+
+Admins can soft-delete specs from the detail page. Deleted specs are hidden from governed
+lists, downloads, compiled context, search, reports, metrics, and automation inputs while
+remaining restorable for 14 days. During that retention window the original filename stays
+reserved, preventing a replacement spec from colliding with a restorable governed artifact.
+
 ### Approval Policies and CODEOWNERS-Style Routing
 
 Approval policies can require a minimum number of approvals and optional named reviewers by project type and filename glob.

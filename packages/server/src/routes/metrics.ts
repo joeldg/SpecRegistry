@@ -32,6 +32,7 @@ export async function metricsRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT s.status, pt.scope, COUNT(*) AS n
          FROM specs s JOIN project_types pt ON pt.id = s.project_type_id
+         WHERE s.deleted_at IS NULL
          GROUP BY s.status, pt.scope`
       )
       .all() as Array<{ status: string; scope: string; n: number }>;

@@ -299,6 +299,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT s.id, s.filename, s.project_type_id, pt.name AS project_type_name
          FROM specs s JOIN project_types pt ON pt.id = s.project_type_id
+         WHERE s.deleted_at IS NULL
          ORDER BY pt.name, s.filename`
       )
       .all() as Array<{ id: string; filename: string; project_type_id: string; project_type_name: string }>;
@@ -564,7 +565,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT s.id, s.filename, s.current_version, s.updated_at, pt.name AS project_type_name
          FROM specs s JOIN project_types pt ON pt.id = s.project_type_id
-         WHERE s.status = 'published' AND s.updated_at < ?
+         WHERE s.status = 'published' AND s.deleted_at IS NULL AND s.updated_at < ?
          ORDER BY s.updated_at LIMIT 10`
       )
       .all(staleCutoff);
@@ -584,6 +585,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
            COUNT(*) AS n
          FROM specs s
          JOIN project_types pt ON pt.id = s.project_type_id
+         WHERE s.deleted_at IS NULL
          GROUP BY scope, s.status`
       )
       .all() as Array<{ scope: string; status: string; n: number }>;
@@ -606,7 +608,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
                 COUNT(DISTINCT er.id) AS efficacy_runs,
                 COUNT(DISTINCT CASE WHEN er.improved = 1 THEN er.id END) AS efficacy_improved
          FROM project_types pt
-         LEFT JOIN specs s ON s.project_type_id = pt.id
+         LEFT JOIN specs s ON s.project_type_id = pt.id AND s.deleted_at IS NULL
          LEFT JOIN repo_consumers rc ON rc.project_type_id = pt.id
          LEFT JOIN agent_feedback af ON af.spec_id = s.id
          LEFT JOIN change_requests cr ON cr.spec_id = s.id
@@ -651,8 +653,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
          FROM repo_consumers rc
          JOIN project_types pt ON pt.id = rc.project_type_id
          LEFT JOIN repo_consumer_specs rcs ON rcs.consumer_id = rc.id
-         LEFT JOIN specs ps ON ps.project_id = rc.id
-         LEFT JOIN specs s ON s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global')))
+         LEFT JOIN specs ps ON ps.project_id = rc.id AND ps.deleted_at IS NULL
+         LEFT JOIN specs s ON s.deleted_at IS NULL AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
          LEFT JOIN agent_feedback af ON af.spec_id = ps.id
          LEFT JOIN change_requests cr ON cr.spec_id = ps.id
          GROUP BY rc.id
@@ -673,7 +675,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
          LEFT JOIN agent_feedback af ON af.spec_id = s.id
          LEFT JOIN change_requests cr ON cr.spec_id = s.id
          LEFT JOIN efficacy_runs er ON er.spec_id = s.id
-         WHERE pt.scope = 'global' AND s.project_id IS NULL
+         WHERE pt.scope = 'global' AND s.project_id IS NULL AND s.deleted_at IS NULL
          GROUP BY s.id
          ORDER BY s.filename`
       )

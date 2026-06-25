@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
-import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { seed } from "../src/seed.js";
+import { buildAdminTestApp } from "./helpers.js";
 
 let app: FastifyInstance;
 
 beforeEach(async () => {
   const db = createDb(":memory:");
   seed(db);
-  app = await buildApp(db);
+  app = await buildAdminTestApp(db);
 });
 
 afterEach(async () => {
@@ -94,6 +94,54 @@ describe("project types & specs", () => {
       payload: { project_type_id: edge.id, filename: "DESIGN.md", content: "x", updated_by: "joel" },
     });
     expect(res.statusCode).toBe(409);
+  });
+
+  it("soft-deletes specs, hides them from governed reads, and restores them", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const web = types.find((t: any) => t.name === "Web App Standard");
+    const spec = (await getJson(`/api/v1/specs?project_type_id=${web.id}`)).find((s: any) => s.filename === "STRUCTURE.md");
+
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/specs/${spec.id}`,
+      payload: { confirm: true },
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const scoped = await getJson(`/api/v1/specs?project_type_id=${web.id}`);
+    expect(scoped.some((s: any) => s.id === spec.id)).toBe(false);
+    expect((await getJson("/api/v1/specs/deleted")).map((s: any) => s.id)).toContain(spec.id);
+    expect((await app.inject({ method: "GET", url: `/api/v1/specs/${spec.id}` })).statusCode).toBe(404);
+
+    const download = await app.inject({ method: "GET", url: "/api/v1/specs/Web%20App%20Standard/download" });
+    const zip = new AdmZip(download.rawPayload);
+    expect(zip.getEntry("STRUCTURE.md")).toBeNull();
+
+    const search = await getJson("/api/v1/ai/search?q=Repository%20Structure&project_type=Web%20App%20Standard");
+    expect(search.results.some((row: any) => row.spec_id === spec.id)).toBe(false);
+
+    const restored = await app.inject({ method: "POST", url: `/api/v1/specs/${spec.id}/restore` });
+    expect(restored.statusCode).toBe(200);
+    expect((await getJson(`/api/v1/specs?project_type_id=${web.id}`)).some((s: any) => s.id === spec.id)).toBe(true);
+  });
+
+  it("keeps a soft-deleted spec filename reserved during retention", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const web = types.find((t: any) => t.name === "Web App Standard");
+    const spec = (await getJson(`/api/v1/specs?project_type_id=${web.id}`)).find((s: any) => s.filename === "STRUCTURE.md");
+
+    await app.inject({ method: "DELETE", url: `/api/v1/specs/${spec.id}`, payload: { confirm: true } });
+    const replacement = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: web.id,
+        filename: "STRUCTURE.md",
+        content: "# Replacement\n",
+        updated_by: "admin",
+      },
+    });
+    expect(replacement.statusCode).toBe(409);
   });
 });
 

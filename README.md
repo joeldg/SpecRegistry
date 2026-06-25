@@ -694,7 +694,10 @@ Use the LDAP tester in Settings before switching users over.
   makes them `1.0.0`. Published specs only change through a change request
   (`POST /api/v1/specs/review`): the server stores a unified diff, the spec enters
   `pending_review`, and approval bumps the semver by the requested delta
-  (major/minor/patch) and records an immutable version snapshot.
+  (major/minor/patch) and records an immutable version snapshot. Admins can soft-delete
+  specs; deleted specs are hidden from governed reads, downloads, search, reports, and
+  automation while being retained for 14 days. The filename stays reserved during
+  retention so admins can restore the exact governed artifact without ambiguity.
 - **AI feedback loop** — agents read `GET /api/v1/ai/specs/:projectType` and report
   spec ambiguities/contradictions to `POST /api/v1/ai/feedback`, which appear as
   alerts on the dashboard and on the affected spec until triaged. Repeated complaints

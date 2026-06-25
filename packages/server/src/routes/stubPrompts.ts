@@ -92,6 +92,7 @@ export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
          LEFT JOIN repo_consumer_specs rcs ON rcs.consumer_id = rc.id
          LEFT JOIN specs s ON s.filename = rcs.filename
           AND s.status = 'published'
+          AND s.deleted_at IS NULL
           AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
          GROUP BY rc.id
          ORDER BY rc.last_seen_at DESC`

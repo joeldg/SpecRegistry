@@ -307,14 +307,17 @@ export function registerAuth(app: FastifyInstance, opts: { authRequired: boolean
     if (opts.authRequired && !req.user) {
       throw new HttpError(401, "Authentication required (Bearer token or x-api-key)");
     }
-    if (req.user) {
-      for (const policy of POLICIES) {
-        if (policy.method.test(req.method) && policy.path.test(path)) {
-          if (ROLE_RANK[req.user.role] < ROLE_RANK[policy.min]) {
-            throw new HttpError(403, `Requires role ${policy.min} or higher (you are ${req.user.role})`);
-          }
-          break;
+    // Enforce role-based policies. If a matching policy exists and the user
+    // is not authenticated, reject — even when authRequired is false.
+    for (const policy of POLICIES) {
+      if (policy.method.test(req.method) && policy.path.test(path)) {
+        if (!req.user) {
+          throw new HttpError(401, "Authentication required for this action");
         }
+        if (ROLE_RANK[req.user.role] < ROLE_RANK[policy.min]) {
+          throw new HttpError(403, `Requires role ${policy.min} or higher (you are ${req.user.role})`);
+        }
+        break;
       }
     }
   });

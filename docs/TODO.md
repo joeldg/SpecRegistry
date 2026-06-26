@@ -53,15 +53,40 @@
 - [x] Spec impact explorer for browsing dependencies, consumers, recent usage, and drift outside
   the review flow.
 
-## AI Feedback and Efficacy
+## AST Metadata and Code-to-Spec Traceability
 
-- [ ] Semantic Drift Pipeline: Compute the vector distance between the structural intent of new code and the established architecture. Includes AST/LLM architectural summarization of codebase changes in CI, vector embedding generation, and cosine distance comparison against active spec vectors to output a telemetry drift score (0.0 to 1.0) pushed to the `/metrics` scraper.
-- Code/AST embedding profile: add a separate embedding configuration for parsed code
-  symbols, module summaries, dependency edges, API shapes, and architectural intent so
-  AST drift and code-to-spec matching can use different models from spec text search.
-- Code-to-spec coverage reports: use AST extraction plus embeddings to show which files,
-  modules, routes, APIs, or schemas are governed by which specs, and where code has no
-  matching spec coverage.
+Completed adjacent foundations:
+
+- [x] Spec-text embeddings and semantic/hybrid search for governed spec sections.
+- [x] Manifest/version drift checks for local spec bundles via `specreg check`, uploaded
+  manifest diagnostics, and project/report drift summaries.
+- [x] Repo metadata/spec gap detector that uses tree/manifests/evidence to suggest missing
+  governance specs.
+- [x] Prometheus metrics endpoint for registry, review, usage, and SDD health signals.
+
+Remaining AST/code metadata work:
+
+- [ ] AST tagging engine: parse supported languages and extract stable code entities such as
+  files, modules, classes, functions, routes, schemas, migrations, config keys, commands,
+  jobs, and dependency edges.
+- [ ] Stable code ID generation: assign deterministic IDs to extracted entities so reports
+  can survive file movement, renames, and incremental edits. IDs should record language,
+  entity kind, path, symbol/signature, hash, and parent relationships.
+- [ ] Metadata injection workflow: optionally write traceability metadata back into generated
+  sidecar files or source-adjacent manifests without unsafe source rewrites by default.
+  Include a reviewable mode for projects that want inline comments/annotations.
+- [ ] Code-to-spec traceability graph: link code IDs to governing spec IDs, versions,
+  sections, requirements, audit prompts, and examples. Support manual overrides and agent
+  feedback when automatic matching is wrong or incomplete.
+- [ ] Semantic drift pipeline: summarize changed code entities in CI, embed structural intent,
+  compare against active spec vectors/code-profile vectors, and publish a telemetry drift
+  score (0.0 to 1.0) to reports and `/metrics`.
+- [ ] Code/AST embedding profile: add a separate embedding configuration for parsed code
+  symbols, module summaries, dependency edges, API shapes, schemas, and architectural intent
+  so AST drift and code-to-spec matching can use different models from spec text search.
+- [ ] Code-to-spec coverage reports: show which files, modules, routes, APIs, schemas, jobs,
+  commands, and config areas are governed by which specs, and highlight code with no matching
+  spec coverage or specs with no implementation evidence.
 
 ## Enterprise
 

@@ -30,6 +30,8 @@ Options:
   --skills <s>      init: base | all | none | comma skill slugs (default: interactive/base)
   --skill-dir <p>   init: local governed skill directory (default: .spec/skills)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
+  --examples        generate: write companion example templates
+  --example-dir <p> generate: example template directory (default: .spec/examples)
   --target <t>      compile: claude | agents | cursor (default: claude)
   --author <name>   submit-drafts: author/proposer name (default: $USER or cli)
   --delta <d>       submit-drafts: major | minor | patch (default: minor)
@@ -99,6 +101,8 @@ try {
       type: typeof flags.type === "string" ? flags.type : undefined,
       out: typeof flags.out === "string" ? flags.out : ".spec/prompts",
       dir: typeof flags.dir === "string" ? flags.dir : ".spec/drafts",
+      exampleDir: typeof flags["example-dir"] === "string" ? flags["example-dir"] : ".spec/examples",
+      examples: flags.examples === true,
       write: flags.write === true,
       force: flags.force === true,
     });

@@ -11,6 +11,8 @@ export interface GenerateOptions {
   type?: string;
   out: string;
   dir: string;
+  exampleDir: string;
+  examples: boolean;
   write: boolean;
   force: boolean;
 }
@@ -39,6 +41,84 @@ interface GenerateLlmConfig {
 
 const SYSTEM_PROMPT =
   "You generate complete Markdown specification documents. Output only the Markdown document, with no preamble and no code fence around the response.";
+
+export function exampleTemplateFilename(specFilename: string): string {
+  const parsed = path.parse(specFilename);
+  return `${parsed.name}.examples.md`;
+}
+
+export function renderExampleTemplate(input: {
+  filename: string;
+  projectType: string;
+  languages: string[];
+  tree: string;
+}): string {
+  const languages = input.languages.length > 0 ? input.languages.join(", ") : "unknown";
+  const notablePaths = input.tree
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.endsWith("/"))
+    .slice(0, 12);
+  const pathHints = notablePaths.length > 0
+    ? notablePaths.map((item) => `- \`${item.replace(/^[-\s]+/, "")}\``).join("\n")
+    : "- `<path/to/source>`";
+  return `# ${input.filename} Example Template
+
+> Companion examples for a generated \`${input.filename}\` draft.
+> Keep this file outside governed \`specs/\` content unless reviewers decide these examples should become part of the spec.
+
+## Scope
+
+- Project type: ${input.projectType}
+- Detected languages: ${languages}
+- Draft spec: \`${input.filename}\`
+
+## Source Evidence To Check
+
+${pathHints}
+
+## Positive Examples
+
+Add examples of implementation choices that should satisfy \`${input.filename}\`.
+
+### Example: <name>
+
+- Context: <where this appears in the codebase>
+- Input or situation: <trigger, request, config, or code path>
+- Expected behavior: <observable result>
+- Relevant files: <paths>
+
+\`\`\`
+<minimal good example>
+\`\`\`
+
+## Negative Examples
+
+Add examples that should be rejected, flagged in review, or treated as spec violations.
+
+### Anti-example: <name>
+
+- Context: <where this could happen>
+- Problem: <why this conflicts with the spec>
+- Expected agent response: <what an implementation/review agent should do>
+
+\`\`\`
+<minimal bad example>
+\`\`\`
+
+## Edge Cases
+
+- <boundary condition>
+- <error path>
+- <migration or compatibility case>
+
+## Review Notes
+
+- Which examples should be promoted into the governed spec?
+- Which examples should stay as local training/reference material?
+- What tests or audit prompts should cite these examples?
+`;
+}
 
 function normalizeProvider(value: string | undefined): GenerateProvider | undefined {
   if (value === "anthropic" || value === "openai" || value === "gemini" || value === "openai_compatible") return value;
@@ -203,10 +283,13 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
   fs.mkdirSync(outDir, { recursive: true });
   const specDir = path.resolve(root, opts.dir);
   if (opts.write) fs.mkdirSync(specDir, { recursive: true });
+  const exampleDir = path.resolve(root, opts.exampleDir);
+  if (opts.examples) fs.mkdirSync(exampleDir, { recursive: true });
   const governed = opts.write ? governedFilenames(specDir) : new Set<string>();
 
   const written: string[] = [];
   const generated: string[] = [];
+  const examples: string[] = [];
   for (const stub of response.prompts) {
     // The server tailors [PROJECT_TYPE]/[LANGUAGES]; the local scan fills [TREE]/[CONTEXT].
     const prompt = stub.prompt.replaceAll("[TREE]", scan.tree).replaceAll("[CONTEXT]", scan.tree);
@@ -229,6 +312,24 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
       fs.writeFileSync(target, await generateMarkdown(prompt), "utf8");
       generated.push(target);
     }
+
+    if (opts.examples) {
+      const exampleTarget = path.join(exampleDir, exampleTemplateFilename(stub.target_filename));
+      if (fs.existsSync(exampleTarget) && !opts.force) {
+        throw new Error(`${path.relative(root, exampleTarget)} already exists. Re-run with --force to overwrite it.`);
+      }
+      fs.writeFileSync(
+        exampleTarget,
+        renderExampleTemplate({
+          filename: stub.target_filename,
+          projectType: projectType.name,
+          languages: scan.languages,
+          tree: scan.tree,
+        }),
+        "utf8"
+      );
+      examples.push(exampleTarget);
+    }
   }
 
   console.log(`\nWrote ${written.length} generation prompt(s):`);
@@ -247,6 +348,13 @@ export async function runGenerate(opts: GenerateOptions): Promise<void> {
     console.log(
       `\nNext step: run each prompt through your AI agent to produce the corresponding spec file,\nor re-run with --write and SPECREG_GENERATE_PROVIDER / LLM_PROVIDER configured.`
     );
+  }
+  if (examples.length > 0) {
+    console.log(`\nGenerated ${examples.length} example template file(s):`);
+    for (const file of examples) {
+      console.log(`  - ${path.relative(root, file)}`);
+    }
+    console.log("Keep example templates outside governed specs unless reviewers intentionally promote them.");
   }
 }
 

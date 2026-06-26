@@ -236,8 +236,11 @@ Use this flow when bringing SpecRegistry into a new or existing repository.
    `.spec/drafts/`. For a new project, write the specs you want to submit there directly.
 
    ```sh
-   specreg generate --write --server http://localhost:4000 --type "Acme Edge Device"
+   specreg generate --write --examples --server http://localhost:4000 --type "Acme Edge Device"
    ```
+
+   `--examples` writes companion files like `.spec/examples/DESIGN.examples.md` with
+   positive examples, anti-examples, edge cases, and review notes for the generated draft.
 
 5. **Submit drafts to the registry.**
    This creates project-scoped drafts or review requests so they can become governed specs.
@@ -391,9 +394,14 @@ they are submitted through the registry review workflow.
 Generate repo-specific draft specs from local code into `.spec/drafts`, then submit them:
 
 ```sh
-specreg generate --write --server https://specs.example.com --type "Acme Edge Device"
+specreg generate --write --examples --server https://specs.example.com --type "Acme Edge Device"
 specreg submit-drafts --server https://specs.example.com --type "Acme Edge Device" --author alice
 ```
+
+Use `--examples` to save companion example templates under `.spec/examples/` during the
+same generation pass. Override the location with `--example-dir <path>`. These files are
+kept outside `.spec/drafts/` by default so `submit-drafts` does not submit local examples
+unless reviewers intentionally fold them into a governed spec.
 
 `submit-drafts` reports the current repo to the registry and creates project-scoped drafts
 for that repo. If a generated filename already exists as a global or project-type spec, the

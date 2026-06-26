@@ -98,7 +98,7 @@ Why it matters: drift is a governance failure in SDD. Code can be correct agains
 
 ### `specreg generate` and `submit-drafts`
 
-The CLI can scan a repository, produce draft spec prompts or LLM-generated drafts, and submit generated drafts into the registry workflow.
+The CLI can scan a repository, produce draft spec prompts or LLM-generated drafts, and submit generated drafts into the registry workflow. With `--examples`, the same generation pass also writes companion example templates under `.spec/examples/` so reviewers can capture positive examples, anti-examples, edge cases, and test/audit notes without accidentally submitting them as governed specs.
 
 Why it matters: new or existing repos can bootstrap governed specs without bypassing review.
 

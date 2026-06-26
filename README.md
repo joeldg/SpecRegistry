@@ -912,6 +912,13 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `SPECREG_AUTOMATION_AUDIT_PROMPTS` | Enable generated audit prompts |
 | `SPECREG_AUTOMATION_SECTION_CLASSIFIER` | Enable section classification |
 | `SPECREG_AUTOMATION_CONTEXT_OPTIMIZER` | Enable context budget optimization |
+| `SPECREG_CODE_METADATA_ENABLED` | Master default for code metadata and traceability features |
+| `SPECREG_CODE_METADATA_TYPESCRIPT_JAVASCRIPT` | Enable TypeScript/JavaScript extraction defaults |
+| `SPECREG_CODE_METADATA_PYTHON` | Enable Python extraction defaults |
+| `SPECREG_CODE_METADATA_SQL` | Enable SQL extraction defaults |
+| `SPECREG_CODE_METADATA_ROUTE_DETECTION` | Enable route metadata extraction defaults |
+| `SPECREG_CODE_METADATA_SCHEMA_DETECTION` | Enable schema metadata extraction defaults |
+| `SPECREG_CODE_METADATA_INLINE` | Default for optional inline metadata injection (default off) |
 | `GITHUB_TOKEN` | Git push-back PRs + inbound webhook file fetch; fallback if not saved in Settings |
 | `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks; fallback if not saved in Settings |
 | `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions; fallback if not saved in Settings |
@@ -1042,6 +1049,8 @@ in the database. `specreg verify` checks bundle provenance against the public ke
 Automation APIs are enabled by default. Set any flag to `false`, `0`, `off`, or `no` to
 disable that capability for a deployment. The Generate Specs workbench reads
 `GET /api/v1/automation/features` and disables controls for unavailable features.
+Admins can also manage these flags on **Settings -> Features**. Saved settings are stored
+in the registry database and override environment defaults.
 
 LLM-backed automation only runs when both conditions are true:
 
@@ -1051,6 +1060,13 @@ LLM-backed automation only runs when both conditions are true:
 Without LLM mode, automation endpoints use deterministic templates, spec metadata, repo
 evidence, and existing registry telemetry. This keeps CI/server deployments usable even when
 no model provider is configured.
+
+The same Settings screen also exposes code metadata and AST traceability controls. Current
+available toggles cover `specreg code-map` style extraction for TypeScript/JavaScript,
+Python, SQL, routes, schemas, stable IDs, and sidecar metadata. Planned toggles are visible
+for inline metadata injection, traceability graphs, semantic drift, code embeddings, and
+code-to-spec coverage reports so deployments can decide which features should be allowed as
+those slices are implemented.
 
 ### Troubleshooting
 

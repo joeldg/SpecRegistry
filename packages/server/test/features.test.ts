@@ -1184,4 +1184,50 @@ describe("LLM spec automation", () => {
     });
     expect(blocked.statusCode).toBe(403);
   });
+
+  it("persists feature settings and applies automation overrides", async () => {
+    const initial = await getJson("/api/v1/features/config");
+    expect(initial.code_metadata.typescript_javascript).toBe(true);
+    expect(initial.catalog.code_metadata.find((feature: any) => feature.key === "traceability_graph")).toMatchObject({
+      stage: "planned",
+    });
+    expect(initial.code_metadata.traceability_graph).toBe(false);
+    const enabled = await app.inject({
+      method: "PUT",
+      url: "/api/v1/features/config",
+      payload: { automation: { task_planner: true } },
+    });
+    expect(enabled.statusCode).toBe(200);
+    expect(enabled.json().automation.task_planner).toBe(true);
+
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/features/config",
+      payload: {
+        automation: { task_planner: false },
+        code_metadata: { python: false, coverage_reports: false },
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().automation.task_planner).toBe(false);
+    expect(saved.json().code_metadata.python).toBe(false);
+
+    const flags = await getJson("/api/v1/automation/features");
+    expect(flags.task_planner).toBe(false);
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/api/v1/automation/task-plan",
+      payload: { project_type: "Acme Edge Device", task: "x" },
+    });
+    expect(blocked.statusCode).toBe(403);
+
+    const restored = await app.inject({
+      method: "PUT",
+      url: "/api/v1/features/config",
+      payload: { automation: { task_planner: true } },
+    });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().automation.task_planner).toBe(true);
+  });
 });

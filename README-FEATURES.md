@@ -334,7 +334,15 @@ Selects the highest-value spec sections for an agent task under a token budget.
 
 ### Feature Flags
 
-Automation capabilities can be enabled or disabled with `SPECREG_AUTOMATION_*` environment flags.
+Automation capabilities can be enabled or disabled with `SPECREG_AUTOMATION_*`
+environment flags or from **Settings -> Features**. The settings screen persists overrides
+in the registry database while environment variables remain the defaults for fresh Docker
+and server deployments.
+
+The same screen includes AST metadata and traceability controls for code-map extraction,
+language/entity families, stable IDs, sidecar metadata, and planned follow-on features such
+as inline metadata injection, traceability graphs, semantic drift, code embeddings, and
+code-to-spec coverage reports.
 
 ## LLM Provider Support
 

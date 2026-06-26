@@ -9,6 +9,7 @@ import {
   type ApprovalPolicyRow,
   type EmbeddingConfig,
   type EmbeddingStatus,
+  type FeatureConfig,
   type LdapConfig,
   type LlmConfig,
   type LlmTaskRoute,
@@ -25,9 +26,10 @@ import { StatusBadge, timeAgo } from "../components";
 
 const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved", "review.rejected", "feedback.created"];
 const LLM_TIERS: LlmTier[] = ["cheap", "standard", "frontier"];
-type SettingsTab = "ai" | "access" | "governance" | "integrations";
+type SettingsTab = "ai" | "features" | "access" | "governance" | "integrations";
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
   { id: "ai", label: "AI & Search", description: "Choose models, route AI work, and manage agent context and semantic indexing." },
+  { id: "features", label: "Features", description: "Turn automation and traceability capabilities on or off for the registry." },
   { id: "access", label: "Access", description: "Manage people, machine credentials, and directory-based authentication." },
   { id: "governance", label: "Governance", description: "Control approvals and inspect the projects and events governed by this registry." },
   { id: "integrations", label: "Integrations", description: "Connect external services and distribute approved specs to subscribed repositories." },
@@ -73,6 +75,7 @@ export default function SettingsPage() {
   const [embedding, setEmbedding] = useState<EmbeddingConfig>();
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus>();
   const [appKeys, setAppKeys] = useState<AppKeyConfig>();
+  const [featureConfig, setFeatureConfig] = useState<FeatureConfig>();
   const [mcpGuide, setMcpGuide] = useState<McpGuide>();
   const [policies, setPolicies] = useState<ApprovalPolicyRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditLogRow[]>([]);
@@ -83,6 +86,7 @@ export default function SettingsPage() {
   const [llmNotice, setLlmNotice] = useState<string>();
   const [embeddingNotice, setEmbeddingNotice] = useState<string>();
   const [appKeyNotice, setAppKeyNotice] = useState<string>();
+  const [featureNotice, setFeatureNotice] = useState<string>();
   const [tierModels, setTierModels] = useState<Record<LlmTier, string[]>>({ cheap: [], standard: [], frontier: [] });
   const [llmTestStatus, setLlmTestStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [llmTestResult, setLlmTestResult] = useState<string>();
@@ -140,11 +144,12 @@ export default function SettingsPage() {
       api.embeddingConfig(),
       api.embeddingStatus(),
       api.appKeys(),
+      api.featureConfig(),
       api.approvalPolicies(),
       api.auditLog(50),
       api.agentSkills(true),
     ])
-      .then(([w, s, c, j, t, u, k, l, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, p, a, nextSkills]) => {
+      .then(([w, s, c, j, t, u, k, l, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, p, a, nextSkills]) => {
         setWebhooks(w);
         setSubs(s);
         setConsumers(c);
@@ -157,6 +162,7 @@ export default function SettingsPage() {
         setEmbedding(embeddingConfig);
         setEmbeddingStatus(nextEmbeddingStatus);
         setAppKeys(appKeyConfig);
+        setFeatureConfig(nextFeatureConfig);
         setPolicies(p);
         setAuditRows(a);
         setAgentSkills(nextSkills);
@@ -216,6 +222,52 @@ export default function SettingsPage() {
     return saved;
   }
 
+  function setFeatureFlag(group: "automation" | "code_metadata", key: string, enabled: boolean) {
+    setFeatureConfig((current) =>
+      current
+        ? {
+            ...current,
+            [group]: { ...current[group], [key]: enabled },
+          }
+        : current
+    );
+  }
+
+  function renderFeatureGroup(group: "automation" | "code_metadata", title: string, help: string) {
+    if (!featureConfig) return null;
+    const flags = featureConfig[group] as Record<string, boolean>;
+    const masterDisabled = flags.enabled === false;
+    return (
+      <div className="feature-panel">
+        <div>
+          <h3>{title}</h3>
+          <p className="settings-help">{help}</p>
+        </div>
+        <div className="feature-toggle-list">
+          {featureConfig.catalog[group].map((feature) => {
+            const disabledByMaster = masterDisabled && feature.key !== "enabled";
+            return (
+              <label className={`feature-toggle${disabledByMaster ? " muted" : ""}`} key={`${group}-${feature.key}`}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(flags[feature.key])}
+                  onChange={(e) => setFeatureFlag(group, feature.key, e.target.checked)}
+                />
+                <span>
+                  <strong>
+                    {feature.label}
+                    {feature.stage === "planned" && <span className="badge draft">Planned</span>}
+                  </strong>
+                  <small>{feature.description}</small>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="page-head">
@@ -241,6 +293,44 @@ export default function SettingsPage() {
       </div>
       <div className="settings-tab-intro" id="settings-panel" role="tabpanel">
         {SETTINGS_TABS.find((tab) => tab.id === activeTab)?.description}
+      </div>
+
+      <div className={`section${activeTab === "features" ? "" : " settings-hidden"}`}>
+        <h2>Feature controls</h2>
+        <p className="settings-help">Use these switches to control high-leverage automation, LLM usage points, and code-to-spec traceability features. Environment variables still provide defaults for fresh deployments; saved settings override them.</p>
+        {featureNotice && <div className="notice-banner">{featureNotice}</div>}
+        {featureConfig ? (
+          <div className="card">
+            {renderFeatureGroup(
+              "automation",
+              "Spec automation",
+              "Controls the workbench actions and API endpoints that generate, classify, optimize, and maintain governed specs."
+            )}
+            {renderFeatureGroup(
+              "code_metadata",
+              "AST metadata and traceability",
+              "Controls code-map extraction, durable code IDs, and the upcoming traceability pipeline from implementation surfaces back to specs."
+            )}
+            <div className="form-row" style={{ marginTop: 14 }}>
+              <button
+                onClick={() =>
+                  act(async () => {
+                    const saved = await api.updateFeatureConfig({
+                      automation: featureConfig.automation,
+                      code_metadata: featureConfig.code_metadata,
+                    });
+                    setFeatureConfig(saved);
+                    setFeatureNotice("Feature settings saved.");
+                  }, false)
+                }
+              >
+                Save feature settings
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="empty">Feature settings are loading.</div>
+        )}
       </div>
 
       <div className={`section${activeTab === "access" ? "" : " settings-hidden"}`}>

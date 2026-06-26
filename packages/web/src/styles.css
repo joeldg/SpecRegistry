@@ -255,6 +255,60 @@ table.grid tr.click:hover td {
   display: none;
 }
 
+.feature-panel {
+  border-top: 1px solid var(--border);
+  padding: 14px 0;
+}
+
+.feature-panel:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.feature-panel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.feature-toggle-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.feature-toggle {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--bg);
+}
+
+.feature-toggle.muted {
+  opacity: 0.66;
+}
+
+.feature-toggle input {
+  margin-top: 2px;
+}
+
+.feature-toggle strong {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.feature-toggle small {
+  display: block;
+  color: var(--text-faint);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
 .badge {
   display: inline-block;
   font-size: 11px;

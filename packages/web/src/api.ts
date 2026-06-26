@@ -268,6 +268,36 @@ export type AutomationFlags = Record<
   | "context_optimizer",
   boolean
 >;
+export type CodeMetadataFlags = Record<
+  | "enabled"
+  | "typescript_javascript"
+  | "python"
+  | "sql"
+  | "route_detection"
+  | "schema_detection"
+  | "stable_ids"
+  | "sidecar_metadata"
+  | "inline_metadata"
+  | "traceability_graph"
+  | "semantic_drift"
+  | "code_embedding_profile"
+  | "coverage_reports",
+  boolean
+>;
+export interface FeatureDescriptor {
+  key: string;
+  label: string;
+  description: string;
+  stage: "available" | "planned";
+}
+export interface FeatureConfig {
+  automation: AutomationFlags;
+  code_metadata: CodeMetadataFlags;
+  catalog: {
+    automation: FeatureDescriptor[];
+    code_metadata: FeatureDescriptor[];
+  };
+}
 export interface SearchHit {
   spec_id: string;
   filename: string;
@@ -685,6 +715,9 @@ export const api = {
     request<ProjectType>(`/api/v1/project-types/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   specPurposes: () => request<SpecPurposeTemplate[]>("/api/v1/spec-purposes"),
   automationFeatures: () => request<AutomationFlags>("/api/v1/automation/features"),
+  featureConfig: () => request<FeatureConfig>("/api/v1/features/config"),
+  updateFeatureConfig: (body: Partial<Pick<FeatureConfig, "automation" | "code_metadata">>) =>
+    request<FeatureConfig>("/api/v1/features/config", { method: "PUT", body: JSON.stringify(body) }),
   specGaps: (body: { project_type: string; tree: string; detected_languages?: string[]; existing_specs?: string[] }) =>
     request<{ project_type: string; gaps: SpecGap[] }>("/api/v1/spec-gaps", { method: "POST", body: JSON.stringify(body) }),
   generationPreview: (body: {

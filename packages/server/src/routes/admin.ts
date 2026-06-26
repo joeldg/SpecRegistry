@@ -34,6 +34,7 @@ import {
   semanticIndexStatus,
   type EmbeddingConfig,
 } from "../lib/embeddings.js";
+import { getFeatureConfig, saveFeatureConfig, type FeatureConfig } from "../lib/features.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -44,6 +45,25 @@ function isLlmRoute(value: unknown): value is LlmTaskRoute {
 }
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  // --- Feature controls ---
+
+  app.get("/features/config", async () => {
+    return getFeatureConfig(app.db);
+  });
+
+  app.put("/features/config", async (req) => {
+    const body = (req.body ?? {}) as Partial<Pick<FeatureConfig, "automation" | "code_metadata">>;
+    const saved = saveFeatureConfig(app.db, body);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "features.config.updated",
+      target_type: "features",
+      summary: "Feature settings updated",
+      detail: { automation: saved.automation, code_metadata: saved.code_metadata },
+    });
+    return saved;
+  });
+
   // --- App keys / integration secrets ---
 
   app.get("/app-keys", async () => {

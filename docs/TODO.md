@@ -67,6 +67,8 @@ Completed adjacent foundations:
   entities plus Python and SQL extraction. Writes `.spec/code-map.json` with stable code
   IDs, entity kinds, paths, signatures, source locations, parent links, hashes, and route
   metadata without rewriting source files.
+- [x] Settings-backed feature controls for automation and AST/code metadata families, with
+  Docker/server-friendly environment defaults and database overrides from the Settings UI.
 
 Remaining AST/code metadata work:
 

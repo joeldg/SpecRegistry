@@ -5,6 +5,7 @@ import { HttpError, requireProjectType, requireString } from "../helpers.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { bundleSpecs } from "../lib/compile.js";
 import { recordUsage } from "../lib/events.js";
+import { getAutomationFeatureFlags, type AutomationFeatureKey } from "../lib/features.js";
 import { runLlmText } from "../lib/llm.js";
 import {
   auditPromptForSpec,
@@ -31,35 +32,8 @@ function requirePurpose(id: string) {
   return purpose;
 }
 
-const FLAG_ENV: Record<string, string> = {
-  enabled: "SPECREG_AUTOMATION_ENABLED",
-  gap_detection: "SPECREG_AUTOMATION_GAP_DETECTION",
-  generation: "SPECREG_AUTOMATION_GENERATION",
-  llm_generation: "SPECREG_AUTOMATION_LLM_GENERATION",
-  task_planner: "SPECREG_AUTOMATION_TASK_PLANNER",
-  ticket_generator: "SPECREG_AUTOMATION_TICKET_GENERATOR",
-  maintenance: "SPECREG_AUTOMATION_MAINTENANCE",
-  pack_composer: "SPECREG_AUTOMATION_PACK_COMPOSER",
-  audit_prompts: "SPECREG_AUTOMATION_AUDIT_PROMPTS",
-  section_classifier: "SPECREG_AUTOMATION_SECTION_CLASSIFIER",
-  context_optimizer: "SPECREG_AUTOMATION_CONTEXT_OPTIMIZER",
-};
-
-function flagValue(name: keyof typeof FLAG_ENV): boolean {
-  const value = process.env[FLAG_ENV[name]];
-  if (value === undefined) return true;
-  return !["0", "false", "off", "no"].includes(value.toLowerCase());
-}
-
-function automationFlags() {
-  const enabled = flagValue("enabled");
-  return Object.fromEntries(
-    Object.keys(FLAG_ENV).map((key) => [key, enabled && (key === "enabled" ? true : flagValue(key as keyof typeof FLAG_ENV))])
-  ) as Record<keyof typeof FLAG_ENV, boolean>;
-}
-
-function requireFeature(name: keyof typeof FLAG_ENV): void {
-  const flags = automationFlags();
+function requireFeature(app: FastifyInstance, name: AutomationFeatureKey): void {
+  const flags = getAutomationFeatureFlags(app.db);
   if (!flags.enabled || !flags[name]) throw new HttpError(403, `Automation feature disabled: ${name}`);
 }
 
@@ -78,7 +52,7 @@ const MAX_GUIDANCE_LENGTH = 2000;
 async function buildAuditPrompt(app: FastifyInstance, spec: AutomationSpecInput, useLlm: boolean, customGuidance?: string) {
   let prompt = auditPromptForSpec(spec);
   if (useLlm) {
-    requireFeature("llm_generation");
+    requireFeature(app, "llm_generation");
     let userMsg = prompt;
     if (customGuidance && customGuidance.trim()) {
       const trimmed = customGuidance.trim().slice(0, MAX_GUIDANCE_LENGTH);
@@ -96,12 +70,12 @@ async function buildAuditPrompt(app: FastifyInstance, spec: AutomationSpecInput,
 }
 
 export async function automationRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/automation/features", async () => automationFlags());
+  app.get("/automation/features", async () => getAutomationFeatureFlags(app.db));
 
   app.get("/spec-purposes", async () => PURPOSE_TEMPLATES);
 
   app.post("/spec-gaps", async (req) => {
-    requireFeature("gap_detection");
+    requireFeature(app, "gap_detection");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const pt = requireProjectType(app.db, projectTypeName);
@@ -124,7 +98,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/spec-generation/preview", async (req) => {
-    requireFeature("generation");
+    requireFeature(app, "generation");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const purpose = requirePurpose(requireString(body, "purpose"));
@@ -139,7 +113,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
       extraContext: typeof body.extra_context === "string" ? body.extra_context : undefined,
     });
     const useLlm = body.use_llm === true;
-    if (useLlm) requireFeature("llm_generation");
+    if (useLlm) requireFeature(app, "llm_generation");
     const generated = useLlm
       ? await runLlmText(app.db, {
           system: "You generate complete Markdown specification documents. Output only Markdown.",
@@ -159,7 +133,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/spec-generation/draft", async (req, reply) => {
-    requireFeature("generation");
+    requireFeature(app, "generation");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const purpose = requirePurpose(requireString(body, "purpose"));
@@ -198,7 +172,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/task-plan", async (req) => {
-    requireFeature("task_planner");
+    requireFeature(app, "task_planner");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const task = requireString(body, "task");
@@ -212,7 +186,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
       tokenBudget: Number(body.token_budget ?? 2000),
     });
     if (body.use_llm === true) {
-      requireFeature("llm_generation");
+      requireFeature(app, "llm_generation");
       const llm = await runLlmText(app.db, {
         system: "You are an SDD planning assistant. Improve the deterministic task plan without inventing unavailable specs.",
         user: JSON.stringify(plan, null, 2),
@@ -225,7 +199,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/ticket", async (req) => {
-    requireFeature("ticket_generator");
+    requireFeature(app, "ticket_generator");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const task = requireString(body, "task");
@@ -234,7 +208,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const plan = planTaskContext({ task, tree, specs, existingSpecs: specs.map((spec) => spec.filename) });
     let markdown = ticketChecklist({ task, plan });
     if (body.use_llm === true) {
-      requireFeature("llm_generation");
+      requireFeature(app, "llm_generation");
       const llm = await runLlmText(app.db, {
         system: "You write concise implementation tickets from SDD plans. Output Markdown only.",
         user: markdown,
@@ -247,13 +221,13 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/section-classifier", async (req) => {
-    requireFeature("section_classifier");
+    requireFeature(app, "section_classifier");
     const body = (req.body ?? {}) as Record<string, unknown>;
     return { sections: classifySpecSections(governedSpecs(app, requireString(body, "project_type"))) };
   });
 
   app.post("/automation/context-budget", async (req) => {
-    requireFeature("context_optimizer");
+    requireFeature(app, "context_optimizer");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const task = typeof body.task === "string" ? body.task : "";
     const specs = governedSpecs(app, requireString(body, "project_type"));
@@ -262,7 +236,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/audit-prompt", async (req) => {
-    requireFeature("audit_prompts");
+    requireFeature(app, "audit_prompts");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const specId = requireString(body, "spec_id");
     const spec = app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(specId) as AutomationSpecInput | undefined;
@@ -279,7 +253,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/automation/audit-prompt/:specId", async (req) => {
-    requireFeature("audit_prompts");
+    requireFeature(app, "audit_prompts");
     const { specId } = req.params as { specId: string };
     const spec = app.db.prepare("SELECT * FROM specs WHERE id = ? AND deleted_at IS NULL").get(specId) as (AutomationSpecInput & { audit_prompt?: string | null }) | undefined;
     if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
@@ -297,7 +271,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put("/automation/audit-prompt/:specId", async (req) => {
-    requireFeature("audit_prompts");
+    requireFeature(app, "audit_prompts");
     const { specId } = req.params as { specId: string };
     const body = (req.body ?? {}) as Record<string, unknown>;
     const prompt = requireString(body, "prompt");
@@ -321,7 +295,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/automation/audit-prompts", async (req) => {
-    requireFeature("audit_prompts");
+    requireFeature(app, "audit_prompts");
     const { project_type } = req.query as { project_type?: string };
     const specs = project_type
       ? governedSpecs(app, project_type)
@@ -338,7 +312,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/improvement-suggestions", async (req) => {
-    requireFeature("maintenance");
+    requireFeature(app, "maintenance");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const specs = governedSpecs(app, requireString(body, "project_type"));
     const feedback = app.db.prepare("SELECT spec_id, error_type, description, status FROM agent_feedback").all() as Array<{
@@ -369,7 +343,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
         })),
       });
     if (body.use_llm === true) {
-      requireFeature("llm_generation");
+      requireFeature(app, "llm_generation");
       const llm = await runLlmText(app.db, {
         system: "You turn deterministic spec improvement findings into concise prioritized recommendations. Output Markdown only.",
         user: JSON.stringify(suggestions, null, 2),
@@ -382,13 +356,13 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/automation/spec-pack", async (req) => {
-    requireFeature("pack_composer");
+    requireFeature(app, "pack_composer");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const ids = stringArray(body.purposes);
     const purposes = ids.length > 0 ? ids.map(requirePurpose) : PURPOSE_TEMPLATES;
     const pack = composeSpecPack({ name: typeof body.name === "string" ? body.name : "Custom Spec Pack", purposes });
     if (body.use_llm === true) {
-      requireFeature("llm_generation");
+      requireFeature(app, "llm_generation");
       const llm = await runLlmText(app.db, {
         system: "You write a concise README for a reusable SpecRegistry spec pack. Output Markdown only.",
         user: JSON.stringify({ name: pack.name, files: pack.specs.map((spec) => spec.filename) }, null, 2),

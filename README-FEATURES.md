@@ -346,7 +346,7 @@ Selects the highest-value spec sections for an agent task under a token budget.
 ### Feature Flags
 
 Automation capabilities can be enabled or disabled with `SPECREG_AUTOMATION_*`
-environment flags or from **Settings -> Features**. The settings screen persists overrides
+environment flags or from **Settings → Features**. The settings screen persists overrides
 in the registry database while environment variables remain the defaults for fresh Docker
 and server deployments.
 
@@ -359,7 +359,7 @@ code-to-spec coverage reports.
 
 ### Server LLM Settings
 
-The Settings page supports configuring three LLM tiers:
+The **Settings → AI & Search** page supports configuring three LLM tiers:
 
 - cheap/local for classification, summarization, and planning
 - standard for general automation
@@ -386,7 +386,7 @@ Root URLs such as `http://10.0.0.142:1234` are normalized to `/v1` automatically
 
 ### Model Loading and Testing
 
-Settings can load available models from providers and run a test prompt. Saved API keys are hidden from the browser.
+The **Settings → AI & Search** page can load available models from providers and run a test prompt. Saved API keys are hidden from the browser.
 
 ### CLI LLM Providers
 
@@ -429,7 +429,7 @@ Roles:
 
 ### LDAP Login and Role Mapping
 
-Settings expose LDAP configuration, a login tester, and role preview based on LDAP groups.
+The **Settings → Access** page exposes LDAP configuration, a login tester, and role preview based on LDAP groups.
 
 ### Auth-Required Deployments
 

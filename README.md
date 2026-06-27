@@ -163,7 +163,7 @@ For the full metric catalog and source queries, see
 2. Open the dashboard.
 3. Sign in with the default admin account: **username `admin`, password `admin`**.
    Override the default password with `SPECREG_ADMIN_PASSWORD` in `.env` or the environment.
-   Change the password after first login via **Settings → Users → Reset password**.
+   Change the password after first login via **Settings → Access → Reset password**.
 4. Create or edit project types. Use one global project type for organization-wide specs.
 5. Add spec files such as `DESIGN.md`, `STRUCTURE.md`, `API.md`, or domain-specific docs.
 6. Publish initial drafts once they are ready to become governed contracts.
@@ -375,7 +375,7 @@ specreg init --skills all --skill-dir .agent/skills
 specreg init --skills none
 ```
 
-Admins register, disable, or delete custom skills in **Settings > AI & Search > Agent skills**.
+Admins register, disable, or delete custom skills in **Settings → AI & Search → Agent skills**.
 Built-in skills can be disabled but not deleted. Catalog entries contain Markdown instructions,
 a purpose description, and a `safe` or `restricted` risk label; executable payloads and secrets
 do not belong in skills.
@@ -433,7 +433,7 @@ those edits. Use `specreg sync --force --server https://specs.example.com` only 
 you intend to restore the approved registry bundle over local changes.
 
 `specreg init`, `specreg check`, `specreg sync`, and `specreg submit-drafts` report the
-local manifest back to the registry. The Settings page shows these projects so admins can
+local manifest back to the registry. The **Settings → Governance** page shows these projects so admins can
 see which repositories are using which project type, manifest path, spec count, and outdated
 spec count.
 
@@ -687,7 +687,7 @@ Use webhooks and chat integrations to push SDD events into the places teams alre
 - GitHub repo subscriptions that open pull requests when approved specs change.
 - HMAC-verified inbound GitHub push webhooks that convert repo-side spec edits into reviews.
 
-GitHub and Slack app keys can be configured on the Settings page or with environment variables.
+GitHub and Slack app keys can be configured on the **Settings → Integrations** page or with environment variables.
 Saved values are never returned to the browser; Settings only shows whether each key is present.
 
 ### Authentication, Roles, and LDAP Usage
@@ -703,7 +703,7 @@ Roles are `admin`, `reviewer`, `author`, and `agent`. Admins manage settings, re
 approve governed changes, authors create drafts and change requests, and agents can be
 given scoped API keys for automation.
 
-For LDAP, configure the Settings page or environment variables such as:
+For LDAP, configure the **Settings → Access** page or environment variables such as:
 
 ```dotenv
 LDAP_URL=ldaps://ldap.example.com
@@ -713,7 +713,7 @@ LDAP_REVIEWER_GROUP=SpecRegistry Reviewers
 LDAP_DEFAULT_ROLE=author
 ```
 
-Use the LDAP tester in Settings before switching users over.
+Use the LDAP tester on the **Settings → Access** page before switching users over.
 
 ## Concepts
 
@@ -980,7 +980,7 @@ Server-side LLM features include AI draft-fix, reverse conformance audit, spec e
 and LLM-backed automation. Configure them on the Settings page or with environment
 variables.
 
-The Settings page uses three configurable tiers:
+The **Settings → AI & Search** page uses three configurable tiers:
 
 - **Cheap / local**: default for classification, summarization, and task planning.
 - **Standard**: default for ticket generation, maintenance suggestions, and connectivity tests.
@@ -1050,7 +1050,7 @@ internal gateway that exposes `/chat/completions`.
 For LM Studio, either `http://host:1234` or `http://host:1234/v1` is accepted; root
 OpenAI-compatible URLs are normalized to `/v1` automatically for model loading and chat
 tests.
-The Settings page can query available models from Anthropic, OpenAI, Gemini, and
+The **Settings → AI & Search** page can query available models from Anthropic, OpenAI, Gemini, and
 OpenAI-compatible providers that expose `/models`.
 
 Spec download bundles are ed25519-signed; the keypair is generated on first use and stored
@@ -1061,7 +1061,7 @@ in the database. `specreg verify` checks bundle provenance against the public ke
 Automation APIs are enabled by default. Set any flag to `false`, `0`, `off`, or `no` to
 disable that capability for a deployment. The Generate Specs workbench reads
 `GET /api/v1/automation/features` and disables controls for unavailable features.
-Admins can also manage these flags on **Settings -> Features**. Saved settings are stored
+Admins can also manage these flags on **Settings → Features**. Saved settings are stored
 in the registry database and override environment defaults.
 
 LLM-backed automation only runs when both conditions are true:
@@ -1073,7 +1073,7 @@ Without LLM mode, automation endpoints use deterministic templates, spec metadat
 evidence, and existing registry telemetry. This keeps CI/server deployments usable even when
 no model provider is configured.
 
-The same Settings screen also exposes code metadata and AST traceability controls. Current
+The **Settings → Features** page also exposes code metadata and AST traceability controls. Current
 available toggles cover `specreg code-map` style extraction for TypeScript/JavaScript,
 Python, SQL, routes, schemas, stable IDs, and sidecar metadata. Planned toggles are visible
 for inline metadata injection, traceability graphs, semantic drift, code embeddings, and
@@ -1087,7 +1087,7 @@ those slices are implemented.
 - **Agents cannot reach the registry in Docker**: set `SPECREG_PUBLIC_URL` to the URL reachable
   from developer machines and agent environments.
 - **Auth-required CLI/MCP calls fail**: pass `--token <token>` or set `SPECREG_TOKEN`.
-- **LLM features say a key is missing**: configure the provider on Settings or set the matching
+- **LLM features say a key is missing**: configure the provider on **Settings → AI & Search** or set the matching
   `LLM_*` / provider API key environment variables.
 - **Local model server is on the host while SpecRegistry runs in Docker**: use
   `http://host.docker.internal:<port>/v1` as `LLM_BASE_URL` on macOS/Windows.

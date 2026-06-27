@@ -358,7 +358,7 @@ remote-write them to a Grafana Cloud or Prometheus-compatible endpoint.
 
 LLM provider settings are part of tokenomics. Local or network OpenAI-compatible endpoints
 can reduce spend and keep prompts inside an internal network; hosted providers may provide
-stronger reasoning for high-value audits and efficacy checks. The Settings page exposes
+stronger reasoning for high-value audits and efficacy checks. The **Settings → AI & Search** page exposes
 configurable cheap, standard, and frontier tiers, each with provider, model, base URL, token
 budget, model discovery, saved-key status, and connectivity tests. Feature routing maps
 classification, summarization, planning, tickets, maintenance, generation, audits, draft

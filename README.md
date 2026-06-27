@@ -458,6 +458,7 @@ specreg code-map
 specreg code-map --out .spec/code-map.json --force
 specreg code-map --dir specs --trace-out .spec/code-trace.json
 specreg code-map --report
+specreg trace-check --min-coverage 70% --max-drift 25% --fail-on-unmapped route,schema,command
 ```
 
 `code-map` writes `.spec/code-map.json` with stable code IDs, entity kinds, paths,
@@ -474,6 +475,10 @@ Use `specreg code-map --report` to upload the traceability report to the registr
 uses `--type` or the local `specs/.specregistry.json` manifest to identify the project type.
 Uploaded reports appear on the Reports page as code-to-spec coverage, drift severity, and
 unmapped implementation counts.
+
+Use `specreg trace-check` in CI to fail on insufficient code-to-spec coverage, excessive
+drift, or critical unmapped entity kinds. In GitHub Actions it emits native annotations
+that point at unmapped files/lines from `.spec/code-trace.json`.
 
 Run an AI conformance audit:
 
@@ -623,12 +628,18 @@ jobs:
           dir: specs
           comment: "true"
           fail-on-drift: "true"
+          trace-check: "true"
+          min-coverage: "70%"
+          max-drift: "25%"
+          fail-on-unmapped: route,schema,command
 ```
 
 The action builds the bundled CLI, runs `specreg check` against the checked-out
 repository, posts or updates a PR comment with the drift output, and fails the workflow
 when drift or local governed-spec modification is detected unless `fail-on-drift` is set
-to `false`.
+to `false`. When `trace-check` is enabled, it also runs `specreg code-map` and
+`specreg trace-check`, producing PR annotations for unmapped critical code entities and
+failing on the configured coverage/drift thresholds.
 
 Use `specreg audit --ci` when you want LLM-backed implementation conformance checks.
 That requires a server LLM provider configured through Settings or environment variables.

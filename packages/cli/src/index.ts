@@ -11,6 +11,7 @@ import { runVerify } from "./verify.js";
 import { runAudit } from "./audit.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
+import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -24,6 +25,7 @@ Usage:
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
+  specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
@@ -37,6 +39,11 @@ Options:
   --out <path>      generate: prompt output directory (default: .spec/prompts)
                     code-map: metadata output file (default: .spec/code-map.json)
   --trace-out <p>   code-map: traceability report file (default: .spec/code-trace.json)
+  --trace <path>    trace-check: report file (default: .spec/code-trace.json)
+  --min-coverage <n> trace-check: minimum coverage ratio or percent (default: 50%)
+  --max-drift <n>   trace-check: maximum drift ratio or percent (default: 50%)
+  --fail-on-unmapped <kinds> trace-check: comma kinds that fail CI (default: route,schema)
+  --annotations <m> trace-check: github | none (default: github in GitHub Actions, else none)
   --report          code-map: upload .spec/code-trace.json coverage to the registry
   --examples        generate: write companion example templates
   --example-dir <p> generate: example template directory (default: .spec/examples)
@@ -158,6 +165,20 @@ try {
       const uploaded = await reportCodeTrace(server, token, projectType, inventory.trace, specsDir);
       console.log(`Reported code trace coverage to registry: ${Math.round(uploaded.coverage_ratio * 100)}% coverage, drift ${uploaded.drift_severity} (${uploaded.drift_score}).`);
     }
+  } else if (command === "trace-check") {
+    const ok = runTraceCheck({
+      tracePath: typeof flags.trace === "string" ? flags.trace : ".spec/code-trace.json",
+      minCoverage: traceThreshold(flags["min-coverage"], 0.5),
+      maxDrift: traceThreshold(flags["max-drift"], 0.5),
+      failOnUnmapped: traceKinds(flags["fail-on-unmapped"], ["route", "schema"]),
+      annotations:
+        flags.annotations === "github" || flags.annotations === "none"
+          ? flags.annotations
+          : process.env.GITHUB_ACTIONS === "true"
+            ? "github"
+            : "none",
+    });
+    if (!ok) process.exit(1);
   } else if (command === "check" || command === "sync") {
     await runSync({
       server,

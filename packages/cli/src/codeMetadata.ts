@@ -119,7 +119,7 @@ export interface CodeTraceReport {
   spec_count: number;
   entity_count: number;
   links: TraceabilityLink[];
-  unlinked_entities: Array<Pick<CodeEntity, "id" | "kind" | "path" | "name" | "signature">>;
+  unlinked_entities: Array<Pick<CodeEntity, "id" | "kind" | "path" | "name" | "signature" | "start_line">>;
   aliases: CodeAlias[];
   coverage: CodeCoverageSummary;
   drift: CodeDriftSummary;
@@ -781,6 +781,7 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
       path: entity.path,
       name: entity.name,
       signature: entity.signature,
+      start_line: entity.start_line,
     })),
     aliases: aliasChanges(previous, inventory),
     coverage,

@@ -21,6 +21,22 @@ inputs:
     description: Fail the workflow when specreg check reports drift.
     required: false
     default: "true"
+  trace-check:
+    description: Generate and enforce code traceability coverage with specreg code-map and trace-check.
+    required: false
+    default: "false"
+  min-coverage:
+    description: Minimum code-to-spec coverage ratio or percent for trace-check.
+    required: false
+    default: "50%"
+  max-drift:
+    description: Maximum code drift ratio or percent for trace-check.
+    required: false
+    default: "50%"
+  fail-on-unmapped:
+    description: Comma-separated code entity kinds that fail when unmapped.
+    required: false
+    default: "route,schema"
 
 runs:
   using: composite
@@ -87,6 +103,46 @@ runs:
           } else {
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
           }
+
+    - name: Run code traceability check
+      id: trace
+      if: ${{ inputs.trace-check == 'true' }}
+      shell: bash
+      env:
+        SPECREG_DIR: ${{ inputs.dir }}
+        SPECREG_MIN_COVERAGE: ${{ inputs.min-coverage }}
+        SPECREG_MAX_DRIFT: ${{ inputs.max-drift }}
+        SPECREG_FAIL_ON_UNMAPPED: ${{ inputs.fail-on-unmapped }}
+      run: |
+        set +e
+        ACTION_ROOT="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        OUTPUT_FILE="$RUNNER_TEMP/specreg-trace-check.txt"
+        cd "$GITHUB_WORKSPACE"
+        node "$ACTION_ROOT/packages/cli/dist/index.js" code-map --dir "$SPECREG_DIR" --force >> "$OUTPUT_FILE" 2>&1
+        MAP_STATUS=$?
+        if [ "$MAP_STATUS" -eq 0 ]; then
+          node "$ACTION_ROOT/packages/cli/dist/index.js" trace-check \
+            --min-coverage "$SPECREG_MIN_COVERAGE" \
+            --max-drift "$SPECREG_MAX_DRIFT" \
+            --fail-on-unmapped "$SPECREG_FAIL_ON_UNMAPPED" \
+            --annotations github >> "$OUTPUT_FILE" 2>&1
+          TRACE_STATUS=$?
+        else
+          TRACE_STATUS=$MAP_STATUS
+        fi
+        cat "$OUTPUT_FILE"
+        {
+          echo "status=$TRACE_STATUS"
+          echo "output<<EOF"
+          cat "$OUTPUT_FILE"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Enforce traceability policy
+      if: ${{ inputs.trace-check == 'true' && steps.trace.outputs.status != '0' }}
+      shell: bash
+      run: exit 1
 
     - name: Enforce drift policy
       if: ${{ inputs.fail-on-drift == 'true' && steps.check.outputs.status != '0' }}

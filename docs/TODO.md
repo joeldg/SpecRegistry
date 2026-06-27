@@ -21,19 +21,24 @@
   implementation evidence, security/secrets, and project profiles.
 - [x] Spec impact analysis before approval/publish, including affected manifest consumers,
   repo subscriptions, downstream spec references, feedback, recent usage, and risk level.
-- LLM-assisted contradiction detection: current contradiction reports use deterministic
+- [ ] LLM-assisted contradiction detection: current contradiction reports use deterministic
   normative-statement heuristics. Add an optional LLM/semantic pass that can catch
   paraphrased conflicts, policy collisions, and intent-level contradictions before review.
+- [ ] First-class "spec followed but intent missed" workflow and report type for cases
+  where implementation technically complies but the user or operational outcome is wrong.
 
 ## Quality and Safety
 
-- Persisted prompt regression suites: the `/ai/regression-suite` endpoint runs prompts
+- [ ] Persisted prompt regression suites: the `/ai/regression-suite` endpoint runs prompts
   on demand, but it does not yet store suites, baselines, expected outcomes, model/spec
   version comparisons, or pass/fail history in the UI.
-- Scheduled efficacy runner: the current scheduled-run endpoint is an on-demand batch.
+- [ ] Scheduled efficacy runner: the current scheduled-run endpoint is an on-demand batch.
   Add real schedules with cadence, ownership, retries, last-run status, result history,
   and notifications.
 - [ ] Architecture Boundary Violations Engine: Implement multi-language import graph checking (via dependency-cruiser for JS/TS, Import Linter for Python, and build-system/Bazel visibility rules or compiler checks for C++) alongside category-specific LLM auditing to detect and count layer boundary breaches in CI.
+- [ ] Spec baseline quality scoring for required sections, vague language, missing
+  acceptance evidence, missing examples/non-goals, token budget mismatch, and repeated
+  feedback against the same section.
 
 ## Developer Workflow
 
@@ -87,15 +92,19 @@ Completed adjacent foundations:
   entity summaries from spec-text embeddings.
 - [x] Server ingestion for `specreg code-map --report`, persisted code trace reports, and
   project-level Reports UI coverage/drift summaries.
+- [x] CI traceability enforcement and PR annotations via `specreg trace-check` plus the
+  bundled GitHub Action's optional code trace gate.
 
 Remaining AST/code metadata work:
 
-- [ ] Deepen the traceability system with CI annotations, manual override review,
-  deleted-entity retention, split/merge history, richer dependency graphs, and additional
-  language parsers.
+- [ ] Manual traceability override workflow to approve, reject, or intentionally waive
+  automatic code-to-spec links and route unmapped entities to new spec work.
+- [ ] Deepen the traceability system with manual override review, deleted-entity retention,
+  split/merge history, richer dependency graphs, and additional language parsers.
 
 ## Enterprise
 
 - Secrets hygiene with encrypted-at-rest LDAP bind passwords and webhook secrets.
+- GitHub App integration instead of raw `GITHUB_TOKEN`.
 - Read-only public share links for approved spec bundles.
 - SCIM or scheduled LDAP user/group sync.

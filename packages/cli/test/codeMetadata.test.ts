@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { buildCodeInventory, writeCodeInventory } from "../src/codeMetadata.js";
+import { evaluateTrace } from "../src/traceCheck.js";
 
 function makeProject(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-code-map-"));
@@ -91,6 +92,7 @@ test("code inventory extracts AST metadata and stable IDs across supported langu
   assert.equal(inventory.trace.links.some((link) => link.entity_id === route.id && link.spec_filename === "API.md"), true);
   assert.equal(inventory.trace.coverage.linked_entity_count > 0, true);
   assert.equal(typeof inventory.trace.drift.score, "number");
+  assert.equal(inventory.trace.unlinked_entities.every((entity) => typeof entity.start_line === "number"), true);
 
   const firstId = route.id;
   fs.writeFileSync(
@@ -113,4 +115,17 @@ test("code inventory writes a reviewable sidecar without overwriting unless forc
   const forced = writeCodeInventory({ root, out: ".spec/code-map.json", force: true });
   assert.equal(forced.entity_count, first.entity_count);
   assert.equal(forced.trace.coverage.governed_entity_count, first.trace.coverage.governed_entity_count);
+});
+
+test("trace check fails low coverage, high drift, and unmapped critical entity kinds", () => {
+  const root = makeProject();
+  const inventory = buildCodeInventory(root);
+  const findings = evaluateTrace(inventory.trace, {
+    minCoverage: 0.95,
+    maxDrift: 0.05,
+    failOnUnmapped: ["route", "schema", "command"],
+  });
+  assert.equal(findings.some((finding) => finding.title === "Code-to-spec coverage below threshold"), true);
+  assert.equal(findings.some((finding) => finding.title === "Code drift above threshold"), true);
+  assert.equal(findings.some((finding) => finding.title.startsWith("Unmapped")), true);
 });

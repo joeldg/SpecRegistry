@@ -1290,3 +1290,67 @@ describe("LLM spec automation", () => {
     expect(restored.json().automation.task_planner).toBe(true);
   });
 });
+
+describe("resolve-guidance (on-demand styleguide/spec acquisition)", () => {
+  it("returns a pullable styleguide for a covered language", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/resolve-guidance",
+      payload: { project_type: "Acme Edge Device", languages: ["Go"] },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.covered).toBe(true);
+    expect(body.styleguides).toEqual([
+      expect.objectContaining({ id: "go", pull_command: "specreg styleguide add go" }),
+    ]);
+    expect(body.gaps).toEqual([]);
+  });
+
+  it("reports a gap for a language with no styleguide", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/resolve-guidance",
+      payload: { project_type: "Acme Edge Device", languages: ["Rust"] },
+    });
+    const body = res.json();
+    expect(body.covered).toBe(false);
+    expect(body.styleguides).toEqual([]);
+    expect(body.gaps).toEqual([
+      expect.objectContaining({ kind: "styleguide", subject: "Rust" }),
+    ]);
+  });
+
+  it("resolves a governed spec for a covered topic", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/resolve-guidance",
+      payload: { project_type: "Acme Edge Device", topic: "firewall" },
+    });
+    const body = res.json();
+    expect(body.specs.length).toBeGreaterThan(0);
+    expect(body.specs.some((s: any) => s.filename === "GLOBAL_SECURITY.md")).toBe(true);
+    expect(body.covered).toBe(true);
+  });
+
+  it("reports a spec gap for an uncovered topic", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/resolve-guidance",
+      payload: { project_type: "Acme Edge Device", topic: "quantum teleportation choreography" },
+    });
+    const body = res.json();
+    expect(body.specs).toEqual([]);
+    expect(body.gaps.some((g: any) => g.kind === "spec")).toBe(true);
+    expect(body.covered).toBe(false);
+  });
+
+  it("requires at least one of languages or topic", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/resolve-guidance",
+      payload: { project_type: "Acme Edge Device" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

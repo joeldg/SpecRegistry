@@ -9,6 +9,7 @@ import { runSync } from "./sync.js";
 import { runCompile, COMPILE_TARGETS, type CompileTarget } from "./compile.js";
 import { runVerify } from "./verify.js";
 import { runAudit } from "./audit.js";
+import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
@@ -24,6 +25,7 @@ Usage:
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
+  specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
 
@@ -61,12 +63,13 @@ loadCliEnv();
 
 interface Args {
   command: string | undefined;
+  positionals: string[];
   flags: Record<string, string | boolean>;
 }
 
 function parseArgs(argv: string[]): Args {
   const flags: Record<string, string | boolean> = {};
-  let command: string | undefined;
+  const positionals: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
@@ -80,14 +83,14 @@ function parseArgs(argv: string[]): Args {
       }
     } else if (arg === "-h") {
       flags.help = true;
-    } else if (!command) {
-      command = arg;
+    } else {
+      positionals.push(arg);
     }
   }
-  return { command, flags };
+  return { command: positionals[0], positionals, flags };
 }
 
-const { command, flags } = parseArgs(process.argv.slice(2));
+const { command, positionals, flags } = parseArgs(process.argv.slice(2));
 const server =
   (typeof flags.server === "string" ? flags.server : undefined) ??
   process.env.SPECREG_SERVER ??
@@ -211,6 +214,18 @@ try {
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       ci: flags.ci === true,
     });
+  } else if (command === "styleguide") {
+    const sub = positionals[1];
+    const styleguideDir = typeof flags["styleguide-dir"] === "string" ? flags["styleguide-dir"] : ".spec/styleguides";
+    if (sub === "list") {
+      runStyleguideList({ language: typeof flags.language === "string" ? flags.language : undefined });
+    } else if (sub === "add") {
+      const token = positionals[2] ?? (typeof flags.language === "string" ? flags.language : undefined);
+      if (!token) throw new Error("Usage: specreg styleguide add <id|language>  (e.g. specreg styleguide add go)");
+      await runStyleguideAdd(token, { dir: styleguideDir, force: flags.force === true });
+    } else {
+      throw new Error("Usage: specreg styleguide list|add <id|language>");
+    }
   } else {
     console.error(`Unknown command: ${command}\n`);
     console.log(HELP);

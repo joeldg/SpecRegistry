@@ -295,18 +295,34 @@ Required MCP flow:
 
 1. Call \`get_specs\` for project type \`${projectType}\` and repo \`${repo}\`.
 2. Use \`search_specs\` for focused questions.
-3. Report ambiguity, contradiction, or outdated guidance with \`report_spec_feedback\`.
-4. Use \`specreg check\` to verify this repo is still using current approved spec versions.
+3. Before writing in a language or working in a domain the loaded specs do not cover
+   (e.g. a new language, or networking/auth/database work), call \`resolve_guidance\`
+   with the language(s) and/or topic. It returns the governed specs that apply and the
+   styleguides you can pull, or an explicit gap.
+4. Report ambiguity, contradiction, or outdated guidance with \`report_spec_feedback\`.
+5. Use \`specreg check\` to verify this repo is still using current approved spec versions.
+
+## Missing Guidance
+
+If you are about to work in a language or domain that is not covered by the loaded specs
+or styleguides, **acquire the proper guidance instead of inventing a standard**:
+
+- Run \`resolve_guidance\` (MCP) to see what applies and what is missing.
+- Pull a missing language styleguide on demand: \`specreg styleguide add <id|language>\`
+  (e.g. \`specreg styleguide add go\`). \`specreg styleguide list\` shows the catalog.
+- If no spec or styleguide covers the area, call \`report_spec_feedback\` and (if appropriate)
+  draft one with \`specreg generate\` for review. Do not guess the missing rule.
 
 If the MCP server is unavailable, the same data is available over the documented agent API —
 and only these endpoints:
 
 - \`GET ${server}/api/v1/ai/specs/${encodeURIComponent(projectType)}\` — current governed specs.
 - \`GET ${server}/api/v1/ai/search?q=...\` — focused section search.
+- \`POST ${server}/api/v1/ai/resolve-guidance\` — resolve styleguides/specs for a language or topic.
 - \`POST ${server}/api/v1/ai/feedback\` — report a spec problem.
 
-Use the \`specreg\` CLI for everything else (\`check\`, \`sync\`, \`compile\`, \`verify\`). Do not call
-other server routes directly.
+Use the \`specreg\` CLI for everything else (\`check\`, \`sync\`, \`compile\`, \`verify\`,
+\`styleguide add\`). Do not call other server routes directly.
 `,
     "utf8"
   );

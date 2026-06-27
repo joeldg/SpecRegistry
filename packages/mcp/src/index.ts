@@ -100,6 +100,34 @@ server.tool(
 );
 
 server.tool(
+  "resolve_guidance",
+  "Call this BEFORE writing code in a language, or working in a domain/topic (networking, auth, database, deployment, etc.), that the already-loaded specs do not clearly cover. Returns the governed specs that apply, the styleguides available to pull (with the exact `specreg styleguide add` command), and any coverage gaps. If something is uncovered, report it via report_spec_feedback and pull/generate the proper guidance — do not invent the standard.",
+  {
+    languages: z.array(z.string()).optional().describe("Programming language(s) about to be written, e.g. ['Go', 'Rust']."),
+    topic: z.string().optional().describe("Domain/topic about to be worked on, e.g. 'networking', 'authentication', 'database schema'."),
+    project_type: z.string().optional().describe("Project type name. Defaults to the repo's configured type."),
+    repo: z.string().optional().describe("Repo/project identity for project-scoped specs. Defaults to SPECREG_REPO when set."),
+    project_id: z.string().optional().describe("Explicit SpecRegistry project id."),
+  },
+  async ({ languages, topic, project_type, repo, project_id }) => {
+    const type = project_type ?? DEFAULT_TYPE;
+    return text(
+      await api("/api/v1/ai/resolve-guidance", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          languages: languages ?? [],
+          topic,
+          project_type: type,
+          project_id,
+          repo: project_id ? undefined : (repo ?? DEFAULT_REPO),
+        }),
+      })
+    );
+  }
+);
+
+server.tool(
   "report_spec_feedback",
   "Report an ambiguity, contradiction, or outdated guidance you found in a specification while executing a task. This flags the spec for human review — use it instead of guessing.",
   {

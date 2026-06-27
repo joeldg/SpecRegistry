@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { AgentFeedback, FeedbackErrorType, Spec } from "@specregistry/shared";
+import { styleGuidesForLanguages, type AgentFeedback, type FeedbackErrorType, type Spec } from "@specregistry/shared";
 import { now, uuid } from "../db.js";
 import { findProjectConsumer, HttpError, requireOneOf, requireProjectType, requireSpec, requireString } from "../helpers.js";
 import { draftFix } from "../lib/aifix.js";
@@ -116,6 +116,89 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       : undefined;
     recordUsage(app.db, "search", pt?.id, q);
     return { query: q, mode: searchMode, project: project?.repo ?? null, results: await searchSpecsByMode(app.db, q, searchMode, pt?.id, 20, project?.id) };
+  });
+
+  // On-demand guidance resolution. Given the language(s) an agent is about to write in
+  // and/or the domain/topic it is about to work on, return the governed specs that apply,
+  // the styleguides available to pull, and explicit gaps — so the agent fetches the right
+  // guidance (or reports the gap) instead of inventing a standard.
+  app.post("/ai/resolve-guidance", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const pt = body.project_type ? requireProjectType(app.db, requireString(body, "project_type")) : undefined;
+    const project = pt
+      ? typeof body.project_id === "string"
+        ? findProjectConsumer(app.db, body.project_id, pt.id)
+        : typeof body.repo === "string"
+          ? findProjectConsumer(app.db, body.repo, pt.id)
+          : undefined
+      : undefined;
+    const languages = Array.isArray(body.languages)
+      ? (body.languages as unknown[]).filter((l): l is string => typeof l === "string" && l.trim() !== "")
+      : [];
+    const topic = typeof body.topic === "string" ? body.topic.trim() : "";
+    if (languages.length === 0 && !topic) {
+      throw new HttpError(400, "Provide at least one of: languages[], topic");
+    }
+    recordUsage(app.db, "search", pt?.id, `resolve-guidance:${[...languages, topic].filter(Boolean).join("|")}`);
+
+    // Governed specs relevant to the topic and/or languages (FTS: no embedding dependency).
+    const query = [topic, ...languages].filter(Boolean).join(" ");
+    const specs = query ? await searchSpecsByMode(app.db, query, "fts", pt?.id, 8, project?.id) : [];
+
+    // Styleguides available to pull, one entry per requested language.
+    const perLanguage = languages.map((language) => {
+      const match = styleGuidesForLanguages([language])[0];
+      return {
+        language,
+        styleguide: match
+          ? {
+              id: match.id,
+              title: match.title,
+              sources: match.sources.map((s) => s.url),
+              pull_command: `specreg styleguide add ${match.id}`,
+            }
+          : null,
+      };
+    });
+    const styleguides = [
+      ...new Map(perLanguage.filter((l) => l.styleguide).map((l) => [l.styleguide!.id, l.styleguide!])).values(),
+    ];
+
+    const gaps: Array<{ kind: "styleguide" | "spec"; subject: string; detail: string; recommended_action: string }> = [];
+    for (const l of perLanguage) {
+      if (!l.styleguide) {
+        gaps.push({
+          kind: "styleguide",
+          subject: l.language,
+          detail: `No styleguide is available for ${l.language} in the registry catalog.`,
+          recommended_action: `Report the gap with report_spec_feedback (or ask an admin to add a styleguide/spec for ${l.language}). Do not invent the standard.`,
+        });
+      }
+    }
+    if (topic && specs.length === 0) {
+      gaps.push({
+        kind: "spec",
+        subject: topic,
+        detail: `No governed spec covers "${topic}" for this project.`,
+        recommended_action: `Report the gap with report_spec_feedback, then draft one with \`specreg generate\` and submit it through review.`,
+      });
+    }
+
+    const recommended_actions: string[] = [];
+    for (const sg of styleguides) recommended_actions.push(`Pull the ${sg.title}: \`${sg.pull_command}\``);
+    if (specs.length > 0) recommended_actions.push("Load the matched governed specs before writing code.");
+    if (gaps.length > 0) recommended_actions.push("Report uncovered languages/domains via report_spec_feedback instead of guessing.");
+
+    return {
+      project_type: pt?.name ?? null,
+      project: project?.repo ?? null,
+      languages: perLanguage,
+      styleguides,
+      specs,
+      covered: gaps.length === 0,
+      gaps,
+      recommended_actions,
+    };
   });
 
   // Close the loop: have the configured server LLM draft a revision that resolves the feedback,

@@ -468,6 +468,21 @@ export interface AgentSkillRow {
   created_at: string;
   updated_at: string;
 }
+export interface ComplianceAttestationRow {
+  id: string;
+  project_type_id: string | null;
+  consumer_id: string | null;
+  repo: string | null;
+  project_type_name: string | null;
+  self_assessed_score: number | null;
+  objective_score: number;
+  compliant: number;
+  coverage_ratio: number | null;
+  drift_score: number | null;
+  outstanding: string;
+  iteration: number;
+  created_at: string;
+}
 
 const TOKEN_KEY = "specregistry.token";
 const USERNAME_KEY = "specregistry.username";
@@ -639,6 +654,10 @@ export const api = {
     "/api/v1/ai/token-roi"
   ),
   auditLog: (limit = 100) => request<AuditLogRow[]>(`/api/v1/audit-log?limit=${limit}`),
+  complianceAttestations: (repo?: string) =>
+    request<ComplianceAttestationRow[]>(
+      `/api/v1/compliance-attestations${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`
+    ),
 
   login: (username: string, password: string) =>
     request<{ token: string; user: { username: string; role: string } }>("/api/v1/auth/login", {

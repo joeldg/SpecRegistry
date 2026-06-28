@@ -1,8 +1,39 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SpecSummary } from "@specregistry/shared";
-import { api, type AnalyticsSummary, type FeedbackRow, type ReviewRow, type ReviewSlaSummary } from "../api";
+import { api, type AnalyticsSummary, type ComplianceAttestationRow, type FeedbackRow, type ReviewRow, type ReviewSlaSummary } from "../api";
 import { StatusBadge, timeAgo } from "../components";
+
+function pct(value: number | null | undefined): string {
+  if (typeof value !== "number") return "n/a";
+  return `${Math.round(value * 100)}%`;
+}
+
+function parseOutstanding(row: ComplianceAttestationRow): number {
+  try {
+    const parsed = JSON.parse(row.outstanding || "[]") as unknown;
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function summarizeCompliance(rows: ComplianceAttestationRow[]) {
+  const latestByRepo = new Map<string, ComplianceAttestationRow>();
+  for (const row of rows) {
+    const repo = row.repo || "unreported repo";
+    const current = latestByRepo.get(repo);
+    if (!current || new Date(row.created_at).getTime() > new Date(current.created_at).getTime()) {
+      latestByRepo.set(repo, row);
+    }
+  }
+  const latest = Array.from(latestByRepo.values()).sort((a, b) => a.repo?.localeCompare(b.repo || "") ?? 0);
+  return {
+    latest,
+    compliantRepos: latest.filter((row) => row.compliant).length,
+    activeLoops: latest.filter((row) => !row.compliant).length,
+  };
+}
 
 export default function Dashboard() {
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
@@ -10,6 +41,8 @@ export default function Dashboard() {
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [usage, setUsage] = useState<AnalyticsSummary>();
   const [sla, setSla] = useState<ReviewSlaSummary>();
+  const [compliance, setCompliance] = useState<ComplianceAttestationRow[]>([]);
+  const [complianceError, setComplianceError] = useState<string>();
   const [error, setError] = useState<string>();
   const navigate = useNavigate();
 
@@ -23,9 +56,14 @@ export default function Dashboard() {
         setSla(sl);
       })
       .catch((e) => setError(e.message));
+    api
+      .complianceAttestations()
+      .then(setCompliance)
+      .catch((e) => setComplianceError(e.message));
   }, []);
 
   const published = specs.filter((s) => s.status === "published").length;
+  const complianceSummary = summarizeCompliance(compliance);
 
   return (
     <>
@@ -139,6 +177,74 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      <div className="section">
+        <h2>Compliance loop</h2>
+        {complianceError ? (
+          <div className="card">
+            <div className="label">Compliance attestations</div>
+            <div className="dim">{complianceError}</div>
+          </div>
+        ) : compliance.length === 0 ? (
+          <div className="empty">No compliance attestations yet. Agents will appear here after running the compliance gate.</div>
+        ) : (
+          <>
+            <div className="cards">
+              <div className="card">
+                <div className="metric">{complianceSummary.latest.length}</div>
+                <div className="label">Repos with attestations</div>
+              </div>
+              <div className={`card${complianceSummary.activeLoops ? " alert" : ""}`}>
+                <div className="metric">{complianceSummary.activeLoops}</div>
+                <div className="label">Repos still looping</div>
+              </div>
+              <div className="card">
+                <div className="metric">{complianceSummary.compliantRepos}</div>
+                <div className="label">Latest compliant repos</div>
+              </div>
+              <div className="card">
+                <div className="metric">{compliance.length}</div>
+                <div className="label">Recorded attempts</div>
+              </div>
+            </div>
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Repo</th>
+                  <th>Project type</th>
+                  <th>Iteration</th>
+                  <th>Verdict</th>
+                  <th>Scores</th>
+                  <th>Trace</th>
+                  <th>Outstanding</th>
+                  <th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compliance.slice(0, 12).map((row) => (
+                  <tr key={row.id}>
+                    <td className="mono">{row.repo || "unreported"}</td>
+                    <td>{row.project_type_name || "Unknown"}</td>
+                    <td className="mono">{row.iteration}</td>
+                    <td>
+                      <StatusBadge status={row.compliant ? "approved" : "pending"} />
+                    </td>
+                    <td className="mono">
+                      {row.objective_score}
+                      {typeof row.self_assessed_score === "number" ? <span className="dim"> / self {row.self_assessed_score}</span> : null}
+                    </td>
+                    <td className="mono">
+                      {pct(row.coverage_ratio)} <span className="dim">coverage</span> · {pct(row.drift_score)} <span className="dim">drift</span>
+                    </td>
+                    <td className="mono">{parseOutstanding(row)}</td>
+                    <td className="faint">{timeAgo(row.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
 
       <div className="section">
         <h2>Open AI feedback</h2>

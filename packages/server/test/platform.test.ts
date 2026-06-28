@@ -500,7 +500,11 @@ describe("agent MCP guide", () => {
     expect(guide.project_type).toBe("Acme Edge Device");
     expect(guide.content).toContain("SpecRegistry MCP Skill");
     expect(guide.content).toContain("get_specs");
+    expect(guide.content).toContain("pre-implementation gate");
+    expect(guide.content).toContain("check_compliance");
     expect(guide.content).toContain("SPECREG_TOKEN");
+    expect(guide.mcp_config.mcpServers.specregistry.command).toBe("specreg");
+    expect(guide.mcp_config.mcpServers.specregistry.args).toEqual(["mcp"]);
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });
@@ -519,9 +523,12 @@ describe("agent MCP guide", () => {
     expect(names).toContain(".spec/skills/manifest.json");
     expect(names).toContain(".spec/skills/load-governed-specs/SKILL.md");
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("report_spec_feedback");
+    expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("specreg mcp");
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("SPECREG_TOKEN");
     expect(zip.readAsText(".spec/skills/load-governed-specs/SKILL.md")).toContain("Safety Boundary");
     const mcp = JSON.parse(zip.readAsText(".mcp.json"));
+    expect(mcp.mcpServers.specregistry.command).toBe("specreg");
+    expect(mcp.mcpServers.specregistry.args).toEqual(["mcp"]);
     expect(mcp.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(mcp.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
   });

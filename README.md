@@ -20,8 +20,8 @@ for Spec Driven Development, observability, and token economics lives in
 | --- | --- |
 | `packages/server` | Fastify API + SQLite storage, review workflow, signed bundles, AI feedback/draft-fix/audit/efficacy, FTS5 search, webhooks, analytics, auth + LDAP, git push-back, inbound git sync, Slack/GChat |
 | `packages/web` | React management dashboard (specs, diffs, reviews, feedback, templates, settings, search, analytics, login, efficacy) |
-| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `code-map`, `check`, `sync`, `compile`, `verify`, `audit`) |
-| `packages/mcp` | `specreg-mcp` — MCP stdio server so AI agents read specs / search / file feedback natively |
+| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `code-map`, `check`, `sync`, `compile`, `verify`, `audit`, `mcp`) |
+| `packages/mcp` | Legacy standalone `specreg-mcp` binary; generated configs prefer `specreg mcp` so the dashboard-downloaded CLI can run MCP directly |
 | `packages/shared` | Shared TypeScript domain types + semver/range helpers |
 | `samples/ai-sdd` | Loadable sample spec pack + API loader (`npm run sample:ai-sdd`) |
 
@@ -196,15 +196,16 @@ Metrics: http://localhost:4000/metrics
 
 Use this flow when bringing SpecRegistry into a new or existing repository.
 
-1. **Build and link the CLI/MCP tools.**
+1. **Build and link the CLI.**
    From the SpecRegistry checkout, install dependencies, build the workspace, and link the
-   local `specreg` and `specreg-mcp` binaries onto your PATH:
+   local `specreg` binary onto your PATH. The CLI also exposes the MCP stdio server via
+   `specreg mcp`, which is what generated `.mcp.json` files use:
 
    ```sh
    cd /path/to/SDDManager
    npm install
    npm run build
-   npm link -w @specregistry/cli -w @specregistry/mcp
+   npm link -w @specregistry/cli
    ```
 
    If you do not want to link the binaries, use
@@ -273,13 +274,13 @@ Use this flow when bringing SpecRegistry into a new or existing repository.
 
 ### Developer CLI
 
-Build the workspace before using the CLI. During local development, link the CLI and MCP
-bins onto your PATH:
+Build the workspace before using the CLI. During local development, link the CLI onto your
+PATH; `specreg mcp` runs the MCP stdio server:
 
 ```sh
 npm install
 npm run build
-npm link -w @specregistry/cli -w @specregistry/mcp
+npm link -w @specregistry/cli
 ```
 
 If you do not want to link the bins, run the built CLI directly from this checkout:
@@ -351,8 +352,27 @@ That writes:
 - `.spec/styleguides/*.md` — selected Google style guides converted to Markdown.
 - `.spec/styleguides/google-styleguides.json` — fetched guide manifest with source URLs.
 - `.mcp.json` — MCP server config for AI agents in that repository.
+- `AGENTS.md` — root-level bootstrap instructions that point first-run agents to
+  `SPECREGISTRY.md`, `.mcp.json`, governed specs, and governed skills.
 - `SPECREGISTRY.md` — root-level guidance that tells humans and agents which manifest,
   specs directory, registry URL, project type, and MCP flow govern the repository.
+
+Generated `.mcp.json` runs the MCP server through the installed CLI:
+
+```json
+{
+  "mcpServers": {
+    "specregistry": {
+      "command": "specreg",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+That avoids requiring a separate `specreg-mcp` binary on every agent machine. If the
+registry requires auth, `specreg init` carries `SPECREG_TOKEN` into `.mcp.json` when a token
+is provided or enrolled.
 
 During `specreg init`, the CLI scans the repository and suggests Google style guides from
 [google.github.io/styleguide](https://google.github.io/styleguide/) for detected languages,
@@ -498,8 +518,8 @@ After `specreg init`, MCP-capable agents can use the generated `.mcp.json`:
 {
   "mcpServers": {
     "specregistry": {
-      "command": "specreg-mcp",
-      "args": [],
+      "command": "specreg",
+      "args": ["mcp"],
       "env": {
         "SPECREG_SERVER": "https://specs.example.com",
         "SPECREG_PROJECT_TYPE": "Web App Standard",
@@ -519,6 +539,8 @@ The MCP server exposes these tools:
 - `list_project_types` — discover registry project types.
 - `get_specs` — fetch governed global + project-type + project-scoped specs.
 - `search_specs` — retrieve matching spec sections, including project-scoped matches, without loading everything.
+- `resolve_guidance` — check whether a language or domain is governed before inventing a local standard.
+- `check_compliance` — record and evaluate the objective compliance loop before claiming completion.
 - `get_audit_prompt` — fetch a reverse-conformance audit prompt for a governed spec.
 - `report_spec_feedback` — file ambiguity, contradiction, or outdated-guidance feedback.
 
@@ -827,6 +849,9 @@ Use the LDAP tester in Settings before switching users over.
 - **Agent onboarding packs** — `GET /api/v1/specs/:type/agent-pack` returns a zip with
   `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.mcp.json`, and `SPECREGISTRY_MCP_SKILL.md`.
   `GET /api/v1/ai/mcp-guide/:type` exposes the MCP skill guide directly for agent setup.
+  Generated MCP configs use `specreg mcp`, and `specreg init` writes a root `AGENTS.md`
+  bootstrap so agents know to read `SPECREGISTRY.md`, load governed skills, call MCP
+  `get_specs`, and run the compliance loop before claiming completion.
 - **Projects** — local manifests reported by `specreg init`, `specreg check`, `specreg sync`,
   and `specreg submit-drafts` let the Settings page show which repositories are using which
   spec set, how many reported specs are behind the latest approved versions, and which

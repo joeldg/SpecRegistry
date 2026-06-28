@@ -53,8 +53,8 @@ A command-line interface deployed to developer environments to synchronize local
     2. The user selects an existing/premade project type or creates a reusable project type.
        Passing `--type` skips the walkthrough for automation and established projects.
     3. Pulls the latest approved Markdown specs for that type from the server.
-    4. Writes the governed bundle and manifest, MCP discovery files, a structured local
-       profile, and a project-scoped `PROJECT_PROFILE.md` draft.
+    4. Writes the governed bundle and manifest, MCP discovery files, a root `AGENTS.md`
+       bootstrap, a structured local profile, and a project-scoped `PROJECT_PROFILE.md` draft.
     5. Selects governed agent procedures from an admin-managed catalog and writes standard
        `SKILL.md` files plus a local provenance/risk manifest.
     6. Reports the concrete project and submits the profile as a draft without bypassing review.
@@ -68,6 +68,7 @@ A command-line interface deployed to developer environments to synchronize local
 ### 2.3. AI Agent Integration & Feedback Loop
 
 * **Ingestion Endpoint:** Dedicated API layout allowing autonomous AI agents to query the latest specifications.
+* **MCP Discovery:** Generated `.mcp.json` files use `specreg mcp` so the dashboard-downloaded CLI can provide the MCP stdio server without requiring a separate `specreg-mcp` binary.
 * **Telemetry & Error Reporting:** If an AI agent encounters a contradiction, ambiguity, or bug within a specification during execution, it hits a specialized feedback endpoint to flag the issue for human review.
 
 ---

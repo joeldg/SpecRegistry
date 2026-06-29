@@ -69,7 +69,7 @@
 - [x] Compliance dashboard panel: web UI view over `/api/v1/compliance-attestations` so humans
   can watch the self-healing loop per repo (iteration count, objective vs self-assessed score,
   latest outstanding items).
-- [ ] Per-project-type compliance policy editor on the Settings page (`GET/PUT
+- [x] Per-project-type compliance policy editor on the Settings page (`GET/PUT
   /api/v1/compliance-policies`): set min coverage / max drift / required-mapped kinds from the
   UI instead of the API only.
 - [ ] De-duplicate the styleguide catalog: it is now mirrored in `packages/shared` (used by the

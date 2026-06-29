@@ -167,7 +167,7 @@ For the full metric catalog and source queries, see
 4. Create or edit project types. Use one global project type for organization-wide specs.
 5. Add spec files such as `DESIGN.md`, `STRUCTURE.md`, `API.md`, or domain-specific docs.
 6. Publish initial drafts once they are ready to become governed contracts.
-7. Configure templates, approval policies, subscriptions, LDAP, and integrations as needed.
+7. Configure templates, compliance policies, approval policies, subscriptions, LDAP, and integrations as needed.
 8. Install or link the CLI as shown in [Developer CLI](#developer-cli), then have each
    repository initialize its approved specs and agent MCP config.
 
@@ -181,7 +181,7 @@ Use the web dashboard to manage the registry:
 - Edit drafts and publish initial versions.
 - Submit, review, approve, reject, and promote change requests.
 - Triage AI feedback clusters.
-- Configure templates, webhooks, repo subscriptions, approval policies, users, API keys, and LDAP.
+- Configure templates, webhooks, repo subscriptions, compliance policies, approval policies, users, API keys, and LDAP.
 - Inspect usage analytics, review SLA risk, audit log entries, efficacy runs, and SDD metrics.
 
 Typical local URLs:

@@ -7,6 +7,8 @@ import {
   type AuditLogRow,
   type ApiKeyRow,
   type ApprovalPolicyRow,
+  type CompliancePolicyConfig,
+  type CompliancePolicyRow,
   type EmbeddingConfig,
   type EmbeddingStatus,
   type FeatureConfig,
@@ -46,6 +48,7 @@ const LLM_ROUTES: Array<{ route: LlmTaskRoute; label: string; defaultTier: LlmTi
   { route: "efficacy", label: "AI efficacy reports", defaultTier: "frontier" },
   { route: "test", label: "Connectivity test", defaultTier: "standard" },
 ];
+const COMPLIANCE_DEFAULT_TARGET = "__default__";
 
 function modelPlaceholder(provider: LlmConfig["provider"]): string {
   if (provider === "anthropic") return "claude-sonnet-4-5";
@@ -59,6 +62,28 @@ function baseUrlPlaceholder(provider: LlmConfig["provider"]): string {
   if (provider === "openai") return "Optional OpenAI-compatible proxy URL";
   if (provider === "gemini") return "Optional Gemini API base URL";
   return "LM Studio: http://10.0.0.142:1234 · Ollama: http://localhost:11434/v1";
+}
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function clampPercentInput(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseMappedKinds(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((kind): kind is string => typeof kind === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function policyKinds(policy: Pick<CompliancePolicyRow, "required_mapped_kinds"> | { required_mapped_kinds: string[] }): string[] {
+  return typeof policy.required_mapped_kinds === "string" ? parseMappedKinds(policy.required_mapped_kinds) : policy.required_mapped_kinds;
 }
 
 export default function SettingsPage() {
@@ -78,6 +103,7 @@ export default function SettingsPage() {
   const [featureConfig, setFeatureConfig] = useState<FeatureConfig>();
   const [mcpGuide, setMcpGuide] = useState<McpGuide>();
   const [policies, setPolicies] = useState<ApprovalPolicyRow[]>([]);
+  const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyConfig>();
   const [auditRows, setAuditRows] = useState<AuditLogRow[]>([]);
   const [agentSkills, setAgentSkills] = useState<AgentSkillRow[]>([]);
   const [error, setError] = useState<string>();
@@ -87,6 +113,7 @@ export default function SettingsPage() {
   const [embeddingNotice, setEmbeddingNotice] = useState<string>();
   const [appKeyNotice, setAppKeyNotice] = useState<string>();
   const [featureNotice, setFeatureNotice] = useState<string>();
+  const [complianceNotice, setComplianceNotice] = useState<string>();
   const [tierModels, setTierModels] = useState<Record<LlmTier, string[]>>({ cheap: [], standard: [], frontier: [] });
   const [llmTestStatus, setLlmTestStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [llmTestResult, setLlmTestResult] = useState<string>();
@@ -124,6 +151,10 @@ export default function SettingsPage() {
   const [policyGlob, setPolicyGlob] = useState("*.md");
   const [policyApprovals, setPolicyApprovals] = useState(2);
   const [policyReviewers, setPolicyReviewers] = useState("");
+  const [complianceTarget, setComplianceTarget] = useState(COMPLIANCE_DEFAULT_TARGET);
+  const [complianceMinCoverage, setComplianceMinCoverage] = useState(80);
+  const [complianceMaxDrift, setComplianceMaxDrift] = useState(20);
+  const [complianceKinds, setComplianceKinds] = useState("route, schema");
   const [skillName, setSkillName] = useState("");
   const [skillSlug, setSkillSlug] = useState("");
   const [skillDescription, setSkillDescription] = useState("");
@@ -152,10 +183,11 @@ export default function SettingsPage() {
       api.appKeys(),
       api.featureConfig(),
       api.approvalPolicies(),
+      api.compliancePolicies(),
       api.auditLog(50),
       api.agentSkills(true),
     ])
-      .then(([w, s, c, j, t, u, k, l, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, p, a, nextSkills]) => {
+      .then(([w, s, c, j, t, u, k, l, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, p, cp, a, nextSkills]) => {
         setWebhooks(w);
         setSubs(s);
         setConsumers(c);
@@ -170,6 +202,7 @@ export default function SettingsPage() {
         setAppKeys(appKeyConfig);
         setFeatureConfig(nextFeatureConfig);
         setPolicies(p);
+        setCompliancePolicies(cp);
         setAuditRows(a);
         setAgentSkills(nextSkills);
         setSubTypeId((current) => current || t[0]?.id || "");
@@ -291,6 +324,54 @@ export default function SettingsPage() {
     setEditSkillRisk("safe");
     setEditSkillStatus("active");
   }
+
+  function savedCompliancePolicy(target: string): CompliancePolicyRow | undefined {
+    if (!compliancePolicies) return undefined;
+    return compliancePolicies.policies.find((policy) =>
+      target === COMPLIANCE_DEFAULT_TARGET ? policy.project_type_id === null : policy.project_type_name === target
+    );
+  }
+
+  function effectiveCompliancePolicy(target: string) {
+    const saved = savedCompliancePolicy(target);
+    if (saved) {
+      return {
+        min_coverage: saved.min_coverage,
+        max_drift: saved.max_drift,
+        required_mapped_kinds: policyKinds(saved),
+        inherited: false,
+      };
+    }
+    const defaultOverride = savedCompliancePolicy(COMPLIANCE_DEFAULT_TARGET);
+    const fallback = defaultOverride
+      ? {
+          min_coverage: defaultOverride.min_coverage,
+          max_drift: defaultOverride.max_drift,
+          required_mapped_kinds: policyKinds(defaultOverride),
+        }
+      : compliancePolicies?.default;
+    return {
+      min_coverage: fallback?.min_coverage ?? 0.8,
+      max_drift: fallback?.max_drift ?? 0.2,
+      required_mapped_kinds: fallback?.required_mapped_kinds ?? ["route", "schema"],
+      inherited: target !== COMPLIANCE_DEFAULT_TARGET,
+    };
+  }
+
+  function editCompliancePolicy(target: string) {
+    const policy = effectiveCompliancePolicy(target);
+    setComplianceTarget(target);
+    setComplianceMinCoverage(Math.round(policy.min_coverage * 100));
+    setComplianceMaxDrift(Math.round(policy.max_drift * 100));
+    setComplianceKinds(policy.required_mapped_kinds.join(", "));
+  }
+
+  const complianceTargets = [
+    { value: COMPLIANCE_DEFAULT_TARGET, label: "Default policy" },
+    ...types
+      .filter((type) => type.scope !== "global")
+      .map((type) => ({ value: type.name, label: type.name })),
+  ];
 
   return (
     <>
@@ -1391,6 +1472,117 @@ export default function SettingsPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>
+        <h2>Compliance policies</h2>
+        <p className="settings-help">Tune the objective compliance gate that agents and CI use before claiming implementation work is complete.</p>
+        {complianceNotice && <div className="notice-banner">{complianceNotice}</div>}
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="form-row">
+            <label>
+              <span>Policy target</span>
+              <select value={complianceTarget} onChange={(e) => editCompliancePolicy(e.target.value)}>
+                {complianceTargets.map((target) => (
+                  <option key={target.value} value={target.value}>
+                    {target.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Minimum coverage (%)</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={complianceMinCoverage}
+                onChange={(e) => setComplianceMinCoverage(clampPercentInput(Number(e.target.value)))}
+              />
+            </label>
+            <label>
+              <span>Maximum drift (%)</span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={complianceMaxDrift}
+                onChange={(e) => setComplianceMaxDrift(clampPercentInput(Number(e.target.value)))}
+              />
+            </label>
+          </div>
+          <div className="form-row">
+            <label style={{ flex: 1 }}>
+              <span>Required mapped kinds</span>
+              <input
+                type="text"
+                value={complianceKinds}
+                placeholder="route, schema, component"
+                onChange={(e) => setComplianceKinds(e.target.value)}
+              />
+            </label>
+            <button
+              className="primary"
+              onClick={() =>
+                act(async () => {
+                  const requiredKinds = complianceKinds
+                    .split(",")
+                    .map((kind) => kind.trim())
+                    .filter(Boolean);
+                  const saved = await api.updateCompliancePolicy({
+                    project_type: complianceTarget === COMPLIANCE_DEFAULT_TARGET ? undefined : complianceTarget,
+                    min_coverage: clampPercentInput(complianceMinCoverage) / 100,
+                    max_drift: clampPercentInput(complianceMaxDrift) / 100,
+                    required_mapped_kinds: requiredKinds,
+                  });
+                  setComplianceNotice(
+                    `${complianceTarget === COMPLIANCE_DEFAULT_TARGET ? "Default" : complianceTarget} compliance policy saved: coverage ${percent(saved.min_coverage)}, drift ${percent(saved.max_drift)}.`
+                  );
+                })
+              }
+            >
+              Save compliance policy
+            </button>
+          </div>
+        </div>
+        {compliancePolicies ? (
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Coverage</th>
+                <th>Drift</th>
+                <th>Mapped kinds</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {complianceTargets.map((target) => {
+                const saved = savedCompliancePolicy(target.value);
+                const effective = effectiveCompliancePolicy(target.value);
+                const defaultBuiltIn = target.value === COMPLIANCE_DEFAULT_TARGET && !saved;
+                return (
+                  <tr key={target.value}>
+                    <td>{target.label}</td>
+                    <td className="mono">{percent(effective.min_coverage)}</td>
+                    <td className="mono">{percent(effective.max_drift)}</td>
+                    <td className="dim">{effective.required_mapped_kinds.join(", ") || "none"}</td>
+                    <td>
+                      <StatusBadge status={saved ? "approved" : "pending"} />{" "}
+                      {defaultBuiltIn ? "built-in default" : saved ? "override" : "inherited"}
+                    </td>
+                    <td>
+                      <button onClick={() => editCompliancePolicy(target.value)}>Edit</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div className="empty">Compliance policies are loading.</div>
+        )}
       </div>
 
       <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>

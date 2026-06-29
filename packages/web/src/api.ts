@@ -483,6 +483,25 @@ export interface ComplianceAttestationRow {
   iteration: number;
   created_at: string;
 }
+export interface CompliancePolicy {
+  min_coverage: number;
+  max_drift: number;
+  required_mapped_kinds: string[];
+}
+export interface CompliancePolicyRow {
+  id: string;
+  project_type_id: string | null;
+  project_type_name: string | null;
+  min_coverage: number;
+  max_drift: number;
+  required_mapped_kinds: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface CompliancePolicyConfig {
+  default: CompliancePolicy;
+  policies: CompliancePolicyRow[];
+}
 
 const TOKEN_KEY = "specregistry.token";
 const USERNAME_KEY = "specregistry.username";
@@ -658,6 +677,9 @@ export const api = {
     request<ComplianceAttestationRow[]>(
       `/api/v1/compliance-attestations${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`
     ),
+  compliancePolicies: () => request<CompliancePolicyConfig>("/api/v1/compliance-policies"),
+  updateCompliancePolicy: (body: { project_type?: string; min_coverage: number; max_drift: number; required_mapped_kinds: string[] }) =>
+    request<CompliancePolicy>("/api/v1/compliance-policies", { method: "PUT", body: JSON.stringify(body) }),
 
   login: (username: string, password: string) =>
     request<{ token: string; user: { username: string; role: string } }>("/api/v1/auth/login", {

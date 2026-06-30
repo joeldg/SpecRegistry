@@ -318,19 +318,18 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get("/ai/agent-sessions", async (req) => {
-    const { repo, status, limit } = req.query as { repo?: string; status?: string; limit?: string };
+  const listAgentSessions = (opts: { repo?: string; status?: string; limit?: number }) => {
     const clauses: string[] = [];
     const params: unknown[] = [];
-    if (repo) {
+    if (opts.repo) {
       clauses.push("repo = ?");
-      params.push(repo);
+      params.push(opts.repo);
     }
-    if (status && ["active", "completed", "blocked"].includes(status)) {
+    if (opts.status && ["active", "completed", "blocked"].includes(opts.status)) {
       clauses.push("status = ?");
-      params.push(status);
+      params.push(opts.status);
     }
-    params.push(Math.max(1, Math.min(200, Number(limit ?? 50) || 50)));
+    params.push(Math.max(1, Math.min(200, opts.limit && opts.limit > 0 ? opts.limit : 50)));
     const rows = app.db
       .prepare(
         `SELECT s.*, pt.name AS project_type_name
@@ -347,6 +346,20 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       preflight_summary: typeof row.preflight_summary === "string" && row.preflight_summary ? JSON.parse(row.preflight_summary) : null,
       completion_summary: typeof row.completion_summary === "string" && row.completion_summary ? JSON.parse(row.completion_summary) : null,
     }));
+  };
+
+  // Agent-tier: scoped to a single repo so an agent cannot enumerate other repos'
+  // sessions (task text, plans, models). The cross-repo view is admin-only below.
+  app.get("/ai/agent-sessions", async (req) => {
+    const { repo, status, limit } = req.query as { repo?: string; status?: string; limit?: string };
+    if (!repo) throw new HttpError(400, "repo query parameter is required");
+    return listAgentSessions({ repo, status, limit: Number(limit) });
+  });
+
+  // Admin-tier: cross-repo lifecycle view for operators/observability.
+  app.get("/agent-sessions", async (req) => {
+    const { repo, status, limit } = req.query as { repo?: string; status?: string; limit?: string };
+    return listAgentSessions({ repo, status, limit: Number(limit) });
   });
 
   // Compliance verification loop. Agents call this before declaring a task done.

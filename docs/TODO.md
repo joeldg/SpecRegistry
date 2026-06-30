@@ -98,10 +98,13 @@
 - [x] Per-project-type compliance policy editor on the Settings page (`GET/PUT
   /api/v1/compliance-policies`): set min coverage / max drift / required-mapped kinds from the
   UI instead of the API only.
-- [ ] De-duplicate the styleguide catalog: it is now mirrored in `packages/shared` (used by the
-  server's resolve-guidance) and `packages/cli/src/styleguideCatalog.ts` (used by `styleguide
-  add`, vendored so the published CLI has no `@specregistry/shared` runtime dep). Add a comment
-  marking the mirror and a test asserting the two stay identical so they cannot drift.
+- [x] Guard the vendored styleguide catalog against drift: `packages/cli/src/styleguideCatalog.ts`
+  is a deliberate mirror of the `@specregistry/shared` catalog (vendored so the published CLI has
+  no `@specregistry/shared` runtime dep). A mirror comment marks it and `styleguideCatalog.test.ts`
+  asserts the two stay identical. (Full de-dup into one runtime source is still possible later.)
+- [x] Scope agent-session listing: the agent-tier `GET /ai/agent-sessions` now requires a `repo`
+  (no cross-repo enumeration of task text/plans/models); the global cross-repo view moved to the
+  admin-gated `GET /api/v1/agent-sessions`.
 
 ## Developer Workflow
 

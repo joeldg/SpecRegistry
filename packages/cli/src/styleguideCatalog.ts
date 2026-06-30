@@ -1,3 +1,9 @@
+// MIRROR of the styleguide catalog in `@specregistry/shared` (packages/shared/src/index.ts).
+// It is vendored here so the published `specreg` CLI has no @specregistry/shared runtime
+// dependency. The two MUST stay identical — the server's resolve-guidance advertises pull
+// commands from the shared copy, and this copy backs `specreg styleguide add`. If they drift,
+// the server can recommend a guide the CLI can't pull. `styleguideCatalog.test.ts` asserts
+// they match; update both together.
 export interface StyleGuideSource {
   title: string;
   url: string;

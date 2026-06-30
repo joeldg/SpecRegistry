@@ -1555,9 +1555,19 @@ describe("agent lifecycle control plane", () => {
     expect(completed.json().status).toBe("completed");
     expect(completed.json().compliant).toBe(true);
 
-    const sessions = await getJson("/api/v1/ai/agent-sessions?status=completed");
+    // Agent-tier listing is repo-scoped; the cross-repo view is admin-only.
+    const sessions = await getJson("/api/v1/ai/agent-sessions?repo=github.com/acme/finish-loop&status=completed");
     const session = sessions.find((row: any) => row.id === sessionId);
     expect(session.completion_summary.summary).toBe("Trace is now mapped.");
     expect(session.compliance_attestation_id).toMatch(/[0-9a-f-]{36}/);
+
+    // Cross-repo view works on the admin route.
+    const all = await getJson("/api/v1/agent-sessions?status=completed");
+    expect(all.some((row: any) => row.id === sessionId)).toBe(true);
+  });
+
+  it("requires a repo to list agent sessions on the agent-tier route", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/ai/agent-sessions" });
+    expect(res.statusCode).toBe(400);
   });
 });

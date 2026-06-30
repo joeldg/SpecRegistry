@@ -23,26 +23,21 @@ export interface InitOptions {
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const setup = opts.type
-    ? {
-        projectType: await selectProjectType(opts.server, opts.type, opts.token),
-        profile: undefined,
-        skills: resolveAgentSkills(await listAgentSkills(opts.server, opts.token), opts.skills),
-      }
-    : await runProjectSetupWizard(opts.server, opts.token, opts.skills);
-  const { projectType, profile, skills } = setup;
-  if (profile) assertProjectProfileTargetsAvailable(profile, opts.force === true);
-  console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
-
   const identity = repoIdentity();
-
-  // Give this repo its own agent identity so it authenticates as itself (never admin)
-  // for submissions, telemetry, and project-scoped specs. Falls back to anonymous if
-  // enrollment is disabled on the server.
-  const token = opts.token ?? (await enrollAgent(opts.server, identity.repo, projectType.name));
+  const token = opts.token ?? (opts.type ? await enrollAgent(opts.server, identity.repo, opts.type) : undefined);
   if (token && !opts.token) {
     console.log(`Enrolled agent identity for ${identity.repo}; token stored in .spec/credentials.json (gitignored).`);
   }
+  const setup = opts.type
+    ? {
+        projectType: await selectProjectType(opts.server, opts.type, token),
+        profile: undefined,
+        skills: resolveAgentSkills(await listAgentSkills(opts.server, token), opts.skills),
+      }
+    : await runProjectSetupWizard(opts.server, token, opts.skills);
+  const { projectType, profile, skills } = setup;
+  if (profile) assertProjectProfileTargetsAvailable(profile, opts.force === true);
+  console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
 
   const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.name)}/download?repo=${encodeURIComponent(identity.repo)}`;
   const res = await fetch(url, withRegistryAuth(undefined, token));

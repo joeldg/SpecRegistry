@@ -96,7 +96,7 @@ This specification applies to AI agents, coding assistants, automation scripts, 
 Agents should make SpecRegistry usage repeatable and observable. They must load the right context, minimize token waste, cite governed guidance, and report spec problems rather than silently substituting model judgment.
 
 ## Requirements
-1. Agents must use the SpecRegistry MCP server when available and call \`get_specs\` before non-trivial work.
+1. Agents must use the SpecRegistry MCP server when available and call \`begin_task\` before non-trivial work, then \`get_specs\` for the scoped governed bundle.
 2. Agents should use \`search_specs\` for focused context before loading large reference specs into a prompt.
 3. Before writing in a language or working in a domain the loaded specs do not cover, agents must call \`resolve_guidance\` (or the documented agent API) to pull the proper styleguide/spec; if coverage is missing, file feedback and acquire or draft guidance instead of inventing a standard.
 4. In repo-specific work, agents must set or respect \`SPECREG_REPO\` so project-scoped specs can override project-type guidance.
@@ -105,10 +105,10 @@ Agents should make SpecRegistry usage repeatable and observable. They must load 
 7. Agents must call \`report_spec_feedback\` or the feedback API for ambiguity, contradiction, outdated guidance, or missing requirements.
 8. Agents must distinguish approved specs from drafts, examples, local style guides, and generated prompts.
 9. Agents must not claim checks passed unless they actually ran and observed the result.
-10. Agents must reach the registry only through the MCP server, the documented agent API (\`get_specs\`, \`search_specs\`, \`resolve_guidance\`, \`report_spec_feedback\`), and the \`specreg\` CLI. They must not browse the web dashboard, enumerate or probe other server routes, or inspect the registry's database, filesystem, or internals.
+10. Agents must reach the registry only through the MCP server, the documented agent API (\`begin_task\`, \`get_specs\`, \`search_specs\`, \`resolve_guidance\`, \`finish_task\`, \`report_spec_feedback\`), and the \`specreg\` CLI. They must not browse the web dashboard, enumerate or probe other server routes, or inspect the registry's database, filesystem, or internals.
 11. Agents must authenticate only with their own enrolled agent identity. They must never log in as \`admin\` or a human account, never seek shared credentials, and never escalate privileges to merge a change.
 12. Agents may create, edit, and publish project-scoped specs for their own repo, but must only **propose** changes to global and project-type specs. They must never approve or publish a change they proposed; approval is a human action and separation of duties is enforced by the server.
-13. Before declaring a task complete, agents must run the compliance check (\`check_compliance\` via MCP, or \`specreg comply\`) and continue working until it reports compliant. A self-assessment of "done" is not sufficient; the registry's objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
+13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry's objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
 
 ## Non-Goals
 This spec does not grant an agent permission to access production, secrets, protected branches, or external systems. Host approval and least-privilege rules still apply.

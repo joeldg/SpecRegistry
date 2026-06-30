@@ -117,13 +117,29 @@ The system is feature-rich but lightly battle-tested; every real signal so far h
 actually running it, not from the backlog. Before adding more horizontal features, exercise the
 whole loop end-to-end on a real project and let the friction re-rank everything below.
 
-- [ ] **Dogfood: build a real small app end-to-end in secured mode.** Stand up the server with
+- [x] **Dogfood: build a real small app end-to-end in secured mode.** Stand up the server with
   `SPECREG_AUTH=required` + a real admin password, run `specreg init` in a fresh repo (agent
   enrolls its own scoped token), let an agent do `begin_task` → write code → pull guidance via
   `resolve_guidance` → `specreg comply`/`finish_task` loop → submit a change → human approves in
   the UI. Capture every point of friction, 401, confusing message, or governance gap as a
   finding. Expected to surface the next round of real work (as the game experiment did:
   auth hole, self-approval, compliance-loop need).
+- [x] Dogfood fix: secured `specreg init --type ...` now enrolls the repo-bound agent before
+  authenticated project-type and skill lookups, instead of failing with `401 Authentication
+  required` before it has a token.
+- [ ] Dogfood finding: `resolve_guidance` can identify a missing topic/domain, but
+  `report_spec_feedback` requires a `spec_id`; add a first-class missing-guidance feedback
+  endpoint/tool so agents do not have to attach a pure gap to the nearest spec.
+- [ ] Dogfood finding: `specreg comply` recommends inline `// @spec[FILE#section]`
+  annotations, but the current code-map linker does not parse annotation directives. Either
+  implement annotation parsing or change the remediation text to match the token/spec linker
+  that exists today.
+- [ ] Dogfood finding: `submit-drafts --publish` prints the same "Open Reviews and Specs" next
+  step after a newly created project-scoped spec is already published; tailor the CLI summary
+  for created+published vs review-required updates.
+- [ ] Dogfood finding: the default Web App Standard pack lacks an API endpoint behavior/contract
+  spec, so agents adding routes must generate a project-scoped spec before traceability can be
+  meaningful. Consider adding a reusable `API_ENDPOINTS.md` starter spec/template to the pack.
 - [ ] Operability pass uncovered while dogfooding: CI `npm rebuild better-sqlite3` (native ABI
   mismatch across Node versions broke the suite once), bound the code-trace ingest payload, and
   encrypt-at-rest the LDAP bind password and webhook/Slack secrets currently stored plaintext in

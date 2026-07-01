@@ -334,6 +334,7 @@ const PUBLIC_PATHS = [
   "/api/v1/auth/login",
   "/api/v1/agents/enroll", // gated by SPECREG_ENROLL_SECRET / dev-open
   "/api/v1/meta/public-key",
+  "/api/v1/meta/version", // read-only, no more sensitive than /health
   "/api/v1/integrations/", // verified by their own HMAC secrets
 ];
 
@@ -357,6 +358,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST/, path: /^\/api\/v1\/spec-generation\/preview$/, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/automation\//, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/sync-jobs\/run$/, min: "admin" },
+  { method: /POST/, path: /^\/api\/v1\/admin\/update$/, min: "admin" },
   { method: /PUT/, path: /^\/api\/v1\/auth\/users\/[^/]+\/password$/, min: "agent" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/api-keys(\/|$)/, min: "admin" },

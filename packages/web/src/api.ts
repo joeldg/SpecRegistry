@@ -446,6 +446,35 @@ export interface FeedbackCluster {
   sample_description: string;
   feedback_ids: string[];
 }
+export interface VersionStatus {
+  package_version: string;
+  is_git_checkout: boolean;
+  git_sha: string | null;
+  git_sha_short: string | null;
+  git_branch: string | null;
+  is_dirty: boolean | null;
+  repo_slug: string | null;
+  github: {
+    repo: string | null;
+    checked: boolean;
+    status: "up_to_date" | "behind" | "ahead" | "diverged" | "unknown";
+    behind_by: number | null;
+    ahead_by: number | null;
+    latest_sha: string | null;
+    error: string | null;
+    checked_at: string | null;
+  };
+}
+export interface UpdateResult {
+  ok: boolean;
+  message: string;
+  previous_sha: string | null;
+  new_sha: string | null;
+  updated: boolean;
+  dependencies_installed: boolean;
+  build_ran: boolean;
+  output: string;
+}
 export interface AuditLogRow {
   id: string;
   actor: string;
@@ -686,6 +715,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  me: () => request<{ id: string; username: string; role: string }>("/api/v1/auth/me"),
+  version: () => request<VersionStatus>("/api/v1/meta/version"),
+  triggerUpdate: () => request<UpdateResult>("/api/v1/admin/update", { method: "POST" }),
   users: () => request<UserRow[]>("/api/v1/auth/users"),
   createUser: (body: { username: string; role: string; password?: string; display_name?: string }) =>
     request<UserRow>("/api/v1/auth/users", { method: "POST", body: JSON.stringify(body) }),

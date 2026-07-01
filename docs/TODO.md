@@ -170,9 +170,11 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
   spec, so agents adding routes must generate a project-scoped spec before traceability can be
   meaningful. Consider adding a reusable `API_ENDPOINTS.md` starter spec/template to the pack.
 - [ ] Operability pass uncovered while dogfooding: CI `npm rebuild better-sqlite3` (native ABI
-  mismatch across Node versions broke the suite once). This repo also has no
-  `.github/workflows/` of its own yet to catch that automatically (tracked in Quality and
-  Safety below).
+  mismatch across Node versions broke the suite once, and recurred locally on 2026-07-01 —
+  a machine with both a system Node and an nvm-managed Node hit the exact
+  NODE_MODULE_VERSION mismatch `npm run dev:server` fails on). Added a root `.nvmrc`
+  (24.13.1) as a partial mitigation; this repo still has no `.github/workflows/` of its
+  own to catch a similar mismatch automatically (tracked in Quality and Safety below).
 - [x] Encrypt-at-rest the LDAP bind password, webhook/Slack secrets, and LLM/embedding
   provider API keys and GitHub token, all previously stored plaintext in `settings`. Opt-in
   via `SPECREG_SECRET_KEY` (AES-256-GCM, key derived outside the database so a stolen SQLite
@@ -191,6 +193,15 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 - GitHub App integration instead of raw `GITHUB_TOKEN`.
 - [x] Generated spec update PR summaries and changelogs.
 - [x] Spec change migration checklist generation for downstream projects.
+- [x] Server self-update: `GET /api/v1/meta/version` (git sha/branch/dirty state + GitHub
+  drift check) and an admin-only `POST /api/v1/admin/update` (`git pull --ff-only` +
+  conditional `npm install` + `npm run build`), with a dashboard banner and Update now
+  button. Only works for a live git checkout deployment (local/dev, production-style
+  Node); a Docker deployment has no `.git` to pull into and reports as not a checkout.
+- [ ] Docker-deployment parity for the self-update banner: today `is_git_checkout: false`
+  inside a container just hides the Update now button. Consider a lighter "new image
+  available" signal for Docker (e.g. compare the running image digest/tag against the
+  latest published one) instead of leaving Docker operators with no drift signal at all.
 
 ## Search and Discovery
 

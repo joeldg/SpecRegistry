@@ -27,6 +27,7 @@ import {
   type LlmTier,
 } from "../lib/llm.js";
 import { getAppKeyConfig, publicAppKeyConfig, saveAppKeyConfig, type AppKeyConfig } from "../lib/appKeys.js";
+import { pullAndRebuild } from "../lib/versionInfo.js";
 import {
   publicEmbeddingConfig,
   reindexSemanticAll,
@@ -814,5 +815,35 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       code_trace_reports: codeTraceReports,
       global_specs: globalSpecs,
     };
+  });
+
+  // Self-update: git pull --ff-only + rebuild for a deployment running from a live
+  // checkout. Refuses on a dirty tree or a non-fast-forward pull rather than guessing
+  // at a merge, and does not restart the process — Node cannot safely hot-swap its own
+  // already-loaded modules, so a manual (or process-manager) restart is still required.
+  app.post("/admin/update", async (req) => {
+    try {
+      const result = await pullAndRebuild();
+      recordAudit(app.db, {
+        actor: actorFrom(req, "admin"),
+        action: "server.update_pulled",
+        summary: result.updated ? `Server pulled ${result.previous_sha}..${result.new_sha} and rebuilt` : "Server already up to date",
+        detail: {
+          previous_sha: result.previous_sha,
+          new_sha: result.new_sha,
+          updated: result.updated,
+          dependencies_installed: result.dependencies_installed,
+        },
+      });
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Update failed";
+      recordAudit(app.db, {
+        actor: actorFrom(req, "admin"),
+        action: "server.update_failed",
+        summary: `Server update attempt failed: ${message.split("\n")[0]}`,
+      });
+      throw new HttpError(409, message);
+    }
   });
 }

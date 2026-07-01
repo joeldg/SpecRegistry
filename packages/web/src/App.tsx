@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { clearSession, getAuthor, getLoginUsername, setAuthor } from "./api";
+import UpdateBanner from "./UpdateBanner";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import SpecsPage from "./pages/SpecsPage";
@@ -24,7 +25,9 @@ export default function App() {
   }, [author]);
 
   return (
-    <div className="layout">
+    <>
+      <UpdateBanner />
+      <div className="layout">
       <nav className="sidebar">
         <div className="brand">
           <span className="dot" /> SpecRegistry
@@ -114,6 +117,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
         </Routes>
       </main>
-    </div>
+      </div>
+    </>
   );
 }

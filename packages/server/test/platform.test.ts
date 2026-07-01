@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
@@ -7,6 +8,7 @@ import { createDb } from "../src/db.js";
 import { seed, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
 import { assertSecurePosture, findUser, verifyPassword } from "../src/lib/auth.js";
 import { buildAdminTestApp } from "./helpers.js";
+import { makeGitFixture, pushNewCommit } from "./gitFixture.js";
 
 let app: FastifyInstance;
 
@@ -27,6 +29,7 @@ afterEach(async () => {
   delete process.env.SPECREG_AUTH;
   delete process.env.SPECREG_ADMIN_PASSWORD;
   delete process.env.SPECREG_SECRET_KEY;
+  delete process.env.SPECREG_REPO_DIR;
 });
 
 async function getJson(target: FastifyInstance, url: string) {
@@ -913,5 +916,62 @@ describe("secured posture", () => {
     expect(admin).toBeTruthy();
     expect(verifyPassword("admin", admin!.password_hash!)).toBe(false);
     expect(() => assertSecurePosture(db, { authRequired: true })).not.toThrow();
+  });
+});
+
+describe("version endpoint and self-update", () => {
+  const cleanupDirs: string[] = [];
+  afterEach(() => {
+    for (const dir of cleanupDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports local checkout info on GET /meta/version, reachable even without auth in secured mode", async () => {
+    const { serverCheckout } = makeGitFixture(cleanupDirs);
+    process.env.SPECREG_REPO_DIR = serverCheckout;
+    const securedApp = await buildApp(createDb(":memory:"), { authRequired: true });
+    const res = await securedApp.inject({ method: "GET", url: "/api/v1/meta/version" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ is_git_checkout: true, is_dirty: false });
+    expect(res.json().git_sha).toMatch(/^[0-9a-f]{40}$/);
+    await securedApp.close();
+  });
+
+  it("rejects a non-admin update attempt", async () => {
+    await app.inject({ method: "POST", url: "/api/v1/auth/users", payload: { username: "author1", role: "author", password: "x" } });
+    const token = (await app.inject({ method: "POST", url: "/api/v1/auth/api-keys", payload: { username: "author1" } })).json().token;
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/update",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("pulls and rebuilds for an admin, and records an audit entry", async () => {
+    const { serverCheckout, contributorCheckout } = makeGitFixture(cleanupDirs);
+    pushNewCommit(contributorCheckout, "NEW_FILE.md");
+    process.env.SPECREG_REPO_DIR = serverCheckout;
+
+    const res = await app.inject({ method: "POST", url: "/api/v1/admin/update" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, updated: true, build_ran: true });
+
+    const auditLog = await app.inject({ method: "GET", url: "/api/v1/audit-log" });
+    expect(auditLog.json().some((entry: any) => entry.action === "server.update_pulled")).toBe(true);
+  }, 20000);
+
+  it("returns a clear 409 and audits the failure when the working tree is dirty", async () => {
+    const { serverCheckout } = makeGitFixture(cleanupDirs);
+    fs.writeFileSync(`${serverCheckout}/dirty.txt`, "uncommitted");
+    process.env.SPECREG_REPO_DIR = serverCheckout;
+
+    const res = await app.inject({ method: "POST", url: "/api/v1/admin/update" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().message).toMatch(/local modifications/);
+
+    const auditLog = await app.inject({ method: "GET", url: "/api/v1/audit-log" });
+    expect(auditLog.json().some((entry: any) => entry.action === "server.update_failed")).toBe(true);
   });
 });

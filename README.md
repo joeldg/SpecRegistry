@@ -494,7 +494,10 @@ prior inventory data is available, and includes a code embedding profile for fut
 semantic matching. The extractor uses the TypeScript compiler for TypeScript/JavaScript
 AST entities and lightweight Python/SQL/config extraction for imports, functions, classes,
 routes, commands, config, migrations, tables, fields, and indexes. It does not rewrite
-source files.
+source files. Fuzzy name/path/route text-matching links entities to specs automatically;
+an explicit `// @spec[FILE#section]` comment directly above a declaration overrides that
+guess with a high-confidence link to the named spec (and section, if the anchor matches
+an existing heading) instead.
 
 Use `specreg code-map --report` to upload the traceability report to the registry. The CLI
 uses `--type` or the local `specs/.specregistry.json` manifest to identify the project type.
@@ -886,6 +889,16 @@ Use the LDAP tester in Settings before switching users over.
   before trusting local governed spec content.
 - **Two-way git sync** — a subscribed repo editing `specs/*.md` (HMAC-verified GitHub push
   webhook) auto-opens a matching change request, closing the last drift hole.
+- **Server self-update check** — `GET /api/v1/meta/version` (public, like `/health`) reports
+  the running commit, whether the working tree is dirty, and compares against the GitHub
+  branch it was cloned from. The dashboard shows a banner when the server is behind; admins
+  get an **Update now** button that calls `POST /api/v1/admin/update` to run `git pull
+  --ff-only` and rebuild. This only works for a deployment running from a live git checkout
+  (the local/dev or production-style Node paths below) — it refuses on a dirty working tree
+  or a non-fast-forward pull rather than guessing at a merge, and a Docker deployment has no
+  `.git` directory to pull into, so redeploy a new image there instead. It also does not
+  restart the process itself: Node cannot safely hot-swap its own already-loaded code, so a
+  manual (or process-manager) restart is still required after the pull finishes.
 - **Chat integrations** — webhooks in JSON, **Slack** (with interactive approve/reject
   buttons → `/api/v1/integrations/slack/actions`), or **Google Chat** format.
 
@@ -936,6 +949,7 @@ GET  /api/v1/llm/tiering               PUT /api/v1/llm/tiering/tier/:tier
 PUT  /api/v1/llm/tiering/routes        GET /api/v1/llm/models/:tier
 GET/PUT /api/v1/embeddings/config      GET/POST /api/v1/embeddings/status|reindex
 POST /api/v1/integrations/github/webhook   POST /api/v1/integrations/slack/actions
+GET  /api/v1/meta/version               POST /api/v1/admin/update
 GET  /metrics
 ```
 
@@ -957,11 +971,20 @@ once at first start. This closes the "agent escalates to `admin`/`admin` and sel
 agents authenticate with their own enrolled `agent`-scoped token (issued by `specreg init` into
 `.spec/credentials.json`), which can submit drafts and project-scoped specs but cannot approve,
 publish, or reach admin routes. Combined with separation of duties (you cannot approve a change
-you proposed), the governance is enforced server-side, not merely advised.
+you proposed), the governance is enforced server-side, not merely advised. See
+[README-SECURITY.md](README-SECURITY.md) for exactly which controls are server-enforced versus
+advisory, and a deployment hardening checklist.
 
 Set `LDAP_URL` to authenticate against a directory instead (direct-bind via
 `LDAP_BIND_DN_TEMPLATE`, or service-account search via `LDAP_SEARCH_BASE`/`LDAP_SEARCH_FILTER`);
 map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
+
+Set `SPECREG_SECRET_KEY` to encrypt secrets saved to the database (LDAP bind password, GitHub
+token, webhook/Slack signing secrets, LLM/embedding API keys) at rest, instead of the default
+plaintext storage. The key must come from outside the database (an env var, ideally sourced from
+a secrets manager) so a stolen/leaked SQLite file alone does not also hand over the decryption
+key. Values saved before the key was set keep working as plaintext; new saves encrypt
+automatically once it is configured.
 
 ### Server environment variables
 
@@ -1010,6 +1033,10 @@ map roles with `LDAP_ADMIN_GROUP` / `LDAP_REVIEWER_GROUP`.
 | `GITHUB_WEBHOOK_SECRET` | Verify inbound GitHub push webhooks; fallback if not saved in Settings |
 | `SLACK_SIGNING_SECRET` | Verify Slack interactive approve/reject actions; fallback if not saved in Settings |
 | `LDAP_URL` (+ `LDAP_*`) | Optional LDAP authentication |
+| `SPECREG_SECRET_KEY` | Encrypts secrets saved to the database at rest (LDAP bind password, GitHub token, webhook/Slack signing secrets, LLM/embedding API keys). Unset means those settings are stored in plaintext, as before. |
+| `SPECREG_REPO_DIR` | Overrides the git checkout directory used for `/api/v1/meta/version` and `/api/v1/admin/update`, for process managers that launch the server with a cwd outside the repo. Defaults to auto-discovering the checkout via `git rev-parse --show-toplevel`. |
+| `SPECREG_GITHUB_REPO` | Overrides the `owner/repo` used for the GitHub version-drift check, for deployments where `git remote get-url origin` isn't a `github.com` URL. Auto-detected from the origin remote otherwise. |
+| `SPECREG_UPDATE_TIMEOUT_MS` | Per-command timeout for the `git pull` / `npm install` / `npm run build` steps run by `POST /api/v1/admin/update` (default 180000). |
 
 ### Client environment variables
 
@@ -1171,6 +1198,7 @@ those slices are implemented.
 
 ### Further reading
 
+- [Security model: how agents are kept from self-approving or escalating](README-SECURITY.md)
 - [Agent feedback workflow](README-AGENTS.md)
 - [Google style guide integration](README-GOOGLE-STYLEGUIDES.md)
 - [Product specification](docs/SPEC.md)

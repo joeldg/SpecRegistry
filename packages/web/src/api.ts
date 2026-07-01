@@ -122,9 +122,9 @@ export interface ReviewSlaSummary {
   >;
 }
 export type FeedbackRow = AgentFeedback & {
-  filename: string;
-  current_version: string;
-  project_type_name: string;
+  filename: string | null;
+  current_version: string | null;
+  project_type_name: string | null;
 };
 export type SubscriptionRow = RepoSubscription & { project_type_name: string };
 export type SyncJobRow = SyncJob & { repo: string; branch: string; filename: string };
@@ -436,15 +436,44 @@ export interface ApprovalPolicyRow {
 }
 export interface FeedbackCluster {
   key: string;
-  spec_id: string;
-  filename: string;
-  project_type_name: string;
+  spec_id: string | null;
+  filename: string | null;
+  project_type_name: string | null;
   error_type: string;
   count: number;
   status_counts: Record<string, number>;
   latest_at: string;
   sample_description: string;
   feedback_ids: string[];
+}
+export interface VersionStatus {
+  package_version: string;
+  is_git_checkout: boolean;
+  git_sha: string | null;
+  git_sha_short: string | null;
+  git_branch: string | null;
+  is_dirty: boolean | null;
+  repo_slug: string | null;
+  github: {
+    repo: string | null;
+    checked: boolean;
+    status: "up_to_date" | "behind" | "ahead" | "diverged" | "unknown";
+    behind_by: number | null;
+    ahead_by: number | null;
+    latest_sha: string | null;
+    error: string | null;
+    checked_at: string | null;
+  };
+}
+export interface UpdateResult {
+  ok: boolean;
+  message: string;
+  previous_sha: string | null;
+  new_sha: string | null;
+  updated: boolean;
+  dependencies_installed: boolean;
+  build_ran: boolean;
+  output: string;
 }
 export interface AuditLogRow {
   id: string;
@@ -686,6 +715,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  me: () => request<{ id: string; username: string; role: string }>("/api/v1/auth/me"),
+  version: () => request<VersionStatus>("/api/v1/meta/version"),
+  triggerUpdate: () => request<UpdateResult>("/api/v1/admin/update", { method: "POST" }),
   users: () => request<UserRow[]>("/api/v1/auth/users"),
   createUser: (body: { username: string; role: string; password?: string; display_name?: string }) =>
     request<UserRow>("/api/v1/auth/users", { method: "POST", body: JSON.stringify(body) }),

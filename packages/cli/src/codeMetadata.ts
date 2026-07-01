@@ -199,11 +199,6 @@ function makeId(input: Omit<AddEntityInput, "body" | "metadata">): string {
 
 function addEntity(entities: CodeEntity[], input: AddEntityInput): CodeEntity {
   const id = makeId(input);
-  const specRefs = extractSpecRefs(input.body);
-  const metadata = {
-    ...(input.metadata ?? {}),
-    ...(specRefs.length > 0 ? { spec_refs: specRefs } : {}),
-  };
   const entity: CodeEntity = {
     id,
     kind: input.kind,
@@ -216,15 +211,10 @@ function addEntity(entities: CodeEntity[], input: AddEntityInput): CodeEntity {
     end_line: input.endLine,
     hash: digest(input.body, 24),
     ...(input.parentId ? { parent_id: input.parentId } : {}),
-    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
   entities.push(entity);
   return entity;
-}
-
-function extractSpecRefs(value: string): string[] {
-  const refs = [...value.matchAll(/@spec\[\s*([^\]\s]+)\s*\]/gi)].map((match) => match[1].split("#")[0].trim());
-  return [...new Set(refs)];
 }
 
 function sourceSnippetByLine(content: string, startLine: number, endLine: number): string {
@@ -291,7 +281,7 @@ function extractTypeScript(root: string, file: string, content: string, entities
       startLine: loc.line,
       startColumn: loc.column,
       endLine: nodeEndLine(source, node),
-      body: node.getFullText(source),
+      body: node.getText(source),
       parentId: parentId ?? fileEntity.id,
       metadata,
     });
@@ -310,7 +300,7 @@ function extractTypeScript(root: string, file: string, content: string, entities
         startLine: loc.line,
         startColumn: loc.column,
         endLine: nodeEndLine(source, node),
-        body: node.getFullText(source),
+        body: node.getText(source),
         parentId: fileEntity.id,
         metadata: { module: moduleSpecifier },
       });
@@ -325,7 +315,7 @@ function extractTypeScript(root: string, file: string, content: string, entities
         startLine: loc.line,
         startColumn: loc.column,
         endLine: nodeEndLine(source, node),
-        body: node.getFullText(source),
+        body: node.getText(source),
         parentId: fileEntity.id,
         metadata: { module: node.moduleSpecifier.text, export: true },
       });
@@ -362,7 +352,7 @@ function extractTypeScript(root: string, file: string, content: string, entities
           startLine: loc.line,
           startColumn: loc.column,
           endLine: nodeEndLine(source, node),
-          body: node.getFullText(source),
+          body: node.getText(source),
           parentId: fileEntity.id,
           metadata: {
             method,
@@ -617,6 +607,48 @@ function extractConfig(root: string, file: string, content: string, entities: Co
   }
 }
 
+const SPEC_ANNOTATION = /@spec\[([^\]#]+)(?:#([a-zA-Z0-9._-]+))?\]/;
+
+/** Mirrors packages/server/src/lib/sections.ts sectionAnchor; kept local so the CLI
+ * doesn't need a runtime dependency on the server package for one slugify function. */
+function sectionAnchor(section: string): string {
+  const base = section
+    .trim()
+    .toLowerCase()
+    .replace(/[`*_~[\]()]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "intro";
+}
+
+/**
+ * Scan a file's raw text for `// @spec[FILE#section]` (or block-comment equivalents)
+ * and attach the reference to the nearest governable entity declared on the next
+ * couple of lines, so an explicit annotation short-circuits the fuzzy text-matching
+ * linker below with a high-confidence, human-authored link.
+ */
+function annotateSpecReferences(content: string, entities: CodeEntity[], relativePath: string): void {
+  const fileEntities = entities
+    .filter((entity) => entity.path === relativePath && governable(entity))
+    .sort((a, b) => a.start_line - b.start_line);
+  if (fileEntities.length === 0) return;
+  const lines = content.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const match = SPEC_ANNOTATION.exec(lines[i]);
+    if (!match) continue;
+    const annotationLine = i + 1;
+    const filename = match[1].trim();
+    const section = match[2]?.trim();
+    const target = fileEntities.find((entity) => entity.start_line >= annotationLine && entity.start_line <= annotationLine + 3);
+    if (!target) continue;
+    target.metadata = {
+      ...(target.metadata ?? {}),
+      spec_ref: section ? `${filename}#${section}` : filename,
+    };
+  }
+}
+
 function loadSpecs(root: string, specsDir: string): SpecReference[] {
   const dir = path.resolve(root, specsDir);
   if (!fs.existsSync(dir)) return [];
@@ -648,24 +680,31 @@ function governable(entity: CodeEntity): boolean {
 
 function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): TraceabilityLink[] {
   const links: TraceabilityLink[] = [];
-  const linkedKeys = new Set<string>();
+  const specByFilename = new Map(specs.map((spec) => [spec.filename.toLowerCase(), spec]));
   for (const entity of entities.filter(governable)) {
-    const haystacks = specs.map((spec) => ({ spec, text: `${spec.filename}\n${spec.title}\n${spec.sections.join("\n")}\n${spec.content}`.toLowerCase() }));
-    const explicitRefs = Array.isArray(entity.metadata?.spec_refs) ? entity.metadata.spec_refs : [];
-    for (const ref of explicitRefs) {
-      const spec = specs.find((candidate) => candidate.filename.toLowerCase() === ref.toLowerCase());
-      if (!spec) continue;
-      const key = `${entity.id}:${spec.filename}`;
-      linkedKeys.add(key);
-      links.push({
-        entity_id: entity.id,
-        entity_name: entity.name,
-        entity_kind: entity.kind,
-        spec_filename: spec.filename,
-        confidence: 0.99,
-        reasons: [`explicit @spec annotation: ${ref}`],
-      });
+    const specRef = typeof entity.metadata?.spec_ref === "string" ? entity.metadata.spec_ref : undefined;
+    if (specRef) {
+      const [refFilename, refSection] = specRef.split("#");
+      const spec = specByFilename.get(refFilename.trim().toLowerCase());
+      if (spec) {
+        // An explicit annotation is a human assertion, not a heuristic guess: link at
+        // high confidence and skip the fuzzy matching below entirely for this entity.
+        const sectionKnown = !refSection || spec.sections.some((s) => sectionAnchor(s) === refSection.toLowerCase());
+        links.push({
+          entity_id: entity.id,
+          entity_name: entity.name,
+          entity_kind: entity.kind,
+          spec_filename: spec.filename,
+          confidence: sectionKnown ? 1 : 0.9,
+          reasons: [
+            "explicit @spec annotation",
+            ...(refSection ? [sectionKnown ? `section: ${refSection}` : `section "${refSection}" not found in spec`] : []),
+          ],
+        });
+        continue;
+      }
     }
+    const haystacks = specs.map((spec) => ({ spec, text: `${spec.filename}\n${spec.title}\n${spec.sections.join("\n")}\n${spec.content}`.toLowerCase() }));
     const probes = [
       entity.name,
       entity.signature,
@@ -679,9 +718,6 @@ function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): Tr
       const directName = entity.name.length >= 3 && text.includes(entity.name.toLowerCase());
       const directRoute = typeof entity.metadata?.route_path === "string" && text.includes(entity.metadata.route_path.toLowerCase());
       if (!directName && !directRoute && matched.length < 2) continue;
-      const key = `${entity.id}:${spec.filename}`;
-      if (linkedKeys.has(key)) continue;
-      linkedKeys.add(key);
       const confidence = Math.min(0.95, 0.35 + matched.length * 0.12 + (directName ? 0.2 : 0) + (directRoute ? 0.25 : 0));
       links.push({
         entity_id: entity.id,
@@ -779,6 +815,7 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
     } else if (CONFIG_FILENAMES.has(path.basename(file))) {
       extractConfig(resolvedRoot, file, content, entities, fileEntity);
     }
+    annotateSpecReferences(content, entities, fileEntity.path);
   }
   const languages = [...new Set(entities.map((entity) => entity.language))].sort();
   const specs = loadSpecs(resolvedRoot, specsDir);

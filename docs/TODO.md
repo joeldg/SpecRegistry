@@ -71,6 +71,14 @@
 - [ ] Dedicated agent-scope token type (narrower than the `agent` role) that allows only
   documented lifecycle/spec/feedback endpoints plus manifest/code-trace telemetry, with
   per-repo issuance and revocation from the admin console.
+- [ ] Clarify and, if needed, enforce cross-repo spec **read** scope: `assertAgentScope`
+  restricts agent-role **writes** (create/edit/publish) to the agent's own enrolled repo,
+  but spec **reads** (`GET /ai/specs/:type?repo=`, `GET /specs?project_id=`) accept any
+  `repo`/`project_id`, so an agent enrolled for repo A can currently read repo B's
+  project-scoped specs by passing repo B's identifier. Likely intentional today (specs are
+  governance docs, not secrets, and one registry usually serves one trusted org), but it
+  should be a documented decision rather than an emergent property — revisit if
+  multi-tenant/cross-org deployments are ever supported.
 
 ## Quality and Safety
 
@@ -84,9 +92,28 @@
 - [ ] Spec baseline quality scoring for required sections, vague language, missing
   acceptance evidence, missing examples/non-goals, token budget mismatch, and repeated
   feedback against the same section.
-- [ ] Bound the code-trace ingest payload explicitly: `raw_json` stores the whole untrusted
+- [x] Bound the code-trace ingest payload explicitly: `raw_json` stores the whole untrusted
   trace (currently only capped by Fastify's default 1MB body limit). Add an explicit size
   cap / per-route body limit and dedupe the repeated `repo` reads in the handler.
+- [ ] No login rate limiting or lockout: `POST /api/v1/auth/login` has no attempt throttling,
+  backoff, or account lockout (verified: no `@fastify/rate-limit` or equivalent in
+  `packages/server`). scrypt slows single guesses but does not stop a distributed or
+  low-and-slow brute-force campaign against `SPECREG_AUTH=required` deployments exposed to
+  the internet. Add per-IP/per-username throttling on `/auth/login` and `/agents/enroll`.
+- [ ] Tokens never expire: `issueToken` (packages/server/src/lib/auth.ts) writes no
+  `expires_at`, and there is no session/token TTL or rotation policy — a login token and an
+  agent-enrollment token are both valid forever until someone manually deletes the row via
+  `DELETE /auth/api-keys/:id`. Add optional TTLs (especially for interactive login sessions
+  vs. long-lived agent/CI tokens) and a way to bulk-revoke a compromised identity's tokens.
+- [ ] CORS is fully open: `app.register(cors, { origin: true })` (packages/server/src/app.ts)
+  reflects any request Origin. Low risk today because auth is Bearer-token-only (no cookies
+  to ride via CSRF), but it means any website's JS can call this API cross-origin if it ever
+  obtains a token, and it would become a real CSRF vector the moment a cookie-based auth path
+  is added. Add an allowlist (`SPECREG_CORS_ORIGINS`) for secured deployments.
+- [ ] This repository has no CI workflow of its own (no `.github/workflows/`, only the
+  reusable `specreg-check` composite action for *consumers*). `npm run build` / `npm test`
+  are not gated automatically on push/PR. Add a workflow that runs both on every PR before
+  the "CI `npm rebuild better-sqlite3`" operability note above can be caught automatically.
 - [ ] Gitignore generated/pulled init artifacts (`CLAUDE.md`, `SPECREGISTRY.md`, `specs/`,
   `.spec/`, `.mcp.json`) in consuming repos and document it, so demo/init output is not
   accidentally committed.
@@ -133,7 +160,9 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 - [x] Dogfood finding: `specreg comply` recommends inline `// @spec[FILE#section]`
   annotations, but the current code-map linker does not parse annotation directives. Either
   implement annotation parsing or change the remediation text to match the token/spec linker
-  that exists today.
+  that exists today. (Implemented annotation parsing: `code-map` now scans for
+  `@spec[FILE#section]` above a declaration and links it at high confidence, ahead of the
+  fuzzy text matcher.)
 - [x] Dogfood finding: `submit-drafts --publish` prints the same "Open Reviews and Specs" next
   step after a newly created project-scoped spec is already published; tailor the CLI summary
   for created+published vs review-required updates.
@@ -141,9 +170,15 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
   spec, so agents adding routes must generate a project-scoped spec before traceability can be
   meaningful. Consider adding a reusable `API_ENDPOINTS.md` starter spec/template to the pack.
 - [ ] Operability pass uncovered while dogfooding: CI `npm rebuild better-sqlite3` (native ABI
-  mismatch across Node versions broke the suite once), bound the code-trace ingest payload, and
-  encrypt-at-rest the LDAP bind password and webhook/Slack secrets currently stored plaintext in
-  settings.
+  mismatch across Node versions broke the suite once, and recurred locally on 2026-07-01 —
+  a machine with both a system Node and an nvm-managed Node hit the exact
+  NODE_MODULE_VERSION mismatch `npm run dev:server` fails on). Added a root `.nvmrc`
+  (24.13.1) as a partial mitigation; this repo still has no `.github/workflows/` of its
+  own to catch a similar mismatch automatically (tracked in Quality and Safety below).
+- [x] Encrypt-at-rest the LDAP bind password, webhook/Slack secrets, and LLM/embedding
+  provider API keys and GitHub token, all previously stored plaintext in `settings`. Opt-in
+  via `SPECREG_SECRET_KEY` (AES-256-GCM, key derived outside the database so a stolen SQLite
+  file alone doesn't also hand over the key); unset behaves exactly as before (plaintext).
 
 ## Developer Workflow
 
@@ -158,6 +193,15 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 - GitHub App integration instead of raw `GITHUB_TOKEN`.
 - [x] Generated spec update PR summaries and changelogs.
 - [x] Spec change migration checklist generation for downstream projects.
+- [x] Server self-update: `GET /api/v1/meta/version` (git sha/branch/dirty state + GitHub
+  drift check) and an admin-only `POST /api/v1/admin/update` (`git pull --ff-only` +
+  conditional `npm install` + `npm run build`), with a dashboard banner and Update now
+  button. Only works for a live git checkout deployment (local/dev, production-style
+  Node); a Docker deployment has no `.git` to pull into and reports as not a checkout.
+- [ ] Docker-deployment parity for the self-update banner: today `is_git_checkout: false`
+  inside a container just hides the Update now button. Consider a lighter "new image
+  available" signal for Docker (e.g. compare the running image digest/tag against the
+  latest published one) instead of leaving Docker operators with no drift signal at all.
 
 ## Search and Discovery
 

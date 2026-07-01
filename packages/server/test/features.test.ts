@@ -70,12 +70,18 @@ Existing. Clarified.
 describe("governed agent skills", () => {
   it("seeds safe base skills and supports admin-managed skill lifecycle", async () => {
     const initial = await getJson("/api/v1/skills");
-    expect(initial.length).toBeGreaterThanOrEqual(6);
+    expect(initial.length).toBeGreaterThanOrEqual(10);
     expect(initial.every((skill: any) => skill.status === "active")).toBe(true);
     expect(initial.find((skill: any) => skill.slug === "load-governed-specs")).toMatchObject({
       built_in: 1,
       risk_level: "safe",
     });
+    // load-governed-specs must point agents at begin_task first (matches AGENT_OPERATING_RULES).
+    expect(initial.find((skill: any) => skill.slug === "load-governed-specs").instructions).toContain("begin_task");
+    // The lifecycle, guidance, compliance-loop, and separation-of-duties skills are seeded safe built-ins.
+    for (const slug of ["register-task-session", "resolve-uncovered-guidance", "run-compliance-loop", "propose-not-publish"]) {
+      expect(initial.find((skill: any) => skill.slug === slug)).toMatchObject({ built_in: 1, risk_level: "safe", status: "active" });
+    }
 
     const created = await app.inject({
       method: "POST",
@@ -226,6 +232,24 @@ describe("sync-check (CLI drift detection)", () => {
       code_drift_score: 0.5,
       code_drift_severity: "medium",
     });
+  });
+
+  it("rejects an oversized code-trace payload instead of persisting it unbounded", async () => {
+    const report = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/code-trace-report",
+      payload: {
+        repo: "github.com/acme/oversized",
+        project_type: "Acme Edge Device",
+        trace: {
+          schema_version: 1,
+          // Pad well past the 2MB default cap so the route-level bodyLimit rejects
+          // the request before it ever reaches the handler / raw_json column.
+          padding: "x".repeat(3 * 1024 * 1024),
+        },
+      },
+    });
+    expect(report.statusCode).toBe(413);
   });
 
   it("allows project-scoped specs to override project-type specs for one repo", async () => {
@@ -1389,6 +1413,84 @@ describe("resolve-guidance (on-demand styleguide/spec acquisition)", () => {
       payload: { project_type: "Acme Edge Device" },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("missing_guidance feedback (spec-less coverage gap reports)", () => {
+  it("accepts a gap report with no spec_id and surfaces it in listings and clusters", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/feedback",
+      payload: {
+        error_type: "missing_guidance",
+        project_type: "Acme Edge Device",
+        languages: ["Rust"],
+        topic: "embedded driver style",
+        description: "resolve_guidance found nothing for Rust firmware drivers",
+        agent_identifier: "test-agent",
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const body = created.json();
+    expect(body.spec_id).toBeNull();
+    expect(body.error_type).toBe("missing_guidance");
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/ai/feedback" });
+    expect(list.statusCode).toBe(200);
+    const listed = list.json().find((f: any) => f.id === body.id);
+    expect(listed).toBeTruthy();
+    expect(listed.filename).toBeNull();
+    expect(listed.project_type_name).toBe("Acme Edge Device");
+
+    const clusters = await app.inject({ method: "GET", url: "/api/v1/ai/feedback/clusters" });
+    expect(clusters.statusCode).toBe(200);
+    const cluster = clusters.json().find((c: any) => c.feedback_ids.includes(body.id));
+    expect(cluster).toBeTruthy();
+    expect(cluster.spec_id).toBeNull();
+  });
+
+  it("still requires spec_id for ambiguity/contradiction/outdated reports", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/feedback",
+      payload: {
+        error_type: "ambiguity",
+        description: "no spec_id given",
+        agent_identifier: "test-agent",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("requires at least one of languages or topic for a gap report", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/feedback",
+      payload: {
+        error_type: "missing_guidance",
+        project_type: "Acme Edge Device",
+        description: "vague gap with no language or topic",
+        agent_identifier: "test-agent",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("refuses to draft-fix a gap report since there is no spec to revise", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/feedback",
+      payload: {
+        error_type: "missing_guidance",
+        project_type: "Acme Edge Device",
+        topic: "quantum teleportation choreography",
+        description: "no governing spec exists",
+        agent_identifier: "test-agent",
+      },
+    });
+    const { id } = created.json();
+    const draft = await app.inject({ method: "POST", url: `/api/v1/ai/feedback/${id}/draft-fix` });
+    expect(draft.statusCode).toBe(400);
   });
 });
 

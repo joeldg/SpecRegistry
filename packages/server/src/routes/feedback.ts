@@ -14,7 +14,9 @@ import { evaluateCompliance } from "../lib/compliance.js";
 import { splitSections } from "../lib/sections.js";
 import { bundleSpecs } from "../lib/compile.js";
 
-function feedbackClusterKey(row: Pick<AgentFeedback, "spec_id" | "error_type" | "description">): string {
+function feedbackClusterKey(
+  row: Pick<AgentFeedback, "spec_id" | "error_type" | "description" | "project_type_id">
+): string {
   const normalized = row.description
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ")
@@ -22,7 +24,10 @@ function feedbackClusterKey(row: Pick<AgentFeedback, "spec_id" | "error_type" | 
     .filter((word) => word.length > 3)
     .slice(0, 10)
     .join(" ");
-  return `${row.spec_id}:${row.error_type}:${normalized}`;
+  // Spec-less "missing_guidance" reports have no spec_id to group by; use the
+  // project type instead so repeated gap reports for the same domain still cluster.
+  const subject = row.spec_id ?? `gap:${row.project_type_id ?? "none"}`;
+  return `${subject}:${row.error_type}:${normalized}`;
 }
 
 const GUIDANCE_TOPIC_ALIASES: Array<{ triggers: string[]; query: string }> = [
@@ -117,21 +122,58 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  // Telemetry ingestion: agents flag ambiguities/contradictions for human review.
+  // Telemetry ingestion: agents flag ambiguities/contradictions for human review, or
+  // (error_type "missing_guidance") a pure coverage gap with no spec to attach to —
+  // e.g. a language or domain resolve_guidance couldn't find anything for.
   app.post("/ai/feedback", async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const specId = requireString(body, "spec_id");
     const agentIdentifier = requireString(body, "agent_identifier");
     const description = requireString(body, "description");
     const errorType = requireOneOf(body, "error_type", [
       "ambiguity",
       "contradiction",
       "outdated",
+      "missing_guidance",
     ] as const satisfies readonly FeedbackErrorType[]);
-    const spec: Spec = requireSpec(app.db, specId);
-    const specVersion = typeof body.spec_version === "string" ? body.spec_version : spec.current_version;
 
     const id = uuid();
+    if (errorType === "missing_guidance") {
+      const pt = requireProjectType(app.db, requireString(body, "project_type"));
+      const languages = stringList(body.languages);
+      const topic = optionalString(body, "topic");
+      if (languages.length === 0 && !topic) {
+        throw new HttpError(400, "missing_guidance feedback requires at least one of: languages[], topic");
+      }
+      app.db
+        .prepare(
+          `INSERT INTO agent_feedback
+             (id, agent_identifier, error_type, context_code_snippet, description, status,
+              project_type_id, languages, topic, created_at)
+           VALUES (?, ?, 'missing_guidance', ?, ?, 'open', ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          agentIdentifier,
+          (body.context_code_snippet as string) ?? null,
+          description,
+          pt.id,
+          languages.length > 0 ? JSON.stringify(languages) : null,
+          topic ?? null,
+          now()
+        );
+      await dispatchWebhooks(
+        app.db,
+        "feedback.created",
+        `${agentIdentifier} flagged a coverage gap in ${pt.name}${topic ? `: ${topic}` : ""}`,
+        { feedback_id: id, project_type_id: pt.id, error_type: errorType }
+      );
+      reply.code(201);
+      return app.db.prepare("SELECT * FROM agent_feedback WHERE id = ?").get(id);
+    }
+
+    const specId = requireString(body, "spec_id");
+    const spec: Spec = requireSpec(app.db, specId);
+    const specVersion = typeof body.spec_version === "string" ? body.spec_version : spec.current_version;
     app.db
       .prepare(
         `INSERT INTO agent_feedback (id, spec_id, spec_version, agent_identifier, error_type, context_code_snippet, description, status, created_at)
@@ -155,49 +197,6 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     );
     reply.code(201);
     return app.db.prepare("SELECT * FROM agent_feedback WHERE id = ?").get(id);
-  });
-
-  // First-class gap reporting when resolve_guidance finds a missing language or
-  // domain and there is no existing spec_id to attach ordinary feedback to.
-  app.post("/ai/guidance-feedback", async (req, reply) => {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const topic = requireString(body, "topic");
-    const description = requireString(body, "description");
-    const pt = body.project_type ? requireProjectType(app.db, requireString(body, "project_type")) : undefined;
-    const project = pt
-      ? typeof body.project_id === "string"
-        ? findProjectConsumer(app.db, body.project_id, pt.id)
-        : typeof body.repo === "string"
-          ? findProjectConsumer(app.db, body.repo, pt.id)
-          : undefined
-      : undefined;
-    const id = uuid();
-    app.db
-      .prepare(
-        `INSERT INTO guidance_feedback
-          (id, project_type_id, consumer_id, repo, topic, languages, description, context_code_snippet, agent_identifier, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`
-      )
-      .run(
-        id,
-        pt?.id ?? null,
-        project?.id ?? null,
-        project?.repo ?? optionalString(body, "repo") ?? null,
-        topic,
-        JSON.stringify(stringList(body.languages)),
-        description,
-        optionalString(body, "context_code_snippet") ?? null,
-        optionalString(body, "agent_identifier") ?? "mcp-agent",
-        now()
-      );
-    await dispatchWebhooks(app.db, "feedback.created", `Missing guidance reported: ${topic}`, {
-      guidance_feedback_id: id,
-      project_type: pt?.name ?? null,
-      topic,
-    });
-    reply.code(201);
-    const row = app.db.prepare("SELECT * FROM guidance_feedback WHERE id = ?").get(id) as Record<string, unknown>;
-    return { ...row, languages: JSON.parse(String(row.languages)) };
   });
 
   // Agent lifecycle preflight. Agents call this when starting non-trivial work so
@@ -510,7 +509,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
           kind: "styleguide",
           subject: l.language,
           detail: `No styleguide is available for ${l.language} in the registry catalog.`,
-          recommended_action: `Report the gap with report_guidance_gap (or ask an admin to add a styleguide/spec for ${l.language}). Do not invent the standard.`,
+          recommended_action: `Report the gap with report_spec_feedback (error_type: missing_guidance, languages: ["${l.language}"]), or ask an admin to add a styleguide/spec for ${l.language}. Do not invent the standard.`,
         });
       }
     }
@@ -519,14 +518,14 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         kind: "spec",
         subject: topic,
         detail: `No governed spec covers "${topic}" for this project.`,
-        recommended_action: `Report the gap with report_guidance_gap, then draft one with \`specreg generate\` and submit it through review.`,
+        recommended_action: `Report the gap with report_spec_feedback (error_type: missing_guidance, topic: "${topic}"), then draft one with \`specreg generate\` and submit it through review.`,
       });
     }
 
     const recommended_actions: string[] = [];
     for (const sg of styleguides) recommended_actions.push(`Pull the ${sg.title}: \`${sg.pull_command}\``);
     if (resolvedSpecs.length > 0) recommended_actions.push("Load the matched governed specs before writing code.");
-    if (gaps.length > 0) recommended_actions.push("Report uncovered languages/domains via report_guidance_gap instead of guessing.");
+    if (gaps.length > 0) recommended_actions.push("Report uncovered languages/domains via report_spec_feedback instead of guessing.");
 
     return {
       project_type: pt?.name ?? null,
@@ -549,6 +548,12 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       | undefined;
     if (!feedback) throw new HttpError(404, `Unknown feedback: ${id}`);
     if (feedback.status === "resolved") throw new HttpError(409, "Feedback is already resolved");
+    if (!feedback.spec_id) {
+      throw new HttpError(
+        400,
+        "This is a missing_guidance gap report with no spec to revise. Draft a new spec (e.g. `specreg generate`) or add the missing styleguide, then acknowledge or resolve this item."
+      );
+    }
     const spec = requireSpec(app.db, feedback.spec_id);
     if (spec.status === "pending_review") {
       throw new HttpError(409, "Spec already has a pending change request; review it first");
@@ -574,13 +579,16 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     return cr;
   });
 
+  // LEFT JOIN specs: a "missing_guidance" report has no spec_id, so an inner join
+  // would silently drop it from every listing. project_types is joined off either
+  // the spec's type or the gap's own recorded project_type_id.
   app.get("/ai/feedback", async (req) => {
     const { status } = req.query as { status?: string };
     const base = `
       SELECT f.*, s.filename, s.current_version, pt.name AS project_type_name
       FROM agent_feedback f
-      JOIN specs s ON s.id = f.spec_id
-      JOIN project_types pt ON pt.id = s.project_type_id
+      LEFT JOIN specs s ON s.id = f.spec_id
+      LEFT JOIN project_types pt ON pt.id = COALESCE(s.project_type_id, f.project_type_id)
       WHERE s.deleted_at IS NULL
     `;
     if (status) {
@@ -595,13 +603,13 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `SELECT f.*, s.filename, pt.name AS project_type_name
          FROM agent_feedback f
-         JOIN specs s ON s.id = f.spec_id
-         JOIN project_types pt ON pt.id = s.project_type_id
+         LEFT JOIN specs s ON s.id = f.spec_id
+         LEFT JOIN project_types pt ON pt.id = COALESCE(s.project_type_id, f.project_type_id)
          WHERE s.deleted_at IS NULL
          ${status ? "AND f.status = ?" : ""}
          ORDER BY f.created_at DESC`
       )
-      .all(...(status ? [status] : [])) as Array<AgentFeedback & { filename: string; project_type_name: string }>;
+      .all(...(status ? [status] : [])) as Array<AgentFeedback & { filename: string | null; project_type_name: string | null }>;
     const clusters = new Map<string, Array<(typeof rows)[number]>>();
     for (const row of rows) {
       const key = feedbackClusterKey(row);
@@ -648,6 +656,12 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const items = rows.filter((row) => feedbackClusterKey(row) === key && row.status !== "resolved");
     if (items.length === 0) throw new HttpError(404, `Unknown open feedback cluster: ${key}`);
     const first = items[0];
+    if (!first.spec_id) {
+      throw new HttpError(
+        400,
+        "This cluster is missing_guidance gap reports with no spec to revise. Draft a new spec (e.g. `specreg generate`) or add the missing styleguide, then acknowledge or resolve the cluster."
+      );
+    }
     const spec = requireSpec(app.db, first.spec_id);
     if (spec.status === "pending_review") throw new HttpError(409, "Spec already has a pending change request; review it first");
     const merged = {

@@ -105,6 +105,47 @@ test("code inventory extracts AST metadata and stable IDs across supported langu
   assert.notEqual(nextRoute.hash, route.hash);
 });
 
+test("an explicit @spec[FILE#section] annotation short-circuits fuzzy matching with a high-confidence link", () => {
+  const root = makeProject();
+  fs.writeFileSync(
+    path.join(root, "src", "routes", "users.ts"),
+    `import fastify from "fastify";
+
+export function registerRoutes(app: ReturnType<typeof fastify>) {
+  // @spec[API.md#routes]
+  app.get("/users/:id", async (req) => ({ ok: true }));
+
+  // @spec[API.md#nonexistent-section]
+  app.delete("/users/:id", async (req) => ({ ok: true }));
+
+  // @spec[MISSING.md]
+  app.put("/widgets/:id", async (req) => ({ ok: true }));
+}
+`,
+    "utf8"
+  );
+
+  const { trace } = buildCodeInventory(root);
+  const getRoute = trace.links.find((link) => link.entity_name === "GET /users/:id");
+  assert.ok(getRoute);
+  assert.equal(getRoute!.confidence, 1);
+  assert.equal(getRoute!.spec_filename, "API.md");
+  assert.ok(getRoute!.reasons.includes("explicit @spec annotation"));
+  assert.ok(getRoute!.reasons.some((r) => r.includes("section: routes")));
+
+  const deleteRoute = trace.links.find((link) => link.entity_name === "DELETE /users/:id");
+  assert.ok(deleteRoute);
+  assert.equal(deleteRoute!.confidence, 0.9);
+  assert.ok(deleteRoute!.reasons.some((r) => r.includes('section "nonexistent-section" not found')));
+
+  // An annotation pointing at a spec file that doesn't exist falls back to fuzzy
+  // matching (which finds nothing here, since nothing else mentions /widgets/:id)
+  // rather than silently dropping the entity.
+  const putRoute = trace.links.find((link) => link.entity_name === "PUT /widgets/:id");
+  assert.equal(putRoute, undefined);
+  assert.ok(trace.unlinked_entities.some((entity) => entity.name === "PUT /widgets/:id"));
+});
+
 test("code inventory writes a reviewable sidecar without overwriting unless forced", () => {
   const root = makeProject();
   const first = writeCodeInventory({ root, out: ".spec/code-map.json", force: false });
@@ -115,36 +156,6 @@ test("code inventory writes a reviewable sidecar without overwriting unless forc
   const forced = writeCodeInventory({ root, out: ".spec/code-map.json", force: true });
   assert.equal(forced.entity_count, first.entity_count);
   assert.equal(forced.trace.coverage.governed_entity_count, first.trace.coverage.governed_entity_count);
-});
-
-test("explicit @spec annotations create high-confidence trace links", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-code-map-annotation-"));
-  fs.mkdirSync(path.join(root, "src"), { recursive: true });
-  fs.mkdirSync(path.join(root, "specs"), { recursive: true });
-  fs.writeFileSync(path.join(root, "specs", "API.md"), "# API\n\n## Traceability\n\nHandlers are mapped explicitly.\n", "utf8");
-  fs.writeFileSync(
-    path.join(root, "src", "api.ts"),
-    `// @spec[API.md#traceability]
-export function handler() {
-  return { ok: true };
-}
-`,
-    "utf8"
-  );
-
-  const inventory = buildCodeInventory(root);
-  const entity = inventory.entities.find((item) => item.kind === "function" && item.name === "handler")!;
-  assert.deepEqual(entity.metadata?.spec_refs, ["API.md"]);
-  assert.equal(
-    inventory.trace.links.some(
-      (link) =>
-        link.entity_id === entity.id &&
-        link.spec_filename === "API.md" &&
-        link.confidence === 0.99 &&
-        link.reasons.some((reason) => reason.includes("@spec"))
-    ),
-    true
-  );
 });
 
 test("trace check fails low coverage, high drift, and unmapped critical entity kinds", () => {

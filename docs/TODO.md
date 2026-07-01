@@ -71,6 +71,14 @@
 - [ ] Dedicated agent-scope token type (narrower than the `agent` role) that allows only
   documented lifecycle/spec/feedback endpoints plus manifest/code-trace telemetry, with
   per-repo issuance and revocation from the admin console.
+- [ ] Clarify and, if needed, enforce cross-repo spec **read** scope: `assertAgentScope`
+  restricts agent-role **writes** (create/edit/publish) to the agent's own enrolled repo,
+  but spec **reads** (`GET /ai/specs/:type?repo=`, `GET /specs?project_id=`) accept any
+  `repo`/`project_id`, so an agent enrolled for repo A can currently read repo B's
+  project-scoped specs by passing repo B's identifier. Likely intentional today (specs are
+  governance docs, not secrets, and one registry usually serves one trusted org), but it
+  should be a documented decision rather than an emergent property — revisit if
+  multi-tenant/cross-org deployments are ever supported.
 
 ## Quality and Safety
 
@@ -87,6 +95,25 @@
 - [ ] Bound the code-trace ingest payload explicitly: `raw_json` stores the whole untrusted
   trace (currently only capped by Fastify's default 1MB body limit). Add an explicit size
   cap / per-route body limit and dedupe the repeated `repo` reads in the handler.
+- [ ] No login rate limiting or lockout: `POST /api/v1/auth/login` has no attempt throttling,
+  backoff, or account lockout (verified: no `@fastify/rate-limit` or equivalent in
+  `packages/server`). scrypt slows single guesses but does not stop a distributed or
+  low-and-slow brute-force campaign against `SPECREG_AUTH=required` deployments exposed to
+  the internet. Add per-IP/per-username throttling on `/auth/login` and `/agents/enroll`.
+- [ ] Tokens never expire: `issueToken` (packages/server/src/lib/auth.ts) writes no
+  `expires_at`, and there is no session/token TTL or rotation policy — a login token and an
+  agent-enrollment token are both valid forever until someone manually deletes the row via
+  `DELETE /auth/api-keys/:id`. Add optional TTLs (especially for interactive login sessions
+  vs. long-lived agent/CI tokens) and a way to bulk-revoke a compromised identity's tokens.
+- [ ] CORS is fully open: `app.register(cors, { origin: true })` (packages/server/src/app.ts)
+  reflects any request Origin. Low risk today because auth is Bearer-token-only (no cookies
+  to ride via CSRF), but it means any website's JS can call this API cross-origin if it ever
+  obtains a token, and it would become a real CSRF vector the moment a cookie-based auth path
+  is added. Add an allowlist (`SPECREG_CORS_ORIGINS`) for secured deployments.
+- [ ] This repository has no CI workflow of its own (no `.github/workflows/`, only the
+  reusable `specreg-check` composite action for *consumers*). `npm run build` / `npm test`
+  are not gated automatically on push/PR. Add a workflow that runs both on every PR before
+  the "CI `npm rebuild better-sqlite3`" operability note above can be caught automatically.
 - [ ] Gitignore generated/pulled init artifacts (`CLAUDE.md`, `SPECREGISTRY.md`, `specs/`,
   `.spec/`, `.mcp.json`) in consuming repos and document it, so demo/init output is not
   accidentally committed.
@@ -143,7 +170,9 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 - [ ] Operability pass uncovered while dogfooding: CI `npm rebuild better-sqlite3` (native ABI
   mismatch across Node versions broke the suite once), bound the code-trace ingest payload, and
   encrypt-at-rest the LDAP bind password and webhook/Slack secrets currently stored plaintext in
-  settings.
+  settings. Scope also covers LLM/embedding provider API keys and the GitHub token, which are
+  masked from the browser (`has_api_key`/`has_*` booleans) but persisted as plaintext in the same
+  `settings` table — a stolen/leaked SQLite file exposes all of them, not just LDAP/webhook.
 
 ## Developer Workflow
 

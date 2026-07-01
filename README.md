@@ -955,7 +955,9 @@ once at first start. This closes the "agent escalates to `admin`/`admin` and sel
 agents authenticate with their own enrolled `agent`-scoped token (issued by `specreg init` into
 `.spec/credentials.json`), which can submit drafts and project-scoped specs but cannot approve,
 publish, or reach admin routes. Combined with separation of duties (you cannot approve a change
-you proposed), the governance is enforced server-side, not merely advised.
+you proposed), the governance is enforced server-side, not merely advised. See
+[README-SECURITY.md](README-SECURITY.md) for exactly which controls are server-enforced versus
+advisory, and a deployment hardening checklist.
 
 Set `LDAP_URL` to authenticate against a directory instead (direct-bind via
 `LDAP_BIND_DN_TEMPLATE`, or service-account search via `LDAP_SEARCH_BASE`/`LDAP_SEARCH_FILTER`);
@@ -1169,6 +1171,7 @@ those slices are implemented.
 
 ### Further reading
 
+- [Security model: how agents are kept from self-approving or escalating](README-SECURITY.md)
 - [Agent feedback workflow](README-AGENTS.md)
 - [Google style guide integration](README-GOOGLE-STYLEGUIDES.md)
 - [Product specification](docs/SPEC.md)

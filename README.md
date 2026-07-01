@@ -552,8 +552,8 @@ The MCP server exposes these tools:
 - `resolve_guidance` — check whether a language or domain is governed before inventing a local standard.
 - `check_compliance` — record and evaluate the objective compliance loop directly, useful for CI or ad hoc checks.
 - `get_audit_prompt` — fetch a reverse-conformance audit prompt for a governed spec.
-- `report_spec_feedback` — file ambiguity, contradiction, or outdated-guidance feedback.
-- `report_guidance_gap` — file missing language/domain guidance when no existing spec applies.
+- `report_spec_feedback` — file ambiguity, contradiction, or outdated-guidance feedback, or
+  (`error_type: "missing_guidance"`) a pure coverage gap with no `spec_id` to attach to.
 
 For the full agent feedback loop, including compiled files, MCP tool usage, dashboard
 triage, draft fixes, and release/sync behavior, see [README-AGENTS.md](README-AGENTS.md).
@@ -915,7 +915,7 @@ GET  /api/v1/reviews/sla
 GET  /api/v1/reviews/:id/publish-preview
 POST /api/v1/reviews/:id/approve        POST /api/v1/reviews/:id/reject
 GET  /api/v1/ai/specs/:projectType      POST /api/v1/ai/feedback
-POST /api/v1/ai/guidance-feedback       POST /api/v1/ai/resolve-guidance
+POST /api/v1/ai/resolve-guidance
 GET  /api/v1/ai/feedback[?status=]      POST /api/v1/ai/feedback/:id/status
 GET  /api/v1/ai/feedback/clusters       POST /api/v1/ai/feedback/:id/draft-fix
 POST /api/v1/ai/feedback/clusters/status   POST /api/v1/ai/feedback/clusters/draft-fix

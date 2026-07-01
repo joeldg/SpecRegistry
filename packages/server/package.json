@@ -5,10 +5,15 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "ensure-native": "node scripts/ensure-native.mjs",
     "build": "tsc -p tsconfig.json",
+    "predev": "node scripts/ensure-native.mjs",
     "dev": "tsx watch src/index.ts",
+    "prestart": "node scripts/ensure-native.mjs",
     "start": "node dist/index.js",
+    "preseed": "node scripts/ensure-native.mjs",
     "seed": "tsx src/seed-cli.ts",
+    "pretest": "node scripts/ensure-native.mjs",
     "test": "vitest run"
   },
   "dependencies": {

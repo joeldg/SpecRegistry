@@ -169,12 +169,14 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 - [x] Dogfood finding: the default Web App Standard pack lacks an API endpoint behavior/contract
   spec, so agents adding routes must generate a project-scoped spec before traceability can be
   meaningful. Consider adding a reusable `API_ENDPOINTS.md` starter spec/template to the pack.
-- [ ] Operability pass uncovered while dogfooding: CI `npm rebuild better-sqlite3` (native ABI
-  mismatch across Node versions broke the suite once, and recurred locally on 2026-07-01 —
-  a machine with both a system Node and an nvm-managed Node hit the exact
-  NODE_MODULE_VERSION mismatch `npm run dev:server` fails on). Added a root `.nvmrc`
-  (24.13.1) as a partial mitigation; this repo still has no `.github/workflows/` of its
-  own to catch a similar mismatch automatically (tracked in Quality and Safety below).
+- [x] better-sqlite3 native ABI mismatch across Node versions (broke the suite once, recurred
+  locally on 2026-07-01 when a Node-24 rebuild met a Node-22 shell). Fixed with a self-healing
+  guard (`packages/server/scripts/ensure-native.mjs`) wired into `predev`/`prestart`/`pretest`/
+  `preseed`: it probes the module in a fresh process and, only on failure, rebuilds it for the
+  running Node — so the version in use no longer matters. `.nvmrc` (24.13.1) remains a soft hint.
+- [ ] Remaining operability pass: still no `.github/workflows/` of this repo's own to run
+  build+tests (which would exercise the guard) on a clean runner. Bound code-trace payload and
+  at-rest secret encryption already landed during the dogfood rounds.
 - [x] Encrypt-at-rest the LDAP bind password, webhook/Slack secrets, and LLM/embedding
   provider API keys and GitHub token, all previously stored plaintext in `settings`. Opt-in
   via `SPECREG_SECRET_KEY` (AES-256-GCM, key derived outside the database so a stolen SQLite

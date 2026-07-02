@@ -774,6 +774,12 @@ const DEFAULT_AGENT_SKILLS = [
     description: "Propose changes to governed specs through review; never approve or publish your own change.",
     instructions: "You may create, edit, and publish project-scoped specs for your own enrolled repo, but only propose changes to global and project-type specs through the review workflow. Never approve or publish a change you proposed — approval is a separate human action. Authenticate only as your own enrolled agent identity and stay within the documented MCP tools and the specreg CLI.",
   },
+  {
+    slug: "evaluate-quality-model",
+    name: "Evaluate the quality model",
+    description: "Run the external QUALITY.md evaluation loop against this project's governed quality rubric, if one exists.",
+    instructions: "If this project has a published QUALITY.md spec (a portable quality rubric of areas, factors, requirements, and a rating scale — see https://getquality.md/specification), load it with get_specs or search_specs before making quality judgments. Its YAML frontmatter is a valid, spec-compliant QUALITY.md document: use the external `qualitymd` CLI or `/quality` agent skill to actually run the evaluation and generate a report — SpecRegistry governs the rubric's content, versioning, and review history, it does not implement the evaluation methodology itself. Report ambiguous, stale, or unassessable requirements with report_spec_feedback, and propose rubric changes through the normal review workflow; never hand-edit a published QUALITY.md directly. If no QUALITY.md exists yet, treat that as a spec gap rather than inventing an ad hoc quality bar — consider generating one with `specreg generate` (purpose: quality-model).",
+  },
 ] as const;
 
 function seedDefaultAgentSkills(db: Db): void {

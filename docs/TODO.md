@@ -4,7 +4,18 @@
 
 - [x] Spec gap detector that scans repo metadata and identifies missing governance specs.
 - [x] Spec generation workbench for generating reviewed draft specs from repo scans, pasted trees, uploaded manifests, existing spec packs, or project type templates.
-- [x] Purpose-based spec templates for API contracts, database schemas, test strategies, deployment/runbooks, observability, security/privacy, and agent operating rules.
+- [x] Purpose-based spec templates for API contracts, database schemas, test strategies, deployment/runbooks, observability, security/privacy, agent operating rules, and quality models.
+- [x] QUALITY.md integration (https://getquality.md/specification): a `quality-model`
+  purpose template generates a spec-compliant QUALITY.md (YAML frontmatter with
+  ratingScale/factors/requirements, plus a governed AI Agent Directives section) through
+  the normal draft/review/publish pipeline, so a portable, tool-agnostic quality rubric
+  becomes a versioned governed artifact instead of a loose local file. A built-in
+  `evaluate-quality-model` skill bridges to the external `qualitymd` CLI / `/quality`
+  agent skill for the actual evaluation loop — SpecRegistry governs the rubric's content
+  and review history, it does not reimplement QUALITY.md's evaluation methodology.
+  Follow-up if this proves valuable: parse the frontmatter natively and feed
+  factors/requirements/ratingScale into the compliance-policy and audit-prompt machinery
+  instead of treating it as opaque prose.
 - [x] Agent task planner that returns applicable specs, sections, missing specs, and acceptance criteria for a ticket or task.
 - [x] Spec-aware PR/ticket generator that produces implementation checklists from governing specs.
 - [x] Spec improvement suggestions based on feedback clusters, weak efficacy, audit findings, and low token ROI.

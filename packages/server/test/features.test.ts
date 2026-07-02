@@ -70,7 +70,7 @@ Existing. Clarified.
 describe("governed agent skills", () => {
   it("seeds safe base skills and supports admin-managed skill lifecycle", async () => {
     const initial = await getJson("/api/v1/skills");
-    expect(initial.length).toBeGreaterThanOrEqual(10);
+    expect(initial.length).toBeGreaterThanOrEqual(11);
     expect(initial.every((skill: any) => skill.status === "active")).toBe(true);
     expect(initial.find((skill: any) => skill.slug === "load-governed-specs")).toMatchObject({
       built_in: 1,
@@ -78,10 +78,14 @@ describe("governed agent skills", () => {
     });
     // load-governed-specs must point agents at begin_task first (matches AGENT_OPERATING_RULES).
     expect(initial.find((skill: any) => skill.slug === "load-governed-specs").instructions).toContain("begin_task");
-    // The lifecycle, guidance, compliance-loop, and separation-of-duties skills are seeded safe built-ins.
-    for (const slug of ["register-task-session", "resolve-uncovered-guidance", "run-compliance-loop", "propose-not-publish"]) {
+    // The lifecycle, guidance, compliance-loop, separation-of-duties, and quality-model
+    // bridge skills are seeded safe built-ins.
+    for (const slug of ["register-task-session", "resolve-uncovered-guidance", "run-compliance-loop", "propose-not-publish", "evaluate-quality-model"]) {
       expect(initial.find((skill: any) => skill.slug === slug)).toMatchObject({ built_in: 1, risk_level: "safe", status: "active" });
     }
+    // The bridge skill defers evaluation methodology to the external qualitymd tooling
+    // rather than reimplementing it, and treats a missing QUALITY.md as a gap to fill.
+    expect(initial.find((skill: any) => skill.slug === "evaluate-quality-model").instructions).toContain("qualitymd");
 
     const created = await app.inject({
       method: "POST",
@@ -1209,6 +1213,44 @@ describe("LLM spec automation", () => {
     });
     expect(draft.statusCode).toBe(201);
     expect(draft.json()).toMatchObject({ filename: "SECURITY_PRIVACY.md", status: "draft" });
+  });
+
+  it("generates a spec-compliant QUALITY.md draft from the quality-model purpose", async () => {
+    const purposes = await getJson("/api/v1/spec-purposes");
+    expect(purposes.find((purpose: any) => purpose.id === "quality-model")).toMatchObject({ filename: "QUALITY.md" });
+
+    const preview = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/preview",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "quality-model",
+        tree: "src/routes/api.ts",
+        detected_languages: ["TypeScript"],
+      },
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({ filename: "QUALITY.md", provider: null });
+    const content = preview.json().content as string;
+    // Frontmatter must stay parseable/spec-compliant: fenced with --- and carrying the
+    // real QUALITY.md keys, not just SpecRegistry's usual ## heading convention.
+    expect(content.startsWith("---\n")).toBe(true);
+    expect(content).toContain("ratingScale:");
+    expect(content).toContain("factors:");
+    expect(content).toContain("## AI Agent Directives");
+
+    const draft = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/draft",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "quality-model",
+        content,
+        updated_by: "automation-test",
+      },
+    });
+    expect(draft.statusCode).toBe(201);
+    expect(draft.json()).toMatchObject({ filename: "QUALITY.md", status: "draft" });
   });
 
   it("plans tasks, generates checklists, classifies sections, optimizes context, and composes packs", async () => {

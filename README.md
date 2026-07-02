@@ -840,12 +840,22 @@ Use the LDAP tester in Settings before switching users over.
   the same blast-radius model outside the review flow, including consumers, dependencies,
   migration checklist items, and generated PR summary markdown.
 - **LLM spec automation** — the Generate Specs workbench detects missing governance specs
-  from repo evidence, uses purpose-based templates for common spec types, generates prompts
-  or server-LLM drafts, and creates reviewed registry drafts rather than publishing directly.
-  It also provides task planning, spec-aware PR/ticket checklists, generated audit prompts,
-  section classification, context budget optimization, improvement suggestions, and spec
-  pack composition. Automation features are individually flaggable, and LLM-backed variants
+  from repo evidence, uses purpose-based templates for common spec types (API contracts,
+  database schemas, test strategies, observability, security/privacy, agent operating
+  rules, deployment runbooks, and quality models), generates prompts or server-LLM drafts,
+  and creates reviewed registry drafts rather than publishing directly. It also provides
+  task planning, spec-aware PR/ticket checklists, generated audit prompts, section
+  classification, context budget optimization, improvement suggestions, and spec pack
+  composition. Automation features are individually flaggable, and LLM-backed variants
   run only when requested and enabled.
+- **QUALITY.md quality models** — the `quality-model` purpose generates a spec-compliant
+  [QUALITY.md](https://getquality.md/specification) quality rubric (YAML frontmatter with
+  a rating scale, factors, and assessable requirements) through the normal draft/review/
+  publish pipeline, so a portable, tool-agnostic quality model becomes a versioned,
+  reviewed governed artifact instead of a loose local file. The built-in
+  `evaluate-quality-model` agent skill bridges to the external `qualitymd` CLI / `/quality`
+  agent skill for the actual evaluation loop — SpecRegistry governs the rubric's content
+  and review history, it does not reimplement QUALITY.md's evaluation methodology.
 - **Harness improvement controls** — Settings -> Features includes an experimental
   Self-Harness-style control group. When enabled, `GET /api/v1/features/harness-insights`
   mines agent sessions, feedback, and compliance attestations for recurring harness-level

@@ -341,6 +341,57 @@ Define deployment metrics, logs, and checks.
 State what an agent must verify before changing deployment behavior.
 `,
   },
+  {
+    id: "quality-model",
+    filename: "QUALITY.md",
+    title: "Quality Model",
+    description:
+      "Portable quality rubric in the QUALITY.md format (https://getquality.md/specification): areas, factors, requirements, and a rating scale for continuous evaluation. Frontmatter is spec-compliant so it works with the external `qualitymd` CLI and `/quality` agent skill; the body carries the governed AI Agent Directives every other template has.",
+    required_sections: ["Overview", "AI Agent Directives"],
+    signals: ["quality.md", ".quality/", "qualitymd", "quality-model", "quality_model", "ratingscale"],
+    prompt:
+      "Generate a QUALITY.md quality model (https://getquality.md/specification) from the repository evidence. The YAML frontmatter must stay spec-compliant: a ratingScale (at least a target and unacceptable level) and 2-4 factors, each with concrete, assessable requirements grounded in this repo's actual risks and conventions, not generic boilerplate. Keep every requirement's assessment method concrete and checkable (a specific test, telemetry query, or review step), never vague language like 'as needed' or 'generally'.",
+    content_template: `---
+title: <Project or Component> Quality Model
+description: What this quality model covers and why it matters.
+ratingScale:
+  - level: target
+    title: Target
+    description: Meets the agreed quality bar.
+    criterion: Satisfies the requirement.
+  - level: unacceptable
+    title: Unacceptable
+    description: Does not meet the agreed quality bar.
+    criterion: Does not satisfy the requirement.
+factors:
+  reliability:
+    title: Reliability
+    description: Describe what "reliable" means for this project.
+    requirements:
+      example-requirement:
+        title: Replace with a concrete, assessable requirement
+        assessment: Describe exactly how this is checked (a specific test, telemetry query, or review step).
+---
+
+# <Project or Component> Quality Model
+
+## Overview
+
+Describe the scope of this quality model: which area of the project it covers, and how
+it relates to the other governed specs for this project type (design, API, database,
+security). This body is SpecRegistry's governed wrapper around the frontmatter above;
+the frontmatter itself is the portable, spec-compliant QUALITY.md content and should
+validate against \`qualitymd lint\` unchanged.
+
+## AI Agent Directives
+
+Agents evaluating or improving this quality model must ground findings in this
+repository's actual evidence, cite the requirement id for every finding, and call
+report_spec_feedback instead of silently loosening a requirement's assessment method.
+Propose changes to this spec through the normal review workflow like any other governed
+spec; do not hand-edit the published file directly.
+`,
+  },
 ];
 
 function normalizedTree(input: string): string {

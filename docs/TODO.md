@@ -13,7 +13,10 @@
   `evaluate-quality-model` skill bridges to the external `qualitymd` CLI / `/quality`
   agent skill for the actual evaluation loop — SpecRegistry governs the rubric's content
   and review history, it does not reimplement QUALITY.md's evaluation methodology.
-  Follow-up if this proves valuable: parse the frontmatter natively and feed
+  A worked, filled-in reference model for SpecRegistry itself lives at
+  `docs/examples/QUALITY.md`; both it and the generated purpose-template scaffold were
+  validated against the real `qualitymd` v0.27.1 CLI (`qualitymd lint` clean, `model tree`
+  parses). Follow-up if this proves valuable: parse the frontmatter natively and feed
   factors/requirements/ratingScale into the compliance-policy and audit-prompt machinery
   instead of treating it as opaque prose.
 - [x] Agent task planner that returns applicable specs, sections, missing specs, and acceptance criteria for a ticket or task.

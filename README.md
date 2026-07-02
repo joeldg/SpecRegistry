@@ -856,6 +856,9 @@ Use the LDAP tester in Settings before switching users over.
   `evaluate-quality-model` agent skill bridges to the external `qualitymd` CLI / `/quality`
   agent skill for the actual evaluation loop — SpecRegistry governs the rubric's content
   and review history, it does not reimplement QUALITY.md's evaluation methodology.
+  [docs/examples/QUALITY.md](docs/examples/QUALITY.md) is a worked, filled-in quality model
+  for SpecRegistry itself (validated with `qualitymd lint`) that you can copy as a starting
+  point.
 - **Harness improvement controls** — Settings -> Features includes an experimental
   Self-Harness-style control group. When enabled, `GET /api/v1/features/harness-insights`
   mines agent sessions, feedback, and compliance attestations for recurring harness-level

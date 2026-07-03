@@ -16,6 +16,7 @@ import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
 import { runMcpServer } from "./mcp.js";
+import { readInstalledDefaultServer } from "./defaultServer.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -35,7 +36,7 @@ Usage:
   specreg mcp       Run the SpecRegistry MCP stdio server for configured agents
 
 Options:
-  --server <url>    Registry server (default: $SPECREG_SERVER or http://localhost:4000)
+  --server <url>    Registry server (default: $SPECREG_SERVER or the downloaded registry URL)
   --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
   --type <name>     Premade project type name (skips the new-project walkthrough)
   --dir <path>      Spec directory (default: specs; generate --write default: .spec/drafts)
@@ -100,11 +101,26 @@ const { command, positionals, flags } = parseArgs(process.argv.slice(2));
 const server =
   (typeof flags.server === "string" ? flags.server : undefined) ??
   process.env.SPECREG_SERVER ??
-  "http://localhost:4000";
+  readInstalledDefaultServer();
 const token =
   (typeof flags.token === "string" ? flags.token : undefined) ??
   process.env.SPECREG_TOKEN ??
   readStoredCredentials()?.token;
+
+if (command && command !== "help" && !flags.help && !server) {
+  throw new Error(
+    "No registry server configured. Install the CLI from SpecRegistry Settings, set SPECREG_SERVER, or pass --server <url>."
+  );
+}
+
+function requireServer(): string {
+  if (!server) {
+    throw new Error(
+      "No registry server configured. Install the CLI from SpecRegistry Settings, set SPECREG_SERVER, or pass --server <url>."
+    );
+  }
+  return server;
+}
 
 function manifestProjectType(dir: string): string | undefined {
   const manifestPath = path.resolve(process.cwd(), dir, ".specregistry.json");
@@ -122,7 +138,7 @@ try {
     console.log(HELP);
   } else if (command === "init") {
     await runInit({
-      server,
+      server: requireServer(),
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
@@ -134,7 +150,7 @@ try {
     });
   } else if (command === "generate") {
     await runGenerate({
-      server,
+      server: requireServer(),
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       out: typeof flags.out === "string" ? flags.out : ".spec/prompts",
@@ -148,7 +164,7 @@ try {
     const delta = typeof flags.delta === "string" ? flags.delta : "minor";
     if (!["major", "minor", "patch"].includes(delta)) throw new Error("--delta must be one of: major, minor, patch");
     await runSubmitDrafts({
-      server,
+      server: requireServer(),
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : ".spec/drafts",
@@ -174,7 +190,7 @@ try {
     if (flags.report === true) {
       const projectType = (typeof flags.type === "string" ? flags.type : undefined) ?? manifestProjectType(specsDir);
       if (!projectType) throw new Error("code-map --report requires --type or a local specs/.specregistry.json manifest with project_type.");
-      const uploaded = await reportCodeTrace(server, token, projectType, inventory.trace, specsDir);
+      const uploaded = await reportCodeTrace(requireServer(), token, projectType, inventory.trace, specsDir);
       console.log(`Reported code trace coverage to registry: ${Math.round(uploaded.coverage_ratio * 100)}% coverage, drift ${uploaded.drift_severity} (${uploaded.drift_score}).`);
     }
   } else if (command === "trace-check") {
@@ -193,13 +209,13 @@ try {
     if (!ok) process.exit(1);
   } else if (command === "mcp") {
     await runMcpServer({
-      server,
+      server: requireServer(),
       token,
       projectType: typeof flags.type === "string" ? flags.type : undefined,
     });
   } else if (command === "check" || command === "sync") {
     await runSync({
-      server,
+      server: requireServer(),
       token,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       mode: command,
@@ -211,7 +227,7 @@ try {
       throw new Error(`--target must be one of: ${COMPILE_TARGETS.join(", ")}`);
     }
     await runCompile({
-      server,
+      server: requireServer(),
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
@@ -219,11 +235,11 @@ try {
       force: flags.force === true,
     });
   } else if (command === "verify") {
-    const ok = await runVerify({ server, token, dir: typeof flags.dir === "string" ? flags.dir : "specs" });
+    const ok = await runVerify({ server: requireServer(), token, dir: typeof flags.dir === "string" ? flags.dir : "specs" });
     if (!ok) process.exit(1);
   } else if (command === "audit") {
     await runAudit({
-      server,
+      server: requireServer(),
       token,
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
@@ -237,7 +253,7 @@ try {
     if (score !== undefined && (Number.isNaN(score) || score < 0 || score > 100)) {
       throw new Error("--score must be a number between 0 and 100");
     }
-    await runComply({ server, token, type: projectType, dir: specsDir, score });
+    await runComply({ server: requireServer(), token, type: projectType, dir: specsDir, score });
   } else if (command === "styleguide") {
     const sub = positionals[1];
     const styleguideDir = typeof flags["styleguide-dir"] === "string" ? flags["styleguide-dir"] : ".spec/styleguides";

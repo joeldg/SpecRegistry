@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
@@ -769,6 +772,22 @@ describe("agent MCP guide", () => {
     expect(mcp.mcpServers.specregistry.args).toEqual(["mcp"]);
     expect(mcp.mcpServers.specregistry.env.SPECREG_SERVER).toBe("https://specreg.example.com");
     expect(mcp.mcpServers.specregistry.env.SPECREG_PROJECT_TYPE).toBe("Acme Edge Device");
+  });
+});
+
+describe("CLI download", () => {
+  it("embeds the resolved public registry URL as the CLI default server", async () => {
+    process.env.SPECREG_PUBLIC_URL = "https://specreg.example.com";
+    const res = await app.inject({ method: "GET", url: "/api/v1/cli/download" });
+    expect(res.statusCode).toBe(200);
+    const tgz = path.join(os.tmpdir(), `specreg-cli-${crypto.randomUUID()}.tgz`);
+    fs.writeFileSync(tgz, res.rawPayload);
+    try {
+      const stamped = execFileSync("tar", ["-xOf", tgz, "package/dist/default-server.json"], { encoding: "utf8" });
+      expect(JSON.parse(stamped)).toEqual({ server: "https://specreg.example.com" });
+    } finally {
+      fs.rmSync(tgz, { force: true });
+    }
   });
 });
 

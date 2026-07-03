@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ import { findProjectConsumer, HttpError, requireProjectType, requireString } fro
 import { recordUsage } from "../lib/events.js";
 import { now, uuid } from "../db.js";
 import { diagnoseManifest } from "../lib/manifestDiagnostics.js";
+import { publicUrl } from "../lib/publicUrl.js";
 
 interface CodeTracePayload {
   schema_version?: unknown;
@@ -81,15 +83,18 @@ function latestMtimeMs(target: string): number {
   return latest;
 }
 
-function ensureCliTarball(repoRoot: string): string {
+function ensureCliTarball(repoRoot: string, serverUrl: string): string {
   const cliPackage = JSON.parse(fs.readFileSync(path.join(repoRoot, "packages/cli/package.json"), "utf8")) as { version?: string };
-  const filename = `specregistry-cli-${cliPackage.version ?? "0.1.0"}.tgz`;
-  const explicit = path.join(repoRoot, filename);
-  if (fs.existsSync(explicit)) return explicit;
+  const serverHash = crypto.createHash("sha256").update(serverUrl).digest("hex").slice(0, 10);
+  const filename = `specregistry-cli-${cliPackage.version ?? "0.1.0"}-${serverHash}.tgz`;
 
   const cacheDir = process.env.SPECREG_CLI_PACK_DIR ?? path.join(os.tmpdir(), "specregistry-cli-pack");
   const npmCache = path.join(cacheDir, "npm-cache");
   const target = path.join(cacheDir, filename);
+  const cliDistDir = path.join(repoRoot, "packages/cli/dist");
+  const cliDistEntry = path.join(cliDistDir, "index.js");
+  const sharedDistEntry = path.join(repoRoot, "packages/shared/dist/index.js");
+  const defaultServerPath = path.join(cliDistDir, "default-server.json");
   const sourceMtime = Math.max(
     latestMtimeMs(path.join(repoRoot, "packages/cli/src")),
     latestMtimeMs(path.join(repoRoot, "packages/cli/package.json")),
@@ -98,13 +103,19 @@ function ensureCliTarball(repoRoot: string): string {
     latestMtimeMs(path.join(repoRoot, "packages/shared/package.json")),
     latestMtimeMs(path.join(repoRoot, "package-lock.json"))
   );
-  if (fs.existsSync(target) && fs.statSync(target).mtimeMs >= sourceMtime) return target;
+  if (fs.existsSync(target) && fs.statSync(target).mtimeMs >= sourceMtime) {
+    return target;
+  }
 
   fs.mkdirSync(cacheDir, { recursive: true });
   fs.mkdirSync(npmCache, { recursive: true });
   const env = { ...process.env, npm_config_cache: npmCache };
-  execFileSync("npm", ["run", "build", "-w", "@specregistry/shared"], { cwd: repoRoot, env, stdio: "pipe" });
-  execFileSync("npm", ["run", "build", "-w", "@specregistry/cli"], { cwd: repoRoot, env, stdio: "pipe" });
+  const distMtime = Math.min(latestMtimeMs(cliDistEntry), latestMtimeMs(sharedDistEntry));
+  if (distMtime < sourceMtime) {
+    execFileSync("npm", ["run", "build", "-w", "@specregistry/shared"], { cwd: repoRoot, env, stdio: "pipe" });
+    execFileSync("npm", ["run", "build", "-w", "@specregistry/cli"], { cwd: repoRoot, env, stdio: "pipe" });
+  }
+  fs.writeFileSync(defaultServerPath, `${JSON.stringify({ server: serverUrl }, null, 2)}\n`, "utf8");
   for (const file of fs.readdirSync(cacheDir)) {
     if (file.endsWith(".tgz")) fs.rmSync(path.join(cacheDir, file), { force: true });
   }
@@ -117,9 +128,10 @@ function ensureCliTarball(repoRoot: string): string {
     .trim()
     .split(/\r?\n/)
     .pop();
-  const packedPath = path.join(cacheDir, packed || filename);
+  const packedPath = path.join(cacheDir, packed || `specregistry-cli-${cliPackage.version ?? "0.1.0"}.tgz`);
   if (!fs.existsSync(packedPath)) throw new Error("npm pack did not produce a CLI tarball");
-  return packedPath;
+  fs.renameSync(packedPath, target);
+  return target;
 }
 
 export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
@@ -128,7 +140,7 @@ export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
     const repoRoot = path.resolve(here, "../../../..");
     let tgzPath: string;
     try {
-      tgzPath = ensureCliTarball(repoRoot);
+      tgzPath = ensureCliTarball(repoRoot, publicUrl(app.db, req));
     } catch (err) {
       throw new HttpError(500, `CLI tarball could not be built: ${err instanceof Error ? err.message : String(err)}`);
     }

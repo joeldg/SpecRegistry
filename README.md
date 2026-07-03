@@ -296,6 +296,10 @@ If you do not want to link the bins, run the built CLI directly from this checko
 node packages/cli/dist/index.js --help
 ```
 
+The dashboard/downloaded CLI package records the registry URL it was downloaded from, so
+`specreg init` can reach that registry without a `--server` flag. Source-checkout and linked
+CLI installs should use `--server` or `SPECREG_SERVER`.
+
 Initialize a new repository after the CLI is built and either linked or called through
 `node packages/cli/dist/index.js`:
 

@@ -390,6 +390,9 @@ agent host's approval policy and current published specs.
 Use the \`specregistry\` MCP server from \`.mcp.json\`; generated configs run \`specreg mcp\`
 so the dashboard-downloaded CLI also provides the MCP server.
 ${token ? "Authentication is configured through `SPECREG_TOKEN` in `.mcp.json`.\n" : "If the registry requires auth, add `SPECREG_TOKEN` to `.mcp.json`.\n"}
+If \`SPECREG_SERVER\` returns \`policy_denied\`, \`EPERM\`, or another network-policy block, do not treat
+that as a SpecRegistry auth failure. Ask the registry operator for a URL reachable from this
+agent sandbox (public DNS, VPN, or a tunnel) and update \`.mcp.json\` / \`SPECREG_SERVER\`.
 Required MCP flow:
 
 1. Call \`begin_task\` for the concrete task, project type \`${projectType}\`, and repo \`${repo}\`.

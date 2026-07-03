@@ -17,22 +17,47 @@ export function withRegistryAuth(init: RequestInit = {}, token?: string): Reques
   return { ...init, headers };
 }
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "cause" in error) {
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause && typeof cause === "object") {
+      const code = "code" in cause && typeof cause.code === "string" ? cause.code : undefined;
+      const message = "message" in cause && typeof cause.message === "string" ? cause.message : undefined;
+      if (code && message) return `${code}: ${message}`;
+      if (message) return message;
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function networkPolicyHint(detail: string): string {
+  return /policy_denied|eperm|forbidden by policy|network policy/i.test(detail)
+    ? " The agent host appears to be blocking this network target; use a registry URL that is reachable from that sandbox, such as a public DNS name, VPN-accessible host, or tunnel."
+    : "";
+}
+
+function httpDetail(body: { message?: string; error?: string; title?: string; detail?: string; status?: number }, fallback: string): string {
+  const primary = body.message ?? body.error ?? body.title ?? fallback;
+  return body.detail && body.detail !== primary ? `${primary}: ${body.detail}` : primary;
+}
+
 export async function fetchJson<T>(url: string, init?: RequestInit, token?: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, withRegistryAuth(init, token));
-  } catch {
-    throw new Error(`Could not reach the registry server at ${new URL(url).origin}. Is it running?`);
+  } catch (err) {
+    const detail = errorMessage(err);
+    throw new Error(`Could not reach the registry server at ${new URL(url).origin}: ${detail}.${networkPolicyHint(detail)}`);
   }
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = (await res.json()) as { message?: string; error?: string };
-      detail = body.message ?? body.error ?? detail;
+      const body = (await res.json()) as { message?: string; error?: string; title?: string; detail?: string; status?: number };
+      detail = httpDetail(body, detail);
     } catch {
       // non-JSON error body; keep statusText
     }
-    throw new Error(`${res.status} ${detail}`);
+    throw new Error(`${res.status} ${detail}.${networkPolicyHint(detail)}`);
   }
   return (await res.json()) as T;
 }

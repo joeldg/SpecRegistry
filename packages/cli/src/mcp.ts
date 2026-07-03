@@ -9,19 +9,50 @@ export interface McpServerOptions {
   repo?: string;
 }
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "cause" in error) {
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause && typeof cause === "object") {
+      const code = "code" in cause && typeof cause.code === "string" ? cause.code : undefined;
+      const message = "message" in cause && typeof cause.message === "string" ? cause.message : undefined;
+      if (code && message) return `${code}: ${message}`;
+      if (message) return message;
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function networkPolicyHint(detail: string): string {
+  return /policy_denied|eperm|forbidden by policy|network policy/i.test(detail)
+    ? " The agent host appears to be blocking this network target; use a registry URL that is reachable from that sandbox, such as a public DNS name, VPN-accessible host, or tunnel."
+    : "";
+}
+
+function httpDetail(body: { message?: string; error?: string; title?: string; detail?: string; status?: number }, fallback: string): string {
+  const primary = body.message ?? body.error ?? body.title ?? fallback;
+  return body.detail && body.detail !== primary ? `${primary}: ${body.detail}` : primary;
+}
+
 async function api<T>(serverUrl: string, token: string | undefined, path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
-  const res = await fetch(`${serverUrl}${path}`, { ...init, headers });
+  const url = `${serverUrl}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers });
+  } catch (err) {
+    const detail = errorMessage(err);
+    throw new Error(`Could not reach SpecRegistry at ${new URL(url).origin}: ${detail}.${networkPolicyHint(detail)}`);
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = (await res.json()) as { message?: string; error?: string };
-      detail = body.message ?? body.error ?? detail;
+      const body = (await res.json()) as { message?: string; error?: string; title?: string; detail?: string; status?: number };
+      detail = httpDetail(body, detail);
     } catch {
       // non-JSON error body
     }
-    throw new Error(`SpecRegistry API error ${res.status}: ${detail}`);
+    throw new Error(`SpecRegistry API error ${res.status}: ${detail}.${networkPolicyHint(detail)}`);
   }
   return (await res.json()) as T;
 }

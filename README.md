@@ -1019,10 +1019,12 @@ automatically once it is configured.
 | `SPECREG_PUBLIC_URL` | Externally reachable URL used in agent packs and MCP guides |
 | `SPECREG_AUTH=required` | Require auth on all non-public routes |
 | `SPECREG_ADMIN_PASSWORD` | Seeded admin password (default `admin`) |
+| `SPECREG_SELF_UPDATE` | Enable the in-app `git pull` + rebuild self-update (`POST /admin/update`). Defaults on in dev, **off when `SPECREG_AUTH=required`**; set `true`/`false` to override |
 | `ANTHROPIC_API_KEY` | Anthropic key fallback for server LLM features |
 | `OPENAI_API_KEY` | OpenAI key fallback for server LLM features |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini key fallback for server LLM features |
-| `LLM_PROVIDER` | Server LLM provider: `anthropic`, `openai`, `gemini`, or `openai_compatible` |
+| `OPENROUTER_API_KEY`, `BITDEER_API_KEY`, `TOGETHER_API_KEY`, `VULTR_API_KEY`, `NVIDIA_API_KEY` / `NGC_API_KEY` | Hosted OpenAI-compatible provider key fallbacks |
+| `LLM_PROVIDER` | Server LLM provider: `anthropic`, `openai`, `gemini`, `openrouter`, `bitdeer`, `together`, `vultr`, `nvidia`, or `openai_compatible` |
 | `LLM_MODEL` | Server LLM model name |
 | `LLM_BASE_URL` | Anthropic proxy or OpenAI-compatible local/network endpoint |
 | `LLM_API_KEY` | Server LLM API key; optional for some local endpoints |
@@ -1039,6 +1041,7 @@ automatically once it is configured.
 | `SPECREG_AUTOMATION_ENABLED` | Master flag for automation APIs and workbench controls |
 | `SPECREG_AUTOMATION_GAP_DETECTION` | Enable spec gap detection |
 | `SPECREG_AUTOMATION_GENERATION` | Enable spec generation preview/draft creation |
+| `SPECREG_AUTOMATION_QUALITY_MODELS` | Enable QUALITY.md rubric generation and evaluation handoff workflows |
 | `SPECREG_AUTOMATION_LLM_GENERATION` | Enable requested LLM-backed automation variants |
 | `SPECREG_AUTOMATION_TASK_PLANNER` | Enable task planning |
 | `SPECREG_AUTOMATION_TICKET_GENERATOR` | Enable PR/ticket checklist generation |
@@ -1119,9 +1122,11 @@ The Settings page uses three configurable tiers:
 - **Frontier**: default for spec generation, final audits, AI draft fixes, and efficacy scoring.
 
 Each tier can use a different provider, model, base URL, API key, and max-token budget.
-The routing table lets admins remap each feature to `cheap`, `standard`, or `frontier`
-without changing code. The older `/api/v1/llm/config` endpoint still configures the
-standard tier for compatibility.
+The provider catalog includes Anthropic, OpenAI, Gemini, OpenRouter, Bitdeer, Together AI,
+Vultr, NVIDIA NIM/build.nvidia.com, and custom OpenAI-compatible endpoints. The routing
+table lets admins remap each feature to `cheap`, `standard`, or `frontier` without
+changing code. The older `/api/v1/llm/config` endpoint still configures the standard tier
+for compatibility.
 
 Anthropic example:
 
@@ -1156,6 +1161,23 @@ LLM_BASE_URL=http://ollama.internal:11434/v1
 LLM_API_KEY=
 ```
 
+Hosted OpenAI-compatible providers use the same chat-completions path with provider
+defaults for base URLs and model fallbacks:
+
+```dotenv
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...
+LLM_MODEL=anthropic/claude-sonnet-4.5
+```
+
+NVIDIA NIM/build.nvidia.com example:
+
+```dotenv
+LLM_PROVIDER=nvidia
+NVIDIA_API_KEY=nvapi-...
+LLM_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1.5
+```
+
 Cheap-tier local model with a hosted frontier model:
 
 ```dotenv
@@ -1183,7 +1205,8 @@ For LM Studio, either `http://host:1234` or `http://host:1234/v1` is accepted; r
 OpenAI-compatible URLs are normalized to `/v1` automatically for model loading and chat
 tests.
 The Settings page can query available models from Anthropic, OpenAI, Gemini, and
-OpenAI-compatible providers that expose `/models`.
+OpenAI-compatible providers that expose `/models`; if a provider cannot list models yet,
+SpecRegistry shows provider-specific fallbacks so tiers can still be configured.
 
 Spec download bundles are ed25519-signed; the keypair is generated on first use and stored
 in the database. `specreg verify` checks bundle provenance against the public key.

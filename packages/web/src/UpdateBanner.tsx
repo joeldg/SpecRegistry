@@ -43,10 +43,16 @@ export default function UpdateBanner() {
         commit{version.github.behind_by === 1 ? "" : "s"} behind {version.git_branch ?? "main"} on GitHub
         {version.github.latest_sha ? ` (latest ${version.github.latest_sha.slice(0, 7)})` : ""}.
       </div>
-      {isAdmin && (
+      {isAdmin && version.self_update_enabled && (
         <button className="primary" disabled={updating} onClick={runUpdate}>
           {updating ? "Updating…" : "Update now"}
         </button>
+      )}
+      {isAdmin && !version.self_update_enabled && (
+        <div className="update-banner-result">
+          In-app self-update is disabled on this server — deploy the update through your pipeline
+          (or set <code>SPECREG_SELF_UPDATE=true</code> to enable the button).
+        </div>
       )}
       {result && (
         <div className="update-banner-result">

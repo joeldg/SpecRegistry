@@ -16,11 +16,13 @@ import { registerAuth } from "./lib/auth.js";
 import { reindexAll } from "./lib/search.js";
 import { getPublicKey } from "./lib/sign.js";
 import { getAppKeyConfig } from "./lib/appKeys.js";
-import { checkGithubVersion, getLocalVersionInfo } from "./lib/versionInfo.js";
+import { checkGithubVersion, getLocalVersionInfo, selfUpdateEnabled } from "./lib/versionInfo.js";
 
 declare module "fastify" {
   interface FastifyInstance {
     db: Db;
+    /** Effective auth mode for this instance; drives secured-posture defaults. */
+    authRequired: boolean;
   }
 }
 
@@ -32,16 +34,18 @@ export interface AppOptions {
 
 export async function buildApp(db: Db, opts: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false });
+  const authRequired = opts.authRequired ?? process.env.SPECREG_AUTH === "required";
   app.decorate("db", db);
+  app.decorate("authRequired", authRequired);
   await app.register(cors, { origin: true });
-  registerAuth(app, { authRequired: opts.authRequired ?? process.env.SPECREG_AUTH === "required" });
+  registerAuth(app, { authRequired });
 
   app.get("/api/v1/health", async () => ({ status: "ok" }));
   app.get("/api/v1/meta/public-key", async () => ({ algorithm: "ed25519", public_key: getPublicKey(db) }));
   app.get("/api/v1/meta/version", async () => {
     const local = getLocalVersionInfo();
     const github = await checkGithubVersion(local, getAppKeyConfig(db).github_token || undefined);
-    return { ...local, github };
+    return { ...local, github, self_update_enabled: selfUpdateEnabled(authRequired) };
   });
   await app.register(metricsRoutes);
 

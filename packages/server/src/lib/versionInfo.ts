@@ -206,6 +206,18 @@ export interface UpdateResult {
 
 const COMMAND_TIMEOUT_MS = Number(process.env.SPECREG_UPDATE_TIMEOUT_MS) || 180000;
 
+/**
+ * Whether the HTTP-triggered `git pull` + rebuild self-update path is available.
+ * An explicit SPECREG_SELF_UPDATE wins; otherwise it is on in dev and off in
+ * secured deployments (where updates should flow through a real pipeline, not a
+ * runtime remote-code-pull that any admin session could invoke).
+ */
+export function selfUpdateEnabled(authRequired: boolean): boolean {
+  const raw = process.env.SPECREG_SELF_UPDATE;
+  if (raw !== undefined) return !["0", "false", "off", "no"].includes(raw.trim().toLowerCase());
+  return !authRequired;
+}
+
 /** True when a `git diff --name-only` listing touches a manifest that could change installed dependencies. */
 export function changedDependencyFiles(diffOutput: string): boolean {
   return /(^|\/)(package\.json|package-lock\.json)$/m.test(diffOutput);

@@ -13,21 +13,27 @@ import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { processSyncJobs } from "../lib/github.js";
 import {
   listLlmModels,
+  listLlmProviderModels,
+  LLM_PROVIDER_VALUES,
   LLM_ROUTE_VALUES,
   LLM_TIER_VALUES,
   publicLlmConfig,
+  publicLlmProviderConfig,
+  publicLlmProvidersConfig,
   publicLlmTierConfig,
   publicLlmTieringConfig,
   runLlmText,
   saveLlmConfig,
+  saveLlmProviderConfig,
   saveLlmRoutes,
   saveLlmTierConfig,
   type LlmConfig,
+  type LlmProvider,
   type LlmTaskRoute,
   type LlmTier,
 } from "../lib/llm.js";
 import { getAppKeyConfig, publicAppKeyConfig, saveAppKeyConfig, type AppKeyConfig } from "../lib/appKeys.js";
-import { pullAndRebuild } from "../lib/versionInfo.js";
+import { pullAndRebuild, selfUpdateEnabled } from "../lib/versionInfo.js";
 import {
   publicEmbeddingConfig,
   reindexSemanticAll,
@@ -45,6 +51,10 @@ function isLlmTier(value: unknown): value is LlmTier {
 
 function isLlmRoute(value: unknown): value is LlmTaskRoute {
   return typeof value === "string" && LLM_ROUTE_VALUES.includes(value as LlmTaskRoute);
+}
+
+function isLlmProvider(value: unknown): value is LlmProvider {
+  return typeof value === "string" && LLM_PROVIDER_VALUES.includes(value as LlmProvider);
 }
 
 function harnessImprovementInsights(app: FastifyInstance) {
@@ -652,6 +662,32 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/llm/config", async () => {
     return publicLlmConfig(app.db);
+  });
+
+  app.get("/llm/providers", async () => {
+    return { providers: publicLlmProvidersConfig(app.db) };
+  });
+
+  app.put("/llm/providers/:provider", async (req) => {
+    const { provider } = req.params as { provider: string };
+    if (!isLlmProvider(provider)) throw new HttpError(400, "unknown LLM provider");
+    const body = (req.body ?? {}) as Partial<Pick<LlmConfig, "model" | "base_url" | "api_key">> & { clear_api_key?: boolean };
+    const saved = publicLlmProviderConfig(app.db, provider, saveLlmProviderConfig(app.db, provider, body));
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "llm.provider.updated",
+      target_type: "llm",
+      target_id: provider,
+      summary: `${saved.label} provider updated`,
+      detail: { provider, model: saved.model, base_url: saved.base_url, has_api_key: saved.has_api_key },
+    });
+    return saved;
+  });
+
+  app.get("/llm/providers/:provider/models", async (req) => {
+    const { provider } = req.params as { provider: string };
+    if (!isLlmProvider(provider)) throw new HttpError(400, "unknown LLM provider");
+    return listLlmProviderModels(app.db, provider);
   });
 
   app.put("/llm/config", async (req) => {
@@ -1381,6 +1417,17 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // at a merge, and does not restart the process — Node cannot safely hot-swap its own
   // already-loaded modules, so a manual (or process-manager) restart is still required.
   app.post("/admin/update", async (req) => {
+    if (!selfUpdateEnabled(app.authRequired)) {
+      recordAudit(app.db, {
+        actor: actorFrom(req, "admin"),
+        action: "server.update_blocked",
+        summary: "Self-update attempt blocked (SPECREG_SELF_UPDATE disabled)",
+      });
+      throw new HttpError(
+        403,
+        "Server self-update is disabled. Set SPECREG_SELF_UPDATE=true to enable it, or deploy updates through your normal pipeline."
+      );
+    }
     try {
       const result = await pullAndRebuild();
       recordAudit(app.db, {

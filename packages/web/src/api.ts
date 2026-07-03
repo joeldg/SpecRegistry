@@ -287,6 +287,7 @@ export type AutomationFlags = Record<
   | "enabled"
   | "gap_detection"
   | "generation"
+  | "quality_models"
   | "llm_generation"
   | "task_planner"
   | "ticket_generator"
@@ -444,8 +445,23 @@ export interface LdapConfig {
   default_role: "admin" | "reviewer" | "author" | "agent";
   has_bind_password: boolean;
 }
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "openai_compatible" | "openrouter" | "bitdeer" | "together" | "vultr" | "nvidia";
+export interface LlmProviderDescriptor {
+  id: LlmProvider;
+  label: string;
+  family: "native" | "openai_compatible";
+  description: string;
+  default_base_url: string;
+  default_model: string;
+  model: string;
+  base_url: string;
+  model_fallbacks: string[];
+  requires_api_key: boolean;
+  has_api_key: boolean;
+  docs_url?: string;
+}
 export interface LlmConfig {
-  provider: "anthropic" | "openai" | "gemini" | "openai_compatible";
+  provider: LlmProvider;
   model: string;
   base_url: string;
   max_tokens: number;
@@ -539,6 +555,7 @@ export interface VersionStatus {
     error: string | null;
     checked_at: string | null;
   };
+  self_update_enabled: boolean;
 }
 export interface UpdateResult {
   ok: boolean;
@@ -824,6 +841,10 @@ export const api = {
       body: JSON.stringify({ groups }),
     }),
   llmConfig: () => request<LlmConfig>("/api/v1/llm/config"),
+  llmProviders: () => request<{ providers: LlmProviderDescriptor[] }>("/api/v1/llm/providers"),
+  updateLlmProvider: (provider: LlmProvider, body: Partial<Pick<LlmConfig, "model" | "base_url">> & { api_key?: string; clear_api_key?: boolean }) =>
+    request<LlmProviderDescriptor>(`/api/v1/llm/providers/${provider}`, { method: "PUT", body: JSON.stringify(body) }),
+  llmProviderModels: (provider: LlmProvider) => request<{ provider: LlmProvider; models: string[] }>(`/api/v1/llm/providers/${provider}/models`),
   updateLlmConfig: (body: Partial<Omit<LlmConfig, "has_api_key">> & { api_key?: string; clear_api_key?: boolean }) =>
     request<LlmConfig>("/api/v1/llm/config", { method: "PUT", body: JSON.stringify(body) }),
   testLlm: (prompt?: string, max_tokens?: number, tier?: LlmTier, route?: LlmTaskRoute) =>

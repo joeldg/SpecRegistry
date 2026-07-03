@@ -30,6 +30,7 @@ afterEach(async () => {
   delete process.env.SPECREG_ADMIN_PASSWORD;
   delete process.env.SPECREG_SECRET_KEY;
   delete process.env.SPECREG_REPO_DIR;
+  delete process.env.SPECREG_SELF_UPDATE;
 });
 
 async function getJson(target: FastifyInstance, url: string) {
@@ -973,5 +974,27 @@ describe("version endpoint and self-update", () => {
 
     const auditLog = await app.inject({ method: "GET", url: "/api/v1/audit-log" });
     expect(auditLog.json().some((entry: any) => entry.action === "server.update_failed")).toBe(true);
+  });
+
+  it("blocks self-update and audits it when SPECREG_SELF_UPDATE is off", async () => {
+    process.env.SPECREG_SELF_UPDATE = "false";
+    const res = await app.inject({ method: "POST", url: "/api/v1/admin/update" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().message).toMatch(/self-update is disabled/i);
+    const auditLog = await app.inject({ method: "GET", url: "/api/v1/audit-log" });
+    expect(auditLog.json().some((entry: any) => entry.action === "server.update_blocked")).toBe(true);
+  });
+
+  it("defaults self-update off in secured mode and reports it on /meta/version", async () => {
+    const securedApp = await buildApp(createDb(":memory:"), { authRequired: true });
+    try {
+      expect((await securedApp.inject({ method: "GET", url: "/api/v1/meta/version" })).json().self_update_enabled).toBe(
+        false
+      );
+    } finally {
+      await securedApp.close();
+    }
+    // Dev mode (the default test app) leaves it enabled.
+    expect((await app.inject({ method: "GET", url: "/api/v1/meta/version" })).json().self_update_enabled).toBe(true);
   });
 });

@@ -34,6 +34,9 @@ ${JSON.stringify(mcpConfig(serverUrl, projectType, repo), null, 2)}
 If the project type is not preconfigured, call \`list_project_types\` first and choose the best match.
 If the registry requires authentication, add \`SPECREG_TOKEN\` to the MCP server \`env\` block. Use a
 login token or long-lived API key with the minimum role needed for the workflow.
+Do not run \`specreg mcp\` directly as a health check; it is a stdio server and may exit
+when no MCP client keeps stdin/stdout open. Run \`specreg mcp --check\` to test registry
+reachability and authentication from the same environment.
 If the agent host reports \`policy_denied\`, \`EPERM\`, or another network-policy block for \`SPECREG_SERVER\`,
 do not treat that as a SpecRegistry auth failure. Configure Settings > Integrations > Server reachability
 or \`SPECREG_PUBLIC_URL\` to a URL reachable from that sandbox, such as public DNS, VPN, or a tunnel.

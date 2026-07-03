@@ -57,6 +57,29 @@ async function api<T>(serverUrl: string, token: string | undefined, path: string
   return (await res.json()) as T;
 }
 
+export async function checkMcpConnectivity(opts: McpServerOptions): Promise<void> {
+  const defaultType = opts.projectType ?? process.env.SPECREG_PROJECT_TYPE;
+  const defaultRepo = opts.repo ?? process.env.SPECREG_REPO;
+  console.log(`SpecRegistry server: ${opts.server}`);
+  await api(opts.server, opts.token, "/api/v1/health");
+  console.log("health: ok");
+  const types = await api<Array<{ name?: string; scope?: string }>>(opts.server, opts.token, "/api/v1/project-types");
+  console.log(`project_types: ${types.length}`);
+  if (defaultType) {
+    const params = new URLSearchParams();
+    if (defaultRepo) params.set("repo", defaultRepo);
+    const specs = await api<{ specs?: unknown[] }>(
+      opts.server,
+      opts.token,
+      `/api/v1/ai/specs/${encodeURIComponent(defaultType)}${params.size ? `?${params}` : ""}`
+    );
+    console.log(`agent_specs: ${specs.specs?.length ?? 0} (${defaultType}${defaultRepo ? `, ${defaultRepo}` : ""})`);
+  } else {
+    console.log("agent_specs: skipped (set SPECREG_PROJECT_TYPE or pass --type)");
+  }
+  console.log("mcp_check: ok");
+}
+
 function text(value: unknown) {
   return {
     content: [

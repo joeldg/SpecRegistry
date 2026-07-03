@@ -15,7 +15,7 @@ import { runComply } from "./comply.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
-import { runMcpServer } from "./mcp.js";
+import { checkMcpConnectivity, runMcpServer } from "./mcp.js";
 import { readInstalledDefaultServer } from "./defaultServer.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
@@ -34,6 +34,7 @@ Usage:
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
   specreg mcp       Run the SpecRegistry MCP stdio server for configured agents
+  specreg mcp --check  Check registry reachability/auth for the configured MCP env
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or the downloaded registry URL)
@@ -208,11 +209,14 @@ try {
     });
     if (!ok) process.exit(1);
   } else if (command === "mcp") {
-    await runMcpServer({
+    const mcpOptions = {
       server: requireServer(),
       token,
       projectType: typeof flags.type === "string" ? flags.type : undefined,
-    });
+      repo: typeof flags.repo === "string" ? flags.repo : undefined,
+    };
+    if (flags.check === true) await checkMcpConnectivity(mcpOptions);
+    else await runMcpServer(mcpOptions);
   } else if (command === "check" || command === "sync") {
     await runSync({
       server: requireServer(),

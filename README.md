@@ -385,6 +385,11 @@ That avoids requiring a separate `specreg-mcp` binary on every agent machine. If
 registry requires auth, `specreg init` carries `SPECREG_TOKEN` into `.mcp.json` when a token
 is provided or enrolled.
 
+Do not run `specreg mcp` directly as a health check; it is a stdio server launched by an
+MCP-capable host and may exit when no client keeps stdin/stdout open. Use
+`specreg mcp --check` from the same environment to verify registry reachability,
+authentication, project type, and agent-spec access.
+
 During `specreg init`, the CLI scans the repository and suggests Google style guides from
 [google.github.io/styleguide](https://google.github.io/styleguide/) for detected languages,
 plus the documentation guide from `/docguide`. Press Enter to accept the suggested

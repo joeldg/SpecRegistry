@@ -565,14 +565,11 @@ export interface LlmTextInput {
   tier?: LlmTier;
 }
 
-export async function runLlmText(
-  db: Db,
-  input: LlmTextInput
-): Promise<{ text: string; model: string; provider: LlmProvider; tier: LlmTier; route: LlmTaskRoute }> {
-  const route = input.route ?? "test";
-  const tier = input.tier ?? getLlmRouteTier(db, route);
-  const config = getLlmTierConfig(db, tier);
-  const maxTokens = input.maxTokens ?? config.max_tokens;
+async function runLlmTextWithConfig(
+  config: LlmConfig,
+  input: { system: string; user: string; maxTokens: number }
+): Promise<{ text: string; model: string; provider: LlmProvider }> {
+  const maxTokens = input.maxTokens;
   if (config.provider === "anthropic") {
     requireHostedApiKey(config);
     const client = new Anthropic({
@@ -593,7 +590,7 @@ export async function runLlmText(
       .join("")
       .trim();
     if (!text) throw new HttpError(502, `LLM returned no text (stop_reason: ${message.stop_reason})`);
-    return { text, model: config.model, provider: config.provider, tier, route };
+    return { text, model: config.model, provider: config.provider };
   }
 
   if (config.provider === "gemini") {
@@ -613,7 +610,7 @@ export async function runLlmText(
     const body = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim() ?? "";
     if (!text) throw new HttpError(502, "LLM returned no text");
-    return { text, model: config.model, provider: config.provider, tier, route };
+    return { text, model: config.model, provider: config.provider };
   }
 
   const openAiBase = openAiCompatibleBase(config);
@@ -642,7 +639,26 @@ export async function runLlmText(
   const body = await res.json();
   const text = textFromOpenAiChoice(body);
   if (!text) throw new HttpError(502, noTextDetail(body));
-  return { text, model: config.model, provider: config.provider, tier, route };
+  return { text, model: config.model, provider: config.provider };
+}
+
+export async function runLlmText(
+  db: Db,
+  input: LlmTextInput
+): Promise<{ text: string; model: string; provider: LlmProvider; tier: LlmTier; route: LlmTaskRoute }> {
+  const route = input.route ?? "test";
+  const tier = input.tier ?? getLlmRouteTier(db, route);
+  const config = getLlmTierConfig(db, tier);
+  const maxTokens = input.maxTokens ?? config.max_tokens;
+  return { ...(await runLlmTextWithConfig(config, { system: input.system, user: input.user, maxTokens })), tier, route };
+}
+
+export async function runLlmProviderTest(
+  db: Db,
+  provider: LlmProvider,
+  input: { system: string; user: string; maxTokens: number }
+): Promise<{ text: string; model: string; provider: LlmProvider }> {
+  return runLlmTextWithConfig(getLlmProviderConfig(db, provider), input);
 }
 
 async function listLlmModelsForConfig(config: LlmConfig): Promise<{ provider: LlmProvider; models: string[] }> {

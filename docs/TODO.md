@@ -109,28 +109,19 @@
 - [x] Bound the code-trace ingest payload explicitly: `raw_json` stores the whole untrusted
   trace (currently only capped by Fastify's default 1MB body limit). Add an explicit size
   cap / per-route body limit and dedupe the repeated `repo` reads in the handler.
-- [ ] No login rate limiting or lockout: `POST /api/v1/auth/login` has no attempt throttling,
-  backoff, or account lockout (verified: no `@fastify/rate-limit` or equivalent in
-  `packages/server`). scrypt slows single guesses but does not stop a distributed or
-  low-and-slow brute-force campaign against `SPECREG_AUTH=required` deployments exposed to
-  the internet. Add per-IP/per-username throttling on `/auth/login` and `/agents/enroll`.
-- [ ] Tokens never expire: `issueToken` (packages/server/src/lib/auth.ts) writes no
-  `expires_at`, and there is no session/token TTL or rotation policy — a login token and an
-  agent-enrollment token are both valid forever until someone manually deletes the row via
-  `DELETE /auth/api-keys/:id`. Add optional TTLs (especially for interactive login sessions
-  vs. long-lived agent/CI tokens) and a way to bulk-revoke a compromised identity's tokens.
-- [ ] CORS is fully open: `app.register(cors, { origin: true })` (packages/server/src/app.ts)
-  reflects any request Origin. Low risk today because auth is Bearer-token-only (no cookies
-  to ride via CSRF), but it means any website's JS can call this API cross-origin if it ever
-  obtains a token, and it would become a real CSRF vector the moment a cookie-based auth path
-  is added. Add an allowlist (`SPECREG_CORS_ORIGINS`) for secured deployments.
-- [ ] This repository has no CI workflow of its own (no `.github/workflows/`, only the
-  reusable `specreg-check` composite action for *consumers*). `npm run build` / `npm test`
-  are not gated automatically on push/PR. Add a workflow that runs both on every PR before
-  the "CI `npm rebuild better-sqlite3`" operability note above can be caught automatically.
-- [ ] Gitignore generated/pulled init artifacts (`CLAUDE.md`, `SPECREGISTRY.md`, `specs/`,
-  `.spec/`, `.mcp.json`) in consuming repos and document it, so demo/init output is not
-  accidentally committed.
+- [x] Login/enroll rate limiting: `POST /api/v1/auth/login` and
+  `POST /api/v1/agents/enroll` now throttle repeated failed attempts per client/identity
+  with `SPECREG_AUTH_RATE_LIMIT_*` controls.
+- [x] Token expiry and rotation controls: tokens now carry `expires_at`; login sessions
+  default to a 24-hour TTL, API/agent token TTLs are opt-in, expired tokens are rejected,
+  and admins can bulk-revoke a compromised user's tokens.
+- [x] CORS allowlist: secured deployments can set `SPECREG_CORS_ORIGINS`, and secured
+  mode no longer falls back to reflecting every Origin.
+- [x] This repository now has its own `.github/workflows/ci.yml` running
+  `npm run build` and `npm test` on PRs and pushes to `main`.
+- [x] Gitignore generated/pulled init artifacts (`CLAUDE.md`, `SPECREGISTRY.md`, `specs/`,
+  `.spec/`, `.mcp.json`) in consuming repos so demo/init output is not accidentally
+  committed.
 
 ## Compliance Verification
 
@@ -188,9 +179,9 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
   guard (`packages/server/scripts/ensure-native.mjs`) wired into `predev`/`prestart`/`pretest`/
   `preseed`: it probes the module in a fresh process and, only on failure, rebuilds it for the
   running Node — so the version in use no longer matters. `.nvmrc` (24.13.1) remains a soft hint.
-- [ ] Remaining operability pass: still no `.github/workflows/` of this repo's own to run
-  build+tests (which would exercise the guard) on a clean runner. Bound code-trace payload and
-  at-rest secret encryption already landed during the dogfood rounds.
+- [x] Remaining operability pass: this repo now has `.github/workflows/ci.yml` to run
+  build+tests (which exercises the native-module guard) on a clean runner. Bound code-trace
+  payload and at-rest secret encryption already landed during the dogfood rounds.
 - [x] Encrypt-at-rest the LDAP bind password, webhook/Slack secrets, and LLM/embedding
   provider API keys and GitHub token, all previously stored plaintext in `settings`. Opt-in
   via `SPECREG_SECRET_KEY` (AES-256-GCM, key derived outside the database so a stolen SQLite

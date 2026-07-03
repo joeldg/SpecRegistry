@@ -6,6 +6,7 @@ import { buildApp } from "./app.js";
 import { createDb } from "./db.js";
 import { loadServerEnv } from "./env.js";
 import { assertSecurePosture } from "./lib/auth.js";
+import { publicUrl } from "./lib/publicUrl.js";
 import { seed } from "./seed.js";
 
 loadServerEnv();
@@ -47,4 +48,4 @@ if (fs.existsSync(webDist)) {
 }
 
 await app.listen({ port, host: "0.0.0.0" });
-console.log(`SpecRegistry API listening on http://localhost:${port}`);
+console.log(`SpecRegistry API listening on ${publicUrl(db)}`);

@@ -3,11 +3,13 @@ import { HttpError, requireOneOf, requireProjectType, requireString } from "../h
 import {
   createUser,
   enrollAgent,
+  apiTokenExpiresAt,
   findUser,
   hashPassword,
   issueToken,
   ldapAuthenticate,
   ldapEnabled,
+  loginTokenExpiresAt,
   verifyPassword,
   type Role,
 } from "../lib/auth.js";
@@ -18,29 +20,86 @@ function publicUser(user: Record<string, unknown>) {
   return rest;
 }
 
+type RateEntry = { count: number; resetAt: number; lockedUntil?: number };
+
+const rateState = new Map<string, RateEntry>();
+
+function rateLimitNumber(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function clientKey(req: { ip: string; headers: Record<string, unknown> }, route: string, identity: string): string {
+  const forwarded = typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"] : "";
+  const ip = forwarded.split(",")[0]?.trim() || req.ip || "unknown";
+  return `${route}:${ip}:${identity.toLowerCase()}`;
+}
+
+function assertNotLimited(key: string): void {
+  const entry = rateState.get(key);
+  if (!entry) return;
+  const nowMs = Date.now();
+  if (entry.lockedUntil && entry.lockedUntil > nowMs) {
+    throw new HttpError(429, "Too many failed attempts; retry later");
+  }
+  if (entry.resetAt <= nowMs) rateState.delete(key);
+}
+
+function recordFailedAttempt(key: string): void {
+  const nowMs = Date.now();
+  const max = rateLimitNumber("SPECREG_AUTH_RATE_LIMIT_MAX", 5);
+  const windowMs = rateLimitNumber("SPECREG_AUTH_RATE_LIMIT_WINDOW_SECONDS", 15 * 60) * 1000;
+  const lockMs = rateLimitNumber("SPECREG_AUTH_RATE_LIMIT_LOCK_SECONDS", 15 * 60) * 1000;
+  const current = rateState.get(key);
+  const entry: RateEntry =
+    current && current.resetAt > nowMs ? current : { count: 0, resetAt: nowMs + windowMs };
+  entry.count += 1;
+  if (entry.count >= max) entry.lockedUntil = nowMs + lockMs;
+  rateState.set(key, entry);
+}
+
+function clearAttempts(key: string): void {
+  rateState.delete(key);
+}
+
+function requestedExpiresAt(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") throw new HttpError(400, "expires_at must be an ISO timestamp");
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) throw new HttpError(400, "expires_at must be an ISO timestamp");
+  return parsed.toISOString();
+}
+
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Self-service agent enrollment. Issues an agent-role token bound to a repo +
   // project type so agents authenticate as themselves (never admin). Open in dev;
   // when SPECREG_ENROLL_SECRET is set (recommended for auth-required deployments)
   // the caller must present a matching x-enroll-secret header.
   app.post("/agents/enroll", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const repo = requireString(body, "repo");
+    const key = clientKey(req, "agents/enroll", repo);
+    assertNotLimited(key);
     const secret = process.env.SPECREG_ENROLL_SECRET;
     const authRequired = process.env.SPECREG_AUTH === "required";
     if (secret) {
       if (req.headers["x-enroll-secret"] !== secret) {
+        recordFailedAttempt(key);
         throw new HttpError(401, "Invalid or missing x-enroll-secret");
       }
     } else if (authRequired) {
       throw new HttpError(403, "Agent enrollment is disabled; set SPECREG_ENROLL_SECRET on the server to enable it");
     }
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const repo = requireString(body, "repo");
     const pt = requireProjectType(app.db, requireString(body, "project_type"));
     const enrolled = enrollAgent(app.db, {
       repo,
       projectTypeId: pt.id,
       displayName: typeof body.display_name === "string" ? body.display_name : undefined,
     });
+    clearAttempts(key);
     recordAudit(app.db, {
       actor: "system",
       action: "agent.enrolled",
@@ -58,35 +117,46 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const username = requireString(body, "username");
     const password = requireString(body, "password");
+    const key = clientKey(req, "auth/login", username);
+    assertNotLimited(key);
 
     let user = findUser(app.db, username);
-    if (ldapEnabled(app.db) && user?.source !== "local") {
-      const { role, displayName } = await ldapAuthenticate(app.db, username, password);
-      if (!user) {
-        user = createUser(app.db, { username, role, display_name: displayName, source: "ldap" });
+    try {
+      if (ldapEnabled(app.db) && user?.source !== "local") {
+        const { role, displayName } = await ldapAuthenticate(app.db, username, password);
+        if (!user) {
+          user = createUser(app.db, { username, role, display_name: displayName, source: "ldap" });
+        } else {
+          // Refresh role/name from the directory on every login.
+          app.db
+            .prepare("UPDATE users SET role = ?, display_name = COALESCE(?, display_name) WHERE id = ?")
+            .run(role, displayName ?? null, user.id);
+          user = findUser(app.db, username)!;
+        }
       } else {
-        // Refresh role/name from the directory on every login.
-        app.db
-          .prepare("UPDATE users SET role = ?, display_name = COALESCE(?, display_name) WHERE id = ?")
-          .run(role, displayName ?? null, user.id);
-        user = findUser(app.db, username)!;
+        if (!user?.password_hash || !verifyPassword(password, user.password_hash)) {
+          throw new HttpError(401, "Invalid credentials");
+        }
       }
-    } else {
-      if (!user?.password_hash || !verifyPassword(password, user.password_hash)) {
-        throw new HttpError(401, "Invalid credentials");
+    } catch (err) {
+      if (err instanceof HttpError && err.statusCode === 401) {
+        recordFailedAttempt(key);
       }
+      throw err;
     }
 
-    const token = issueToken(app.db, user.id, "login session");
+    clearAttempts(key);
+    const expiresAt = loginTokenExpiresAt();
+    const token = issueToken(app.db, user.id, "login session", expiresAt);
     recordAudit(app.db, {
       actor: user.username,
       action: "auth.login",
       target_type: "user",
       target_id: user.id,
       summary: `${user.username} signed in`,
-      detail: { source: user.source, role: user.role },
+      detail: { source: user.source, role: user.role, expires_at: expiresAt },
     });
-    return { token, user: publicUser(user as unknown as Record<string, unknown>) };
+    return { token, expires_at: expiresAt, user: publicUser(user as unknown as Record<string, unknown>) };
   });
 
   app.get("/auth/me", async (req) => {
@@ -103,7 +173,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/auth/api-keys", async () => {
     return app.db
       .prepare(
-        `SELECT t.id, t.user_id, u.username, u.role, t.name, t.created_at, t.last_used_at
+        `SELECT t.id, t.user_id, u.username, u.role, t.name, t.created_at, t.last_used_at, t.expires_at
          FROM tokens t JOIN users u ON u.id = t.user_id
          ORDER BY t.created_at DESC`
       )
@@ -139,7 +209,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const username = requireString(body, "username");
     const user = findUser(app.db, username);
     if (!user) throw new HttpError(404, `Unknown user: ${username}`);
-    const token = issueToken(app.db, user.id, (body.name as string) ?? "api key");
+    const requestedExpiry = requestedExpiresAt(body.expires_at);
+    const expiresAt = requestedExpiry === undefined ? apiTokenExpiresAt() : requestedExpiry;
+    const token = issueToken(app.db, user.id, (body.name as string) ?? "api key", expiresAt);
     reply.code(201);
     recordAudit(app.db, {
       actor: actorFrom(req, "admin"),
@@ -147,9 +219,24 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       target_type: "user",
       target_id: user.id,
       summary: `API key issued for ${user.username}`,
-      detail: { name: (body.name as string) ?? "api key", role: user.role },
+      detail: { name: (body.name as string) ?? "api key", role: user.role, expires_at: expiresAt },
     });
-    return { token, username: user.username, role: user.role };
+    return { token, username: user.username, role: user.role, expires_at: expiresAt };
+  });
+
+  app.delete("/auth/users/:id/tokens", async (req) => {
+    const { id } = req.params as { id: string };
+    const user = app.db.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!user) throw new HttpError(404, `Unknown user: ${id}`);
+    const result = app.db.prepare("DELETE FROM tokens WHERE user_id = ?").run(id);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "api_key.bulk_revoked",
+      target_type: "user",
+      target_id: id,
+      summary: `Revoked ${result.changes} token(s) for ${user.username}`,
+    });
+    return { revoked: result.changes };
   });
 
   app.delete("/auth/api-keys/:id", async (req, reply) => {

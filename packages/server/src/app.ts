@@ -32,12 +32,34 @@ export interface AppOptions {
   authRequired?: boolean;
 }
 
+function parseCorsOrigins(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+export function corsOriginPolicy(authRequired: boolean) {
+  const configured = parseCorsOrigins(process.env.SPECREG_CORS_ORIGINS);
+  const publicUrl = process.env.SPECREG_PUBLIC_URL;
+  const securedDefaults = [
+    publicUrl,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4000",
+    "http://127.0.0.1:4000",
+  ].filter(Boolean) as string[];
+  const allowed = configured.length > 0 ? configured : authRequired ? securedDefaults : [];
+  if (allowed.length === 0) return true;
+  return allowed;
+}
+
 export async function buildApp(db: Db, opts: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false });
   const authRequired = opts.authRequired ?? process.env.SPECREG_AUTH === "required";
   app.decorate("db", db);
   app.decorate("authRequired", authRequired);
-  await app.register(cors, { origin: true });
+  await app.register(cors, { origin: corsOriginPolicy(authRequired) });
   registerAuth(app, { authRequired });
 
   app.get("/api/v1/health", async () => ({ status: "ok" }));

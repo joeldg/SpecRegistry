@@ -22,6 +22,16 @@ export interface User {
   created_at: string;
 }
 
+export interface TokenRecord {
+  id: string;
+  token_hash: string;
+  user_id: string;
+  name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     user?: User;
@@ -45,30 +55,66 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 // --- API tokens (stored hashed; the raw token is shown once) ---
 
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
 function tokenHash(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-export function issueToken(db: Db, userId: string, name?: string): string {
+function futureIso(ms: number): string {
+  return new Date(Date.now() + ms).toISOString();
+}
+
+function positiveNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+export function loginTokenExpiresAt(): string | null {
+  const hours = positiveNumber(process.env.SPECREG_LOGIN_TOKEN_TTL_HOURS) ?? 24;
+  return futureIso(hours * HOUR_MS);
+}
+
+export function apiTokenExpiresAt(): string | null {
+  const days = positiveNumber(process.env.SPECREG_API_TOKEN_TTL_DAYS);
+  return days ? futureIso(days * DAY_MS) : null;
+}
+
+export function agentTokenExpiresAt(): string | null {
+  const days = positiveNumber(process.env.SPECREG_AGENT_TOKEN_TTL_DAYS);
+  return days ? futureIso(days * DAY_MS) : null;
+}
+
+export function issueToken(db: Db, userId: string, name?: string, expiresAt: string | null = null): string {
   const token = `sreg_${crypto.randomBytes(24).toString("hex")}`;
-  db.prepare("INSERT INTO tokens (id, token_hash, user_id, name, created_at) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO tokens (id, token_hash, user_id, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
     uuid(),
     tokenHash(token),
     userId,
     name ?? null,
-    now()
+    now(),
+    expiresAt
   );
   return token;
 }
 
 export function lookupToken(db: Db, token: string): User | undefined {
-  const row = db
+  const hash = tokenHash(token);
+  const tokenRow = db
     .prepare(
-      `SELECT u.* FROM tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`
+      `SELECT * FROM tokens WHERE token_hash = ?`
     )
-    .get(tokenHash(token)) as User | undefined;
+    .get(hash) as TokenRecord | undefined;
+  if (!tokenRow) return undefined;
+  if (tokenRow.expires_at && tokenRow.expires_at <= now()) {
+    db.prepare("DELETE FROM tokens WHERE id = ?").run(tokenRow.id);
+    return undefined;
+  }
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(tokenRow.user_id) as User | undefined;
   if (row) {
-    db.prepare("UPDATE tokens SET last_used_at = ? WHERE token_hash = ?").run(now(), tokenHash(token));
+    db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(now(), tokenRow.id);
   }
   return row;
 }
@@ -155,7 +201,7 @@ export function enrollAgent(
       user.id
     );
   }
-  const token = issueToken(db, user.id, "agent enrollment");
+  const token = issueToken(db, user.id, "agent enrollment", agentTokenExpiresAt());
   return { token, username, role: "agent", repo: input.repo };
 }
 
@@ -346,7 +392,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /GET/, path: /^\/api\/v1\/specs\/deleted$/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/specs\/purge$/, min: "admin" },
   { method: /DELETE/, path: /^\/api\/v1\/specs\//, min: "admin" },
-  { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/(ldap|llm|embeddings|app-keys|features)(\/|$)/, min: "admin" },
+  { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/(ldap|llm|embeddings|app-keys|features|server)(\/|$)/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/audit-log$/, min: "admin" },
   { method: /GET|PUT/, path: /^\/api\/v1\/compliance-policies$/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/compliance-attestations$/, min: "admin" },

@@ -25,6 +25,7 @@ import {
   type LlmTieringConfig,
   type McpGuide,
   type ProjectTypeWithCount,
+  type PublicUrlConfig,
   type RepoConsumerRow,
   type SubscriptionRow,
   type SyncJobRow,
@@ -35,12 +36,21 @@ import { StatusBadge, timeAgo } from "../components";
 const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved", "review.rejected", "feedback.created"];
 const LLM_TIERS: LlmTier[] = ["cheap", "standard", "frontier"];
 type SettingsTab = "ai" | "features" | "access" | "governance" | "integrations";
+type AiSettingsTab = "providers" | "tiers" | "routing" | "test" | "embeddings" | "skills";
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; description: string }> = [
   { id: "ai", label: "AI & Search", description: "Choose models, route AI work, and manage agent context and semantic indexing." },
   { id: "features", label: "Features", description: "Turn automation and traceability capabilities on or off for the registry." },
   { id: "access", label: "Access", description: "Manage people, machine credentials, and directory-based authentication." },
   { id: "governance", label: "Governance", description: "Control approvals and inspect the projects and events governed by this registry." },
   { id: "integrations", label: "Integrations", description: "Connect external services and distribute approved specs to subscribed repositories." },
+];
+const AI_SETTINGS_TABS: Array<{ id: AiSettingsTab; label: string }> = [
+  { id: "providers", label: "Providers" },
+  { id: "tiers", label: "Tiers" },
+  { id: "routing", label: "Routing" },
+  { id: "test", label: "Test" },
+  { id: "embeddings", label: "Embeddings" },
+  { id: "skills", label: "Agent skills" },
 ];
 const LLM_ROUTES: Array<{ route: LlmTaskRoute; label: string; defaultTier: LlmTier }> = [
   { route: "classification", label: "Classification", defaultTier: "cheap" },
@@ -101,6 +111,7 @@ function policyKinds(policy: Pick<CompliancePolicyRow, "required_mapped_kinds"> 
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
+  const [activeAiTab, setActiveAiTab] = useState<AiSettingsTab>("providers");
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [consumers, setConsumers] = useState<RepoConsumerRow[]>([]);
@@ -114,6 +125,7 @@ export default function SettingsPage() {
   const [embedding, setEmbedding] = useState<EmbeddingConfig>();
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus>();
   const [appKeys, setAppKeys] = useState<AppKeyConfig>();
+  const [publicUrlConfig, setPublicUrlConfig] = useState<PublicUrlConfig>();
   const [featureConfig, setFeatureConfig] = useState<FeatureConfig>();
   const [harnessInsights, setHarnessInsights] = useState<HarnessImprovementInsights>();
   const [harnessProposal, setHarnessProposal] = useState<HarnessImprovementProposal>();
@@ -130,6 +142,7 @@ export default function SettingsPage() {
   const [llmNotice, setLlmNotice] = useState<string>();
   const [embeddingNotice, setEmbeddingNotice] = useState<string>();
   const [appKeyNotice, setAppKeyNotice] = useState<string>();
+  const [publicUrlNotice, setPublicUrlNotice] = useState<string>();
   const [featureNotice, setFeatureNotice] = useState<string>();
   const [complianceNotice, setComplianceNotice] = useState<string>();
   const [tierModels, setTierModels] = useState<Record<LlmTier, string[]>>({ cheap: [], standard: [], frontier: [] });
@@ -166,6 +179,7 @@ export default function SettingsPage() {
   const [githubToken, setGithubToken] = useState("");
   const [githubWebhookSecret, setGithubWebhookSecret] = useState("");
   const [slackSigningSecret, setSlackSigningSecret] = useState("");
+  const [publicHostname, setPublicHostname] = useState("");
   const [mcpTypeName, setMcpTypeName] = useState("");
   const [policyTypeId, setPolicyTypeId] = useState("");
   const [policyGlob, setPolicyGlob] = useState("*.md");
@@ -202,6 +216,7 @@ export default function SettingsPage() {
       api.embeddingConfig(),
       api.embeddingStatus(),
       api.appKeys(),
+      api.publicUrlConfig(),
       api.featureConfig(),
       api.harnessImprovementInsights(),
       api.harnessProposals(),
@@ -210,7 +225,7 @@ export default function SettingsPage() {
       api.auditLog(50),
       api.agentSkills(true),
     ])
-      .then(([w, s, c, j, t, u, k, l, providerCatalog, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, nextHarnessInsights, nextHarnessProposals, p, cp, a, nextSkills]) => {
+      .then(([w, s, c, j, t, u, k, l, providerCatalog, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextPublicUrlConfig, nextFeatureConfig, nextHarnessInsights, nextHarnessProposals, p, cp, a, nextSkills]) => {
         setWebhooks(w);
         setSubs(s);
         setConsumers(c);
@@ -224,6 +239,8 @@ export default function SettingsPage() {
         setEmbedding(embeddingConfig);
         setEmbeddingStatus(nextEmbeddingStatus);
         setAppKeys(appKeyConfig);
+        setPublicUrlConfig(nextPublicUrlConfig);
+        setPublicHostname((current) => current || nextPublicUrlConfig.public_hostname);
         setFeatureConfig(nextFeatureConfig);
         setHarnessInsights(nextHarnessInsights);
         setHarnessProposals(nextHarnessProposals);
@@ -425,6 +442,22 @@ export default function SettingsPage() {
       <div className="settings-tab-intro" id="settings-panel" role="tabpanel">
         {SETTINGS_TABS.find((tab) => tab.id === activeTab)?.description}
       </div>
+      {activeTab === "ai" && (
+        <div className="settings-subtabs" role="tablist" aria-label="AI settings sections">
+          {AI_SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeAiTab === tab.id}
+              className={activeAiTab === tab.id ? "active" : ""}
+              onClick={() => setActiveAiTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className={`section${activeTab === "features" ? "" : " settings-hidden"}`}>
         <h2>Feature controls</h2>
@@ -852,9 +885,9 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className={`section${activeTab === "ai" ? "" : " settings-hidden"}`}>
-        <h2>LLM routing</h2>
-        <p className="settings-help">Assign providers and models by cost and capability, then route each AI task to the appropriate tier.</p>
+      <div className={`section${activeTab === "ai" && activeAiTab === "providers" ? "" : " settings-hidden"}`}>
+        <h2>LLM providers</h2>
+        <p className="settings-help">Configure reusable provider defaults and test stored credentials directly before assigning providers to tiers.</p>
         {llmTiering && (
           <>
             {llmNotice && (
@@ -980,6 +1013,36 @@ export default function SettingsPage() {
                             >
                               Load models
                             </button>
+                            <button
+                              onClick={() =>
+                                act(async () => {
+                                  setLlmTestStatus("running");
+                                  setLlmTestResult(undefined);
+                                  try {
+                                    const saved = await api.updateLlmProvider(provider.id, {
+                                      model: provider.model,
+                                      base_url: provider.base_url,
+                                      api_key: providerApiKeys[provider.id] || undefined,
+                                    });
+                                    setLlmProviders((items) => items.map((item) => (item.id === provider.id ? saved : item)));
+                                    setProviderApiKeys((keys) => ({ ...keys, [provider.id]: "" }));
+                                    const result = await api.testLlmProvider(provider.id, llmTestPrompt, 200);
+                                    setLlmTestStatus("ok");
+                                    setLlmTestResult(
+                                      `provider · ${result.provider}/${result.model} · max ${result.max_tokens} token(s)\n${result.text}`
+                                    );
+                                    setLlmNotice(`${saved.label} provider test completed.`);
+                                  } catch (e) {
+                                    setLlmTestStatus("error");
+                                    setLlmTestResult((e as Error).message);
+                                    throw e;
+                                  }
+                                }, false)
+                              }
+                              disabled={llmTestStatus === "running"}
+                            >
+                              Test
+                            </button>
                             {provider.has_api_key && (
                               <button
                                 className="danger"
@@ -1001,7 +1064,26 @@ export default function SettingsPage() {
                   })}
                 </tbody>
               </table>
+              {llmTestStatus !== "idle" && (
+                <pre className="mono" style={{ whiteSpace: "pre-wrap", maxHeight: 180, overflow: "auto", margin: "12px 0 0" }}>
+                  {llmTestStatus === "running" ? "Testing LLM provider..." : llmTestResult}
+                </pre>
+              )}
             </div>
+          </>
+        )}
+      </div>
+
+      <div className={`section${activeTab === "ai" && activeAiTab === "tiers" ? "" : " settings-hidden"}`}>
+        <h2>LLM tiers</h2>
+        <p className="settings-help">Assign providers and models by cost and capability. Tiers inherit saved provider keys unless you override a key here.</p>
+        {llmTiering && (
+          <>
+            {llmNotice && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                {llmNotice}
+              </div>
+            )}
             {LLM_TIERS.map((tier) => {
               const config = llmTiering.tiers[tier];
               const models = tierModels[tier];
@@ -1191,6 +1273,20 @@ export default function SettingsPage() {
                 </div>
               );
             })}
+          </>
+        )}
+      </div>
+
+      <div className={`section${activeTab === "ai" && activeAiTab === "routing" ? "" : " settings-hidden"}`}>
+        <h2>LLM feature routing</h2>
+        <p className="settings-help">Route each AI capability to the tier that matches its cost, privacy, and quality needs.</p>
+        {llmTiering && (
+          <>
+            {llmNotice && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                {llmNotice}
+              </div>
+            )}
             <div className="card" style={{ marginBottom: 12 }}>
               <table className="grid">
                 <thead>
@@ -1241,6 +1337,20 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+          </>
+        )}
+      </div>
+
+      <div className={`section${activeTab === "ai" && activeAiTab === "test" ? "" : " settings-hidden"}`}>
+        <h2>LLM test console</h2>
+        <p className="settings-help">Send a short prompt through a feature route and inspect the tier, provider, and model used.</p>
+        {llmTiering && (
+          <>
+            {llmNotice && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                {llmNotice}
+              </div>
+            )}
             <div className="card">
               <div className="form-row">
                 <input
@@ -1303,7 +1413,7 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className={`section${activeTab === "ai" ? "" : " settings-hidden"}`}>
+      <div className={`section${activeTab === "ai" && activeAiTab === "embeddings" ? "" : " settings-hidden"}`}>
         <h2>Semantic search</h2>
         <p className="settings-help">Configure section embeddings used to retrieve relevant spec context for semantic and hybrid search.</p>
         {embedding && embeddingStatus && (
@@ -1420,6 +1530,52 @@ export default function SettingsPage() {
             </div>
             <div className="faint">
               Semantic and hybrid search use section-level embeddings. Local deterministic mode needs no network; OpenAI-compatible mode supports local embedding servers and internal gateways.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+        <h2>Server reachability</h2>
+        <p className="settings-help">Set the hostname used in generated agent packs, MCP guides, and server URLs shared with agents.</p>
+        {publicUrlConfig && (
+          <div className="card">
+            {publicUrlNotice && <div style={{ marginBottom: 12 }}>{publicUrlNotice}</div>}
+            <div className="form-row">
+              <input
+                type="text"
+                placeholder={`Detected server IP: ${publicUrlConfig.detected_ip}`}
+                value={publicHostname}
+                style={{ flex: 1, minWidth: 260 }}
+                onChange={(e) => setPublicHostname(e.target.value)}
+              />
+              <button
+                className="primary"
+                onClick={() =>
+                  act(async () => {
+                    const saved = await api.updatePublicUrlConfig({ public_hostname: publicHostname });
+                    setPublicUrlConfig(saved);
+                    setPublicHostname(saved.public_hostname);
+                    setPublicUrlNotice("Server hostname saved.");
+                  }, false)
+                }
+              >
+                Save hostname
+              </button>
+            </div>
+            <div className="settings-summary-grid" style={{ marginTop: 12 }}>
+              <div>
+                <div className="label">Effective URL</div>
+                <div className="mono">{publicUrlConfig.effective_public_url}</div>
+              </div>
+              <div>
+                <div className="label">Source</div>
+                <div className="mono">{publicUrlConfig.source}</div>
+              </div>
+              <div>
+                <div className="label">Detected IP</div>
+                <div className="mono">{publicUrlConfig.detected_ip}</div>
+              </div>
             </div>
           </div>
         )}
@@ -1681,7 +1837,7 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className={`section${activeTab === "ai" ? "" : " settings-hidden"}`}>
+      <div className={`section${activeTab === "ai" && activeAiTab === "skills" ? "" : " settings-hidden"}`}>
         <h2>Agent MCP guide</h2>
         <p className="settings-help">Preview the discovery guide and download a project-type agent pack with governed MCP instructions.</p>
         <div className="card">
@@ -1714,7 +1870,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className={`section${activeTab === "ai" ? "" : " settings-hidden"}`}>
+      <div className={`section${activeTab === "ai" && activeAiTab === "skills" ? "" : " settings-hidden"}`}>
         <h2>Agent skills</h2>
         <p className="settings-help">Register governed Markdown procedures that agents can select during initialization. Restricted skills require extra scrutiny and never grant permission by themselves.</p>
         <div className="card" style={{ marginBottom: 12 }}>

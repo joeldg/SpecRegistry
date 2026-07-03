@@ -509,6 +509,12 @@ export interface AppKeyConfig {
   has_github_webhook_secret: boolean;
   has_slack_signing_secret: boolean;
 }
+export interface PublicUrlConfig {
+  public_hostname: string;
+  detected_ip: string;
+  effective_public_url: string;
+  source: "env" | "setting" | "forwarded" | "detected_ip";
+}
 export interface McpGuide {
   filename: string;
   project_type: string | null;
@@ -845,6 +851,11 @@ export const api = {
   updateLlmProvider: (provider: LlmProvider, body: Partial<Pick<LlmConfig, "model" | "base_url">> & { api_key?: string; clear_api_key?: boolean }) =>
     request<LlmProviderDescriptor>(`/api/v1/llm/providers/${provider}`, { method: "PUT", body: JSON.stringify(body) }),
   llmProviderModels: (provider: LlmProvider) => request<{ provider: LlmProvider; models: string[] }>(`/api/v1/llm/providers/${provider}/models`),
+  testLlmProvider: (provider: LlmProvider, prompt?: string, max_tokens?: number) =>
+    request<{ ok: boolean; provider: string; model: string; text: string; max_tokens: number }>(`/api/v1/llm/providers/${provider}/test`, {
+      method: "POST",
+      body: JSON.stringify({ prompt, max_tokens }),
+    }),
   updateLlmConfig: (body: Partial<Omit<LlmConfig, "has_api_key">> & { api_key?: string; clear_api_key?: boolean }) =>
     request<LlmConfig>("/api/v1/llm/config", { method: "PUT", body: JSON.stringify(body) }),
   testLlm: (prompt?: string, max_tokens?: number, tier?: LlmTier, route?: LlmTaskRoute) =>
@@ -879,6 +890,9 @@ export const api = {
       clear_slack_signing_secret: boolean;
     }>
   ) => request<AppKeyConfig>("/api/v1/app-keys", { method: "PUT", body: JSON.stringify(body) }),
+  publicUrlConfig: () => request<PublicUrlConfig>("/api/v1/server/public-url"),
+  updatePublicUrlConfig: (body: { public_hostname: string }) =>
+    request<PublicUrlConfig>("/api/v1/server/public-url", { method: "PUT", body: JSON.stringify(body) }),
   mcpGuide: (projectType?: string) =>
     request<McpGuide>(`/api/v1/ai/mcp-guide${projectType ? `/${encodeURIComponent(projectType)}` : ""}`),
   agentSkills: (includeDisabled = false) =>

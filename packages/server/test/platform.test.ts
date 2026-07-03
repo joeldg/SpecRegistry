@@ -7,6 +7,7 @@ import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
 import { seed, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
 import { assertSecurePosture, findUser, verifyPassword } from "../src/lib/auth.js";
+import { resolvePublicUrl } from "../src/lib/publicUrl.js";
 import { buildAdminTestApp } from "./helpers.js";
 import { makeGitFixture, pushNewCommit } from "./gitFixture.js";
 
@@ -28,9 +29,17 @@ afterEach(async () => {
   delete process.env.SPECREG_PUBLIC_URL;
   delete process.env.SPECREG_AUTH;
   delete process.env.SPECREG_ADMIN_PASSWORD;
+  delete process.env.SPECREG_ENROLL_SECRET;
   delete process.env.SPECREG_SECRET_KEY;
   delete process.env.SPECREG_REPO_DIR;
   delete process.env.SPECREG_SELF_UPDATE;
+  delete process.env.SPECREG_CORS_ORIGINS;
+  delete process.env.SPECREG_LOGIN_TOKEN_TTL_HOURS;
+  delete process.env.SPECREG_API_TOKEN_TTL_DAYS;
+  delete process.env.SPECREG_AGENT_TOKEN_TTL_DAYS;
+  delete process.env.SPECREG_AUTH_RATE_LIMIT_MAX;
+  delete process.env.SPECREG_AUTH_RATE_LIMIT_WINDOW_SECONDS;
+  delete process.env.SPECREG_AUTH_RATE_LIMIT_LOCK_SECONDS;
 });
 
 async function getJson(target: FastifyInstance, url: string) {
@@ -272,6 +281,7 @@ describe("auth & roles", () => {
       });
       expect(login.statusCode).toBe(200);
       const adminToken = login.json().token;
+      expect(login.json().expires_at).toMatch(/T/);
       const adminHeaders = { authorization: `Bearer ${adminToken}` };
 
       const me = await secured.inject({ method: "GET", url: "/api/v1/auth/me", headers: adminHeaders });
@@ -359,6 +369,7 @@ describe("auth & roles", () => {
       expect(listedKeys.statusCode).toBe(200);
       const aliceKeyRow = listedKeys.json().find((k: any) => k.username === "alice");
       expect(aliceKeyRow.name).toBe("api key");
+      expect(aliceKeyRow).toHaveProperty("expires_at");
 
       const revoked = await secured.inject({
         method: "DELETE",
@@ -388,6 +399,143 @@ describe("auth & roles", () => {
         headers: { authorization: "Bearer sreg_bogus" },
       });
       expect(badToken.statusCode).toBe(401);
+    } finally {
+      await secured.close();
+    }
+  });
+
+  it("expires tokens and lets admins bulk-revoke a user's keys", async () => {
+    const db = createDb(":memory:");
+    seed(db);
+    const secured = await buildApp(db, { authRequired: true });
+    try {
+      const login = await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { username: "admin", password: "admin" },
+      });
+      const adminHeaders = { authorization: `Bearer ${login.json().token}` };
+
+      await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/users",
+        headers: adminHeaders,
+        payload: { username: "bob", role: "author", password: "pw" },
+      });
+      const expired = await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/api-keys",
+        headers: adminHeaders,
+        payload: { username: "bob", expires_at: "2000-01-01T00:00:00.000Z" },
+      });
+      const expiredHeaders = { authorization: `Bearer ${expired.json().token}` };
+      expect((await secured.inject({ method: "GET", url: "/api/v1/specs", headers: expiredHeaders })).statusCode).toBe(
+        401
+      );
+
+      const fresh = await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/api-keys",
+        headers: adminHeaders,
+        payload: { username: "bob" },
+      });
+      const freshHeaders = { authorization: `Bearer ${fresh.json().token}` };
+      expect((await secured.inject({ method: "GET", url: "/api/v1/specs", headers: freshHeaders })).statusCode).toBe(
+        200
+      );
+
+      const invalidExpiry = await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/api-keys",
+        headers: adminHeaders,
+        payload: { username: "bob", expires_at: "not-a-date" },
+      });
+      expect(invalidExpiry.statusCode).toBe(400);
+
+      const bob = (await secured.inject({ method: "GET", url: "/api/v1/auth/users", headers: adminHeaders }))
+        .json()
+        .find((user: any) => user.username === "bob");
+      const revoked = await secured.inject({
+        method: "DELETE",
+        url: `/api/v1/auth/users/${bob.id}/tokens`,
+        headers: adminHeaders,
+      });
+      expect(revoked.statusCode).toBe(200);
+      expect(revoked.json().revoked).toBeGreaterThanOrEqual(1);
+      expect((await secured.inject({ method: "GET", url: "/api/v1/specs", headers: freshHeaders })).statusCode).toBe(
+        401
+      );
+    } finally {
+      await secured.close();
+    }
+  });
+
+  it("rate-limits repeated failed login attempts", async () => {
+    process.env.SPECREG_AUTH_RATE_LIMIT_MAX = "2";
+    process.env.SPECREG_AUTH_RATE_LIMIT_WINDOW_SECONDS = "60";
+    process.env.SPECREG_AUTH_RATE_LIMIT_LOCK_SECONDS = "60";
+    const db = createDb(":memory:");
+    seed(db);
+    const secured = await buildApp(db, { authRequired: true });
+    try {
+      for (let i = 0; i < 2; i += 1) {
+        const bad = await secured.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: { username: "rate-test", password: "wrong" },
+        });
+        expect(bad.statusCode).toBe(401);
+      }
+      const locked = await secured.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { username: "rate-test", password: "wrong" },
+      });
+      expect(locked.statusCode).toBe(429);
+    } finally {
+      await secured.close();
+    }
+  });
+
+  it("does not rate-limit disabled secured agent enrollment into a misleading 429", async () => {
+    delete process.env.SPECREG_ENROLL_SECRET;
+    process.env.SPECREG_AUTH = "required";
+    process.env.SPECREG_AUTH_RATE_LIMIT_MAX = "2";
+    const db = createDb(":memory:");
+    seed(db);
+    const secured = await buildApp(db, { authRequired: true });
+    try {
+      for (let i = 0; i < 4; i += 1) {
+        const res = await secured.inject({
+          method: "POST",
+          url: "/api/v1/agents/enroll",
+          payload: { repo: "github.com/acme/agent-loop", project_type: "Web App Standard" },
+        });
+        expect(res.statusCode).toBe(403);
+        expect(res.json().message).toMatch(/SPECREG_ENROLL_SECRET/);
+      }
+    } finally {
+      await secured.close();
+    }
+  });
+
+  it("limits cross-origin API access by allowlist in secured mode", async () => {
+    process.env.SPECREG_CORS_ORIGINS = "https://specs.example.com,http://localhost:5173";
+    const secured = await buildApp(createDb(":memory:"), { authRequired: true });
+    try {
+      const allowed = await secured.inject({
+        method: "OPTIONS",
+        url: "/api/v1/specs",
+        headers: { origin: "https://specs.example.com", "access-control-request-method": "GET" },
+      });
+      expect(allowed.headers["access-control-allow-origin"]).toBe("https://specs.example.com");
+
+      const denied = await secured.inject({
+        method: "OPTIONS",
+        url: "/api/v1/specs",
+        headers: { origin: "https://evil.example", "access-control-request-method": "GET" },
+      });
+      expect(denied.headers["access-control-allow-origin"]).toBeUndefined();
     } finally {
       await secured.close();
     }
@@ -542,6 +690,47 @@ describe("secrets at rest", () => {
 });
 
 describe("agent MCP guide", () => {
+  it("rewrites loopback public URL inputs to the detected server IP", () => {
+    expect(
+      resolvePublicUrl({
+        envPublicUrl: "http://localhost:4000",
+        detectedIp: "10.42.0.9",
+        port: "4000",
+      }).url
+    ).toBe("http://10.42.0.9:4000");
+    expect(
+      resolvePublicUrl({
+        publicHostname: "127.0.0.1:4100",
+        detectedIp: "10.42.0.9",
+        port: "4000",
+      }).url
+    ).toBe("http://10.42.0.9:4100");
+    expect(
+      resolvePublicUrl({
+        host: "localhost:4000",
+        detectedIp: "10.42.0.9",
+        port: "4000",
+      }).url
+    ).toBe("http://10.42.0.9:4000");
+  });
+
+  it("saves a public hostname setting and uses it in generated MCP config", async () => {
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/server/public-url",
+      payload: { public_hostname: "specreg.internal:4444" },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({
+      public_hostname: "specreg.internal:4444",
+      effective_public_url: "http://specreg.internal:4444",
+      source: "setting",
+    });
+
+    const guide = await getJson(app, "/api/v1/ai/mcp-guide/Acme%20Edge%20Device");
+    expect(guide.mcp_config.mcpServers.specregistry.env.SPECREG_SERVER).toBe("http://specreg.internal:4444");
+  });
+
   it("returns a feedable guide and matching MCP config for a project type", async () => {
     process.env.SPECREG_PUBLIC_URL = "https://specreg.example.com";
     const guide = await getJson(app, "/api/v1/ai/mcp-guide/Acme%20Edge%20Device");

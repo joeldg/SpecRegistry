@@ -287,7 +287,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       const compiled = compileBundle(app.db, pt, target, channel ?? "stable", project?.id);
       zip.addFile(compiled.target_filename, Buffer.from(compiled.content, "utf8"));
     }
-    const serverUrl = publicUrl(req);
+    const serverUrl = publicUrl(app.db, req);
     zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt, project?.repo), null, 2) + "\n", "utf8"));
     zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt, project?.repo), "utf8"));
     const skills = app.db

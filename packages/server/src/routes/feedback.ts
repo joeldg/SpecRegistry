@@ -91,7 +91,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.get("/ai/mcp-guide/:projectType?", async (req) => {
     const { projectType } = req.params as { projectType?: string };
     const pt = projectType ? requireProjectType(app.db, projectType) : undefined;
-    const serverUrl = publicUrl(req);
+    const serverUrl = publicUrl(app.db, req);
     return {
       filename: "SPECREGISTRY_MCP_SKILL.md",
       project_type: pt?.name ?? null,

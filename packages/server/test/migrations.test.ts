@@ -106,3 +106,13 @@ describe("agent feedback gap metadata migrations", () => {
     migrated.close();
   });
 });
+
+describe("token expiry migration", () => {
+  it("creates the expires_at column for token rotation policy", () => {
+    const dbPath = tmpDbPath();
+    const db = createDb(dbPath);
+    const columns = db.prepare("PRAGMA table_info(tokens)").all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).toContain("expires_at");
+    db.close();
+  });
+});

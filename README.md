@@ -80,8 +80,9 @@ npm run build
 PORT=4000 SPECREG_DB=/var/lib/specregistry/specregistry.db node packages/server/dist/index.js
 ```
 
-For a server install, set `SPECREG_PUBLIC_URL` to the externally reachable URL. Generated
-agent packs, MCP guides, and `.mcp.json` examples use that value.
+For a server install, set `SPECREG_PUBLIC_URL` to the externally reachable URL, or configure
+the public hostname in **Settings > Integrations > Server reachability**. Generated agent
+packs, MCP guides, and `.mcp.json` examples use that value.
 
 ```sh
 SPECREG_PUBLIC_URL=https://specs.example.com node packages/server/dist/index.js
@@ -99,13 +100,14 @@ For a containerized registry:
 
 ```sh
 cp .env.example .env
-# edit SPECREG_PUBLIC_URL to the URL agents/developers can reach
+# set SPECREG_PUBLIC_URL, or configure Server reachability in Settings after startup
 docker compose up --build
 ```
 
 `SPECREG_PUBLIC_URL` is important for server deployments. Agent packs and MCP guide
 content use it when generating `.mcp.json` and `SPECREGISTRY_MCP_SKILL.md`. If omitted,
-the server falls back to forwarded request headers and then `http://localhost:4000`.
+the server uses the saved public hostname from Settings, then forwarded request headers,
+then the server's detected non-loopback IP address.
 Persisted SQLite data lives in the `specregistry-data` Docker volume by default.
 
 Example `.env` for an internal server:
@@ -1011,14 +1013,25 @@ a secrets manager) so a stolen/leaked SQLite file alone does not also hand over 
 key. Values saved before the key was set keep working as plaintext; new saves encrypt
 automatically once it is configured.
 
+Secured deployments also get failed login/enrollment throttling and a restricted CORS default.
+Set `SPECREG_CORS_ORIGINS` to the browser origins that may call the API directly. Login session
+tokens expire after `SPECREG_LOGIN_TOKEN_TTL_HOURS` (default 24); long-lived API and agent tokens
+remain non-expiring unless `SPECREG_API_TOKEN_TTL_DAYS` or `SPECREG_AGENT_TOKEN_TTL_DAYS` is set.
+Admins can revoke individual API keys or bulk-revoke all tokens for a user.
+
 ### Server environment variables
 
 | Variable | Enables |
 | --- | --- |
 | `PORT`, `SPECREG_DB` | Listen port (4000) and SQLite path |
-| `SPECREG_PUBLIC_URL` | Externally reachable URL used in agent packs and MCP guides |
+| `SPECREG_PUBLIC_URL` | Externally reachable URL used in agent packs and MCP guides; overrides the Settings public hostname |
 | `SPECREG_AUTH=required` | Require auth on all non-public routes |
 | `SPECREG_ADMIN_PASSWORD` | Seeded admin password (default `admin`) |
+| `SPECREG_CORS_ORIGINS` | Comma-separated browser origins allowed to call the API; secured mode defaults to same-origin plus local dev origins |
+| `SPECREG_LOGIN_TOKEN_TTL_HOURS` | Login session TTL in hours (default 24) |
+| `SPECREG_API_TOKEN_TTL_DAYS` / `SPECREG_AGENT_TOKEN_TTL_DAYS` | Optional TTLs for API keys and enrolled agent tokens; unset means long-lived until revoked |
+| `SPECREG_AUTH_RATE_LIMIT_MAX` | Failed login/enroll attempts allowed per identity/window (default 5) |
+| `SPECREG_AUTH_RATE_LIMIT_WINDOW_SECONDS` / `SPECREG_AUTH_RATE_LIMIT_LOCK_SECONDS` | Rate-limit counting window and lockout duration (defaults 900 seconds) |
 | `SPECREG_SELF_UPDATE` | Enable the in-app `git pull` + rebuild self-update (`POST /admin/update`). Defaults on in dev, **off when `SPECREG_AUTH=required`**; set `true`/`false` to override |
 | `ANTHROPIC_API_KEY` | Anthropic key fallback for server LLM features |
 | `OPENAI_API_KEY` | OpenAI key fallback for server LLM features |
@@ -1244,8 +1257,9 @@ those slices are implemented.
 
 - **CLI command not found**: run `npm run build`, then `npm link -w @specregistry/cli -w @specregistry/mcp`,
   or invoke `node packages/cli/dist/index.js ...` directly.
-- **Agents cannot reach the registry in Docker**: set `SPECREG_PUBLIC_URL` to the URL reachable
-  from developer machines and agent environments.
+- **Agents cannot reach the registry in Docker**: set `SPECREG_PUBLIC_URL`, or set the public
+  hostname in Settings > Integrations > Server reachability, to the URL reachable from
+  developer machines and agent environments.
 - **Auth-required CLI/MCP calls fail**: pass `--token <token>` or set `SPECREG_TOKEN`.
 - **LLM features say a key is missing**: configure the provider on Settings or set the matching
   `LLM_*` / provider API key environment variables.

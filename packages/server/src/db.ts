@@ -248,7 +248,8 @@ CREATE TABLE IF NOT EXISTS tokens (
   user_id TEXT NOT NULL REFERENCES users(id),
   name TEXT,
   created_at TEXT NOT NULL,
-  last_used_at TEXT
+  last_used_at TEXT,
+  expires_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -710,6 +711,10 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
       CREATE INDEX IF NOT EXISTS idx_harness_proposals_status_time ON harness_proposals(status, created_at);
     `,
+  },
+  {
+    version: 27,
+    sql: "ALTER TABLE tokens ADD COLUMN expires_at TEXT",
   },
 ];
 

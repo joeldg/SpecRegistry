@@ -22,6 +22,7 @@ import {
   publicLlmProvidersConfig,
   publicLlmTierConfig,
   publicLlmTieringConfig,
+  runLlmProviderTest,
   runLlmText,
   saveLlmConfig,
   saveLlmProviderConfig,
@@ -44,6 +45,7 @@ import {
 import { getFeatureConfig, getHarnessImprovementFeatureFlags, saveFeatureConfig, type FeatureConfig } from "../lib/features.js";
 import { DEFAULT_COMPLIANCE_POLICY, getCompliancePolicy } from "../lib/compliance.js";
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
+import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -503,6 +505,27 @@ function createHarnessProposal(app: FastifyInstance, key: string, proposedBy: st
 }
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
+  // --- Server reachability ---
+
+  app.get("/server/public-url", async (req) => {
+    return getPublicUrlConfig(app.db, req);
+  });
+
+  app.put("/server/public-url", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const publicHostname = typeof body.public_hostname === "string" ? body.public_hostname : "";
+    savePublicHostnameConfig(app.db, publicHostname);
+    const saved = getPublicUrlConfig(app.db, req);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "server.public_url.updated",
+      target_type: "server",
+      summary: "Server public hostname updated",
+      detail: { public_hostname: saved.public_hostname, effective_public_url: saved.effective_public_url, source: saved.source },
+    });
+    return saved;
+  });
+
   // --- Feature controls ---
 
   app.get("/features/config", async () => {
@@ -688,6 +711,20 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const { provider } = req.params as { provider: string };
     if (!isLlmProvider(provider)) throw new HttpError(400, "unknown LLM provider");
     return listLlmProviderModels(app.db, provider);
+  });
+
+  app.post("/llm/providers/:provider/test", async (req) => {
+    const { provider } = req.params as { provider: string };
+    if (!isLlmProvider(provider)) throw new HttpError(400, "unknown LLM provider");
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const prompt = typeof body.prompt === "string" && body.prompt.trim() ? body.prompt.trim() : "Reply with: ok";
+    const maxTokens = Math.max(1, Math.min(100000, Number(body.max_tokens ?? 200) || 200));
+    const result = await runLlmProviderTest(app.db, provider, {
+      system: "You are a connectivity test for SpecRegistry. Reply briefly.",
+      user: prompt,
+      maxTokens,
+    });
+    return { ok: true, provider: result.provider, model: result.model, text: result.text, max_tokens: maxTokens };
   });
 
   app.put("/llm/config", async (req) => {

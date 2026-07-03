@@ -101,6 +101,11 @@ internet-reachable deployment:
   literal default password once auth is required.
 - [ ] Set `SPECREG_ENROLL_SECRET` so `POST /agents/enroll` isn't open to anyone who can
   reach the server.
+- [ ] Set `SPECREG_CORS_ORIGINS` to the dashboard/API origins you expect browsers to use.
+  If unset, secured mode allows same-origin and local dev origins only.
+- [ ] Choose token TTLs: login sessions default to `SPECREG_LOGIN_TOKEN_TTL_HOURS=24`;
+  set `SPECREG_API_TOKEN_TTL_DAYS` and/or `SPECREG_AGENT_TOKEN_TTL_DAYS` if your API or
+  enrolled agent tokens should expire automatically instead of remaining valid until revoked.
 - [ ] Leave `SPECREG_ALLOW_ADMIN_SELF_APPROVE` unset (default `false`) unless you have
   a specific, understood reason to allow solo admin self-approval.
 - [ ] Configure per-project-type `required_reviewers` and/or approval policies
@@ -124,22 +129,11 @@ hypothetical. They're tracked in [docs/TODO.md](docs/TODO.md) rather than hidden
   from the browser UI either way, but are stored unencrypted in the `settings` SQLite
   table unless `SPECREG_SECRET_KEY` is set — see the hardening checklist above. Without
   it, a stolen database file exposes all of them.
-- **No login rate limiting.** `POST /api/v1/auth/login` has no throttling or lockout.
-  scrypt makes single guesses slow but does not stop a distributed brute-force attempt
-  against an internet-reachable secured deployment.
-- **Tokens never expire.** Login sessions and agent/API tokens are valid until someone
-  deletes the row via `DELETE /auth/api-keys/:id`. There is no TTL or rotation policy.
-- **CORS reflects any origin** (`origin: true`). Low risk today because auth is
-  bearer-token-only (nothing for a cross-site request to ride via cookies), but it
-  should be tightened if a cookie-based session is ever added.
 - **Agent-role spec reads are not repo-scoped**, only writes are. An agent enrolled for
   repo A can read repo B's project-scoped specs by passing repo B's identifier to the
   read endpoints. Writes (`assertAgentScope`) are strictly scoped; reads are not. This
   is likely fine for the common single-org deployment (specs are governance docs, not
   secrets) but is an emergent property today, not a documented decision.
-- **This repository has no CI workflow of its own** — `npm run build`/`npm test` are
-  not automatically gated on every push/PR (only a reusable Action for *consumers* of
-  SpecRegistry exists).
 - **The compliance/lifecycle loop is advisory**, as detailed above — it produces a real
   audit trail and a real measured score, but nothing server-side currently blocks an
   agent from ignoring a `COMPLETION BLOCKED` directive and reporting done anyway to its

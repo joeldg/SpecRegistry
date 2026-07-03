@@ -954,6 +954,32 @@ describe("LLM settings", () => {
     );
 
     fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ choices: [{ message: { content: "stored key ok" } }] }), {
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const providerTest = await app.inject({
+      method: "POST",
+      url: "/api/v1/llm/providers/openrouter/test",
+      payload: { prompt: "ping", max_tokens: 99 },
+    });
+    expect(providerTest.statusCode).toBe(200);
+    expect(providerTest.json()).toMatchObject({
+      ok: true,
+      provider: "openrouter",
+      model: "openai/gpt-4.1",
+      text: "stored key ok",
+      max_tokens: 99,
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://openrouter.test/api/v1/chat/completions",
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: "Bearer openrouter-key" }),
+        body: expect.stringContaining('"max_tokens":99'),
+      })
+    );
+
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: [{ id: "local-a" }, { id: "local-b" }] }), {
         headers: { "content-type": "application/json" },
       })

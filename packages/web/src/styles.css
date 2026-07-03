@@ -155,6 +155,22 @@ a {
   font-size: 12px;
 }
 
+.settings-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(120px, 180px));
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-summary-grid > div {
+  min-width: 0;
+}
+
+.settings-summary-grid .mono {
+  overflow-wrap: anywhere;
+}
+
 .card.alert .metric {
   color: var(--amber);
 }
@@ -243,6 +259,32 @@ table.grid tr.click:hover td {
   color: var(--text-dim);
   padding: 12px 0 22px;
   max-width: 760px;
+}
+
+.settings-subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: -8px 0 22px;
+}
+
+.settings-subtabs button {
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.settings-subtabs button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.settings-subtabs button.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--bg-hover);
 }
 
 .settings-help {

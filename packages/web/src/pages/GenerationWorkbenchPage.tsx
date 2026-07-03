@@ -69,6 +69,7 @@ export default function GenerationWorkbenchPage() {
 
   const languages = useMemo(() => detectedLanguages(tree), [tree]);
   const selectedPurpose = purposes.find((purpose) => purpose.id === purposeId);
+  const qualityModelDisabled = selectedPurpose?.id === "quality-model" && !features?.quality_models;
 
   async function detectGaps() {
     if (!projectType) return;
@@ -210,6 +211,10 @@ export default function GenerationWorkbenchPage() {
               <span style={{ color: "var(--text-dim)" }}>Drafts new specification documents using rule-based templates or LLM prompts.</span>
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+              <span className={`badge ${features.quality_models ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>quality_models</span>
+              <span style={{ color: "var(--text-dim)" }}>Enables governed QUALITY.md rubric generation and external quality-evaluation handoff.</span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
               <span className={`badge ${features.llm_generation ? "approved" : "rejected"}`} style={{ minWidth: "110px", textAlign: "center" }}>llm_generation</span>
               <span style={{ color: "var(--text-dim)" }}>Uses active LLM providers (Gemini/Anthropic/OpenAI) to generate intelligent documents.</span>
             </div>
@@ -290,7 +295,7 @@ export default function GenerationWorkbenchPage() {
               <label className="faint">
                 <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} /> Use server LLM
               </label>
-              <button className="primary" onClick={generate} disabled={!features?.generation || !purposeId || busy === "generate" || (useLlm && !features?.llm_generation)}>
+              <button className="primary" onClick={generate} disabled={!features?.generation || qualityModelDisabled || !purposeId || busy === "generate" || (useLlm && !features?.llm_generation)}>
                 {busy === "generate" ? "Generating..." : "Generate"}
               </button>
             </div>
@@ -299,6 +304,7 @@ export default function GenerationWorkbenchPage() {
                 {selectedPurpose.description} Required sections: {selectedPurpose.required_sections.join(", ")}.
               </div>
             )}
+            {qualityModelDisabled && <div className="error-banner">QUALITY.md generation is disabled for this deployment.</div>}
             <textarea
               rows={4}
               value={extraContext}
@@ -312,7 +318,7 @@ export default function GenerationWorkbenchPage() {
               <h2>Draft Preview</h2>
               <div className="toolbar">
                 <span className="mono">{preview.filename}</span>
-                <button className="success" onClick={createDraft} disabled={busy === "draft"}>
+                <button className="success" onClick={createDraft} disabled={busy === "draft" || qualityModelDisabled}>
                   {busy === "draft" ? "Creating..." : "Create registry draft"}
                 </button>
               </div>

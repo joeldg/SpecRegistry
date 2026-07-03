@@ -37,6 +37,10 @@ function requireFeature(app: FastifyInstance, name: AutomationFeatureKey): void 
   if (!flags.enabled || !flags[name]) throw new HttpError(403, `Automation feature disabled: ${name}`);
 }
 
+function requirePurposeFeature(app: FastifyInstance, purpose: { id: string }): void {
+  if (purpose.id === "quality-model") requireFeature(app, "quality_models");
+}
+
 function governedSpecs(app: FastifyInstance, projectTypeName: string): AutomationSpecInput[] {
   const pt = requireProjectType(app.db, projectTypeName);
   return bundleSpecs(app.db, pt.id).map((spec) => ({
@@ -102,6 +106,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const purpose = requirePurpose(requireString(body, "purpose"));
+    requirePurposeFeature(app, purpose);
     const pt = requireProjectType(app.db, projectTypeName);
     const tree = typeof body.tree === "string" ? body.tree : "";
     const detectedLanguages = stringArray(body.detected_languages);
@@ -137,6 +142,7 @@ export async function automationRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const projectTypeName = requireString(body, "project_type");
     const purpose = requirePurpose(requireString(body, "purpose"));
+    requirePurposeFeature(app, purpose);
     const pt = requireProjectType(app.db, projectTypeName);
     const filename = typeof body.filename === "string" && body.filename.trim() ? body.filename.trim() : purpose.filename;
     const content = requireString(body, "content");

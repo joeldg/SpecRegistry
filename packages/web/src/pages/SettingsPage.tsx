@@ -18,6 +18,8 @@ import {
   type HarnessProposalRow,
   type LdapConfig,
   type LlmConfig,
+  type LlmProvider,
+  type LlmProviderDescriptor,
   type LlmTaskRoute,
   type LlmTier,
   type LlmTieringConfig,
@@ -54,16 +56,23 @@ const LLM_ROUTES: Array<{ route: LlmTaskRoute; label: string; defaultTier: LlmTi
 ];
 const COMPLIANCE_DEFAULT_TARGET = "__default__";
 
-function modelPlaceholder(provider: LlmConfig["provider"]): string {
-  if (provider === "anthropic") return "claude-sonnet-4-5";
-  if (provider === "openai") return "gpt-4.1";
-  if (provider === "gemini") return "gemini-3.5-flash";
-  return "google/gemma-4-12b-qat";
+function providerLabel(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
+  return providers.find((item) => item.id === provider)?.label ?? provider;
 }
 
-function baseUrlPlaceholder(provider: LlmConfig["provider"]): string {
+function providerDescriptor(providers: LlmProviderDescriptor[], provider: LlmProvider): LlmProviderDescriptor | undefined {
+  return providers.find((item) => item.id === provider);
+}
+
+function modelPlaceholder(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
+  return providerDescriptor(providers, provider)?.model ?? providerDescriptor(providers, provider)?.default_model ?? "model";
+}
+
+function baseUrlPlaceholder(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
+  const descriptor = providerDescriptor(providers, provider);
+  if (!descriptor) return "Provider base URL";
+  if (descriptor.base_url || descriptor.default_base_url) return descriptor.base_url || descriptor.default_base_url;
   if (provider === "anthropic") return "Optional proxy base URL";
-  if (provider === "openai") return "Optional OpenAI-compatible proxy URL";
   if (provider === "gemini") return "Optional Gemini API base URL";
   return "LM Studio: http://10.0.0.142:1234 · Ollama: http://localhost:11434/v1";
 }
@@ -100,6 +109,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [ldap, setLdap] = useState<LdapConfig>();
+  const [llmProviders, setLlmProviders] = useState<LlmProviderDescriptor[]>([]);
   const [llmTiering, setLlmTiering] = useState<LlmTieringConfig>();
   const [embedding, setEmbedding] = useState<EmbeddingConfig>();
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus>();
@@ -123,6 +133,8 @@ export default function SettingsPage() {
   const [featureNotice, setFeatureNotice] = useState<string>();
   const [complianceNotice, setComplianceNotice] = useState<string>();
   const [tierModels, setTierModels] = useState<Record<LlmTier, string[]>>({ cheap: [], standard: [], frontier: [] });
+  const [providerApiKeys, setProviderApiKeys] = useState<Partial<Record<LlmProvider, string>>>({});
+  const [providerModels, setProviderModels] = useState<Partial<Record<LlmProvider, string[]>>>({});
   const [llmTestStatus, setLlmTestStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
   const [llmTestResult, setLlmTestResult] = useState<string>();
 
@@ -185,6 +197,7 @@ export default function SettingsPage() {
       api.users(),
       api.apiKeys(),
       api.ldapConfig(),
+      api.llmProviders(),
       api.llmTiering(),
       api.embeddingConfig(),
       api.embeddingStatus(),
@@ -197,7 +210,7 @@ export default function SettingsPage() {
       api.auditLog(50),
       api.agentSkills(true),
     ])
-      .then(([w, s, c, j, t, u, k, l, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, nextHarnessInsights, nextHarnessProposals, p, cp, a, nextSkills]) => {
+      .then(([w, s, c, j, t, u, k, l, providerCatalog, tieringConfig, embeddingConfig, nextEmbeddingStatus, appKeyConfig, nextFeatureConfig, nextHarnessInsights, nextHarnessProposals, p, cp, a, nextSkills]) => {
         setWebhooks(w);
         setSubs(s);
         setConsumers(c);
@@ -206,6 +219,7 @@ export default function SettingsPage() {
         setUsers(u);
         setKeys(k);
         setLdap(l);
+        setLlmProviders(providerCatalog.providers);
         setLlmTiering(tieringConfig);
         setEmbedding(embeddingConfig);
         setEmbeddingStatus(nextEmbeddingStatus);
@@ -848,9 +862,150 @@ export default function SettingsPage() {
                 {llmNotice}
               </div>
             )}
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div className="form-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <strong>Providers</strong>
+                  <div className="faint">Set provider defaults once, then assign tiers and route features to those tiers.</div>
+                </div>
+                <span className="badge approved">{llmProviders.length} available</span>
+              </div>
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>API</th>
+                    <th>Model</th>
+                    <th>Base URL</th>
+                    <th>Key</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {llmProviders.map((provider) => {
+                    const models = providerModels[provider.id] ?? [];
+                    return (
+                      <tr key={provider.id}>
+                        <td>
+                          <div>{provider.label}</div>
+                          <div className="faint">{provider.description}</div>
+                        </td>
+                        <td className="mono">{provider.family === "native" ? "native" : "OpenAI-compatible"}</td>
+                        <td>
+                          {models.length > 0 ? (
+                            <select
+                              value={provider.model}
+                              onChange={(e) =>
+                                setLlmProviders((items) =>
+                                  items.map((item) => (item.id === provider.id ? { ...item, model: e.target.value } : item))
+                                )
+                              }
+                            >
+                              {!models.includes(provider.model) && <option value={provider.model}>{provider.model}</option>}
+                              {models.map((model) => (
+                                <option key={model} value={model}>
+                                  {model}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={provider.model}
+                              placeholder={provider.default_model}
+                              onChange={(e) =>
+                                setLlmProviders((items) =>
+                                  items.map((item) => (item.id === provider.id ? { ...item, model: e.target.value } : item))
+                                )
+                              }
+                            />
+                          )}
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={provider.base_url}
+                            placeholder={provider.default_base_url || "custom endpoint"}
+                            onChange={(e) =>
+                              setLlmProviders((items) =>
+                                items.map((item) => (item.id === provider.id ? { ...item, base_url: e.target.value } : item))
+                              )
+                            }
+                          />
+                        </td>
+                        <td>
+                          <div className="form-row" style={{ gap: 6 }}>
+                            <input
+                              type="password"
+                              value={providerApiKeys[provider.id] ?? ""}
+                              placeholder={provider.has_api_key ? "Stored key" : provider.requires_api_key ? "API key" : "Optional"}
+                              onChange={(e) => setProviderApiKeys((keys) => ({ ...keys, [provider.id]: e.target.value }))}
+                              style={{ minWidth: 160 }}
+                            />
+                            {provider.has_api_key && <StatusBadge status="approved" />}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="form-row" style={{ gap: 6 }}>
+                            <button
+                              onClick={() =>
+                                act(async () => {
+                                  const saved = await api.updateLlmProvider(provider.id, {
+                                    model: provider.model,
+                                    base_url: provider.base_url,
+                                    api_key: providerApiKeys[provider.id] || undefined,
+                                  });
+                                  setLlmProviders((items) => items.map((item) => (item.id === provider.id ? saved : item)));
+                                  setProviderApiKeys((keys) => ({ ...keys, [provider.id]: "" }));
+                                  setLlmNotice(`${saved.label} provider saved.`);
+                                }, false)
+                              }
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() =>
+                                act(async () => {
+                                  const saved = await api.updateLlmProvider(provider.id, {
+                                    model: provider.model,
+                                    base_url: provider.base_url,
+                                    api_key: providerApiKeys[provider.id] || undefined,
+                                  });
+                                  setLlmProviders((items) => items.map((item) => (item.id === provider.id ? saved : item)));
+                                  const result = await api.llmProviderModels(provider.id);
+                                  setProviderModels((current) => ({ ...current, [provider.id]: result.models }));
+                                  setLlmNotice(`Loaded ${result.models.length} model(s) for ${saved.label}.`);
+                                }, false)
+                              }
+                            >
+                              Load models
+                            </button>
+                            {provider.has_api_key && (
+                              <button
+                                className="danger"
+                                onClick={() =>
+                                  act(async () => {
+                                    const saved = await api.updateLlmProvider(provider.id, { clear_api_key: true });
+                                    setLlmProviders((items) => items.map((item) => (item.id === provider.id ? saved : item)));
+                                    setLlmNotice(`${saved.label} provider key cleared.`);
+                                  }, false)
+                                }
+                              >
+                                Clear key
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             {LLM_TIERS.map((tier) => {
               const config = llmTiering.tiers[tier];
               const models = tierModels[tier];
+              const descriptor = providerDescriptor(llmProviders, config.provider);
               return (
                 <div className="card" style={{ marginBottom: 12 }} key={tier}>
                   <div className="form-row" style={{ alignItems: "center" }}>
@@ -860,24 +1015,33 @@ export default function SettingsPage() {
                     </div>
                     <select
                       value={config.provider}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const nextProvider = e.target.value as LlmProvider;
+                        const nextDescriptor = providerDescriptor(llmProviders, nextProvider);
                         setLlmTiering({
                           ...llmTiering,
                           tiers: {
                             ...llmTiering.tiers,
-                            [tier]: { ...config, provider: e.target.value as LlmConfig["provider"] },
+                            [tier]: {
+                              ...config,
+                              provider: nextProvider,
+                              model: nextDescriptor?.model ?? nextDescriptor?.default_model ?? config.model,
+                              base_url: nextDescriptor?.base_url ?? nextDescriptor?.default_base_url ?? config.base_url,
+                            },
                           },
-                        })
-                      }
+                        });
+                        setTierModels((current) => ({ ...current, [tier]: nextDescriptor?.model_fallbacks ?? [] }));
+                      }}
                     >
-                      <option value="anthropic">Anthropic</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="gemini">Gemini</option>
-                      <option value="openai_compatible">OpenAI-compatible / local</option>
+                      {llmProviders.map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.label}
+                        </option>
+                      ))}
                     </select>
                     <input
                       type="text"
-                      placeholder={modelPlaceholder(config.provider)}
+                      placeholder={modelPlaceholder(llmProviders, config.provider)}
                       value={config.model}
                       style={{ minWidth: 220, display: models.length ? "none" : undefined }}
                       onChange={(e) =>
@@ -937,10 +1101,11 @@ export default function SettingsPage() {
                                 : current
                             );
                           }
+                          const providerName = providerLabel(llmProviders, config.provider);
                           setLlmNotice(
                             result.models.length
-                              ? `Loaded ${result.models.length} model(s) for ${config.label}. Select one, then save or test.`
-                              : `No models returned for ${config.label}.`
+                              ? `Loaded ${result.models.length} model(s) for ${config.label} from ${providerName}. Select one, then save or test.`
+                              : `No models returned for ${config.label} from ${providerName}.`
                           );
                         }, false)
                       }
@@ -962,7 +1127,7 @@ export default function SettingsPage() {
                   <div className="form-row">
                     <input
                       type="text"
-                      placeholder={baseUrlPlaceholder(config.provider)}
+                      placeholder={baseUrlPlaceholder(llmProviders, config.provider)}
                       value={config.base_url}
                       style={{ flex: 1, minWidth: 360 }}
                       onChange={(e) =>
@@ -974,7 +1139,7 @@ export default function SettingsPage() {
                     />
                     <input
                       type="password"
-                      placeholder={config.has_api_key ? "Stored API key" : "API key, optional for local"}
+                      placeholder={config.has_api_key ? "Stored API key" : descriptor?.requires_api_key ? "API key" : "API key, optional for local"}
                       value={tierApiKeys[tier]}
                       onChange={(e) => setTierApiKeys((keys) => ({ ...keys, [tier]: e.target.value }))}
                     />

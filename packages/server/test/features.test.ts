@@ -836,7 +836,7 @@ describe("LLM settings", () => {
 
     const models = await app.inject({ method: "GET", url: "/api/v1/llm/models/cheap" });
     expect(models.statusCode).toBe(200);
-    expect(models.json()).toEqual({ provider: "openai_compatible", models: ["local-a", "local-b"], tier: "cheap" });
+    expect(models.json()).toEqual({ provider: "openai_compatible", models: ["llama3.1", "google/gemma-4-12b-qat", "local-a", "local-b"], tier: "cheap" });
     expect(fetchMock).toHaveBeenCalledWith("http://tier-models/v1/models", expect.any(Object));
   });
 
@@ -909,20 +909,62 @@ describe("LLM settings", () => {
   });
 
   it("lists models from OpenAI-compatible, OpenAI, and Gemini providers", async () => {
+    const providers = await app.inject({ method: "GET", url: "/api/v1/llm/providers" });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json().providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "openai", label: "OpenAI" }),
+        expect.objectContaining({ id: "anthropic", label: "Anthropic Claude" }),
+        expect.objectContaining({ id: "gemini", label: "Google Gemini" }),
+        expect.objectContaining({ id: "openrouter" }),
+        expect.objectContaining({ id: "bitdeer" }),
+        expect.objectContaining({ id: "together" }),
+        expect.objectContaining({ id: "vultr" }),
+        expect.objectContaining({ id: "nvidia", default_base_url: "https://integrate.api.nvidia.com/v1" }),
+      ])
+    );
+
     const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const savedProvider = await app.inject({
+      method: "PUT",
+      url: "/api/v1/llm/providers/openrouter",
+      payload: { model: "openai/gpt-4.1", base_url: "https://openrouter.test/api/v1", api_key: "openrouter-key" },
+    });
+    expect(savedProvider.statusCode).toBe(200);
+    expect(savedProvider.json()).toMatchObject({
+      id: "openrouter",
+      model: "openai/gpt-4.1",
+      base_url: "https://openrouter.test/api/v1",
+      has_api_key: true,
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: "openrouter/live-model" }] }), {
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const providerModels = await app.inject({ method: "GET", url: "/api/v1/llm/providers/openrouter/models" });
+    expect(providerModels.statusCode).toBe(200);
+    expect(providerModels.json().models).toContain("openrouter/live-model");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://openrouter.test/api/v1/models",
+      expect.objectContaining({ headers: { authorization: "Bearer openrouter-key" } })
+    );
+
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: [{ id: "local-a" }, { id: "local-b" }] }), {
         headers: { "content-type": "application/json" },
       })
     );
-    vi.stubGlobal("fetch", fetchMock);
     await app.inject({
       method: "PUT",
       url: "/api/v1/llm/config",
       payload: { provider: "openai_compatible", base_url: "http://local-llm", model: "local-a" },
     });
     const local = await app.inject({ method: "GET", url: "/api/v1/llm/models" });
-    expect(local.json().models).toEqual(["local-a", "local-b"]);
+    expect(local.json().models).toEqual(["llama3.1", "google/gemma-4-12b-qat", "local-a", "local-b"]);
     expect(fetchMock).toHaveBeenLastCalledWith("http://local-llm/v1/models", expect.any(Object));
 
     fetchMock.mockResolvedValueOnce(
@@ -936,7 +978,7 @@ describe("LLM settings", () => {
       payload: { provider: "openai", base_url: "https://openai.test/v1", api_key: "openai-key", model: "gpt-a" },
     });
     const openai = await app.inject({ method: "GET", url: "/api/v1/llm/models" });
-    expect(openai.json().models).toEqual(["gpt-a"]);
+    expect(openai.json().models).toEqual(["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-a"]);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "https://openai.test/v1/models",
       expect.objectContaining({ headers: { authorization: "Bearer openai-key" } })
@@ -968,6 +1010,23 @@ describe("LLM settings", () => {
     expect(gemini.json().models).toContain("gemini-a");
     expect(gemini.json().models).not.toContain("embed-a");
     expect(fetchMock).toHaveBeenLastCalledWith("https://gemini.test/v1beta/models?key=gemini-key");
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: "nvidia/nemotron-live" }] }), {
+        headers: { "content-type": "application/json" },
+      })
+    );
+    await app.inject({
+      method: "PUT",
+      url: "/api/v1/llm/config",
+      payload: { provider: "nvidia", api_key: "nvidia-key", model: "nvidia/llama-3.3-nemotron-super-49b-v1.5" },
+    });
+    const nvidia = await app.inject({ method: "GET", url: "/api/v1/llm/models" });
+    expect(nvidia.json().models).toContain("nvidia/nemotron-live");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "https://integrate.api.nvidia.com/v1/models",
+      expect.objectContaining({ headers: { authorization: "Bearer nvidia-key" } })
+    );
   });
 
   it("lists current Gemini models without an API key", async () => {
@@ -1251,6 +1310,44 @@ describe("LLM spec automation", () => {
     });
     expect(draft.statusCode).toBe(201);
     expect(draft.json()).toMatchObject({ filename: "QUALITY.md", status: "draft" });
+
+    const disabled = await app.inject({
+      method: "PUT",
+      url: "/api/v1/features/config",
+      payload: { automation: { quality_models: false } },
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect(disabled.json().automation.quality_models).toBe(false);
+
+    const blockedPreview = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/preview",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "quality-model",
+        tree: "src/routes/api.ts",
+      },
+    });
+    expect(blockedPreview.statusCode).toBe(403);
+    expect(blockedPreview.json().message).toContain("quality_models");
+
+    const standardPreview = await app.inject({
+      method: "POST",
+      url: "/api/v1/spec-generation/preview",
+      payload: {
+        project_type: "Acme Edge Device",
+        purpose: "security-privacy",
+        tree: "src/auth/session.ts",
+      },
+    });
+    expect(standardPreview.statusCode).toBe(200);
+
+    const restored = await app.inject({
+      method: "PUT",
+      url: "/api/v1/features/config",
+      payload: { automation: { quality_models: true } },
+    });
+    expect(restored.statusCode).toBe(200);
   });
 
   it("plans tasks, generates checklists, classifies sections, optimizes context, and composes packs", async () => {
@@ -1326,6 +1423,7 @@ describe("LLM spec automation", () => {
   it("exposes automation flags and blocks disabled features", async () => {
     const flags = await getJson("/api/v1/automation/features");
     expect(flags.gap_detection).toBe(true);
+    expect(flags.quality_models).toBe(true);
     vi.stubEnv("SPECREG_AUTOMATION_TASK_PLANNER", "false");
     const blocked = await app.inject({
       method: "POST",
@@ -1342,6 +1440,10 @@ describe("LLM spec automation", () => {
       stage: "available",
     });
     expect(initial.code_metadata.traceability_graph).toBe(true);
+    expect(initial.automation.quality_models).toBe(true);
+    expect(initial.catalog.automation.find((feature: any) => feature.key === "quality_models")).toMatchObject({
+      stage: "available",
+    });
     expect(initial.harness_improvement.enabled).toBe(false);
     expect(initial.catalog.harness_improvement.find((feature: any) => feature.key === "failure_pattern_mining")).toMatchObject({
       stage: "available",

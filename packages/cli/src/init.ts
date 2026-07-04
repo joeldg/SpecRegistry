@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import AdmZip from "adm-zip";
 import type { Spec } from "@specregistry/shared";
-import { fetchJson, registryToken, selectProjectType, withRegistryAuth } from "./registry.js";
+import { fetchBytes, fetchJson, registryToken, selectProjectType } from "./registry.js";
 import { repoIdentity, reportManifest, type Manifest } from "./repo.js";
 import { enrollAgent } from "./credentials.js";
 import { installGoogleStyleGuides, type InstalledStyleGuide } from "./styleguides.js";
@@ -39,12 +39,8 @@ export async function runInit(opts: InitOptions): Promise<void> {
   if (profile) assertProjectProfileTargetsAvailable(profile, opts.force === true);
   console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
 
-  const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.name)}/download?repo=${encodeURIComponent(identity.repo)}`;
-  const res = await fetch(url, withRegistryAuth(undefined, token));
-  if (!res.ok) {
-    throw new Error(`Download failed: ${res.status} ${res.statusText}`);
-  }
-  const zip = new AdmZip(Buffer.from(await res.arrayBuffer()));
+  const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.id)}/download?repo=${encodeURIComponent(identity.repo)}`;
+  const zip = new AdmZip(await fetchBytes(url, undefined, token));
 
   const outDir = path.resolve(process.cwd(), opts.dir);
   fs.mkdirSync(outDir, { recursive: true });

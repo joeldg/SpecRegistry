@@ -62,6 +62,27 @@ export async function fetchJson<T>(url: string, init?: RequestInit, token?: stri
   return (await res.json()) as T;
 }
 
+export async function fetchBytes(url: string, init?: RequestInit, token?: string): Promise<Buffer> {
+  let res: Response;
+  try {
+    res = await fetch(url, withRegistryAuth(init, token));
+  } catch (err) {
+    const detail = errorMessage(err);
+    throw new Error(`Could not reach the registry server at ${new URL(url).origin}: ${detail}.${networkPolicyHint(detail)}`);
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = (await res.json()) as { message?: string; error?: string; title?: string; detail?: string; status?: number };
+      detail = httpDetail(body, detail);
+    } catch {
+      // non-JSON error body; keep statusText
+    }
+    throw new Error(`Download failed: ${res.status} ${detail}.${networkPolicyHint(detail)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export async function listProjectTypes(server: string, token?: string): Promise<ProjectType[]> {
   const all = await fetchJson<ProjectType[]>(`${server}/api/v1/project-types`, undefined, token);
   return all.filter((type) => type.scope === "project_type");

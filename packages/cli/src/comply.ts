@@ -7,6 +7,7 @@ export interface ComplyOptions {
   token?: string;
   type: string;
   dir: string;
+  root?: string;
   /** agent's honest self-assessed compliance score (0-100) */
   score?: number;
 }
@@ -30,7 +31,7 @@ interface ComplianceVerdict {
  * agent) keep going until the work actually satisfies the specs.
  */
 export async function runComply(opts: ComplyOptions): Promise<void> {
-  const root = process.cwd();
+  const root = opts.root ?? process.cwd();
   console.log("Regenerating code traceability report...");
   const inventory = writeCodeInventory({
     root,

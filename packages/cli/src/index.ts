@@ -17,6 +17,7 @@ import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
 import { checkMcpConnectivity, runMcpServer } from "./mcp.js";
 import { readInstalledDefaultServer } from "./defaultServer.js";
+import { resolveRegistryWorkspace } from "./workspace.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -124,7 +125,7 @@ function requireServer(): string {
 }
 
 function manifestProjectType(dir: string): string | undefined {
-  const manifestPath = path.resolve(process.cwd(), dir, ".specregistry.json");
+  const { manifestPath } = resolveRegistryWorkspace(dir);
   if (!fs.existsSync(manifestPath)) return undefined;
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
@@ -251,13 +252,14 @@ try {
     });
   } else if (command === "comply") {
     const specsDir = typeof flags.dir === "string" ? flags.dir : "specs";
-    const projectType = (typeof flags.type === "string" ? flags.type : undefined) ?? manifestProjectType(specsDir);
+    const workspace = resolveRegistryWorkspace(specsDir);
+    const projectType = (typeof flags.type === "string" ? flags.type : undefined) ?? workspace.manifest?.project_type;
     if (!projectType) throw new Error("comply requires --type or a local specs/.specregistry.json manifest with project_type.");
     const score = typeof flags.score === "string" ? Number(flags.score) : undefined;
     if (score !== undefined && (Number.isNaN(score) || score < 0 || score > 100)) {
       throw new Error("--score must be a number between 0 and 100");
     }
-    await runComply({ server: requireServer(), token, type: projectType, dir: specsDir, score });
+    await runComply({ server: requireServer(), token, type: projectType, dir: workspace.specsDir, root: workspace.root, score });
   } else if (command === "styleguide") {
     const sub = positionals[1];
     const styleguideDir = typeof flags["styleguide-dir"] === "string" ? flags["styleguide-dir"] : ".spec/styleguides";

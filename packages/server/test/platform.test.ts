@@ -746,6 +746,8 @@ describe("agent MCP guide", () => {
     expect(guide.content).toContain("specreg comply");
     expect(guide.content).toContain("halt before reporting completion");
     expect(guide.content).toContain("exact tool or command output");
+    expect(guide.content).toContain("Do not blanket-map files to `PROJECT_PROFILE.md`");
+    expect(guide.content).toContain("repeated `finish_task`, `check_compliance`, or `specreg comply` attempts still fail");
     expect(guide.content).toContain("SPECREG_TOKEN");
     expect(guide.mcp_config.mcpServers.specregistry.command).toBe("specreg");
     expect(guide.mcp_config.mcpServers.specregistry.args).toEqual(["mcp"]);

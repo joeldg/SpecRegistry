@@ -76,8 +76,8 @@ describe("agent skill migration (v22)", () => {
   });
 });
 
-describe("agent skill migration (v28)", () => {
-  it("tightens the shipped run-compliance-loop skill to halt when registry compliance is unavailable", () => {
+describe("agent skill migrations (v28-v29)", () => {
+  it("tightens the shipped run-compliance-loop skill to halt instead of spamming broad annotations", () => {
     const dbPath = tmpDbPath();
     const setup = createDb(dbPath);
     setup.prepare("UPDATE agent_skills SET instructions = ? WHERE slug = 'run-compliance-loop'").run(OLD_RUN_COMPLIANCE_TEXT);
@@ -88,8 +88,10 @@ describe("agent skill migration (v28)", () => {
     const skill = db.prepare("SELECT instructions FROM agent_skills WHERE slug = 'run-compliance-loop'").get() as {
       instructions: string;
     };
-    expect(skill.instructions).toContain("halt and notify the user");
-    expect(skill.instructions).toContain("exact tool or command output");
+    expect(skill.instructions).toContain("targeted evidence only");
+    expect(skill.instructions).toContain("never blanket-map files to PROJECT_PROFILE.md");
+    expect(skill.instructions).toContain("halt autonomous remediation");
+    expect(skill.instructions).toContain("exact latest output");
     db.close();
   });
 

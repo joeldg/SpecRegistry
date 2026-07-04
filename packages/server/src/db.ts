@@ -730,6 +730,19 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         AND instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed ''done'' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.';
     `,
   },
+  {
+    // Tighten compliance remediation so agents do not spam broad @spec annotations
+    // after repeated failing compliance loops. Gated on the v28 shipped text.
+    version: 29,
+    sql: `
+      UPDATE agent_skills
+      SET instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Do not report completion while objective compliance is failing or unavailable.',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE slug = 'run-compliance-loop'
+        AND built_in = 1
+        AND instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run -- a self-assessed ''done'' is not sufficient. If finish_task, check_compliance, or specreg comply cannot run because MCP or the SpecRegistry server appears unavailable, halt and notify the user with the exact tool or command output. Do not report completion while objective compliance is failing or unavailable.';
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [
@@ -785,7 +798,7 @@ const DEFAULT_AGENT_SKILLS = [
     slug: "run-compliance-loop",
     name: "Run the compliance loop",
     description: "Confirm objective compliance before claiming a task is complete, and keep working until it passes.",
-    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run -- a self-assessed 'done' is not sufficient. If finish_task, check_compliance, or specreg comply cannot run because MCP or the SpecRegistry server appears unavailable, halt and notify the user with the exact tool or command output. Do not report completion while objective compliance is failing or unavailable.",
+    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Do not report completion while objective compliance is failing or unavailable.",
   },
   {
     slug: "propose-not-publish",

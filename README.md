@@ -508,7 +508,11 @@ routes, commands, config, migrations, tables, fields, and indexes. It does not r
 source files. Fuzzy name/path/route text-matching links entities to specs automatically;
 an explicit `// @spec[FILE#section]` comment directly above a declaration overrides that
 guess with a high-confidence link to the named spec (and section, if the anchor matches
-an existing heading) instead.
+an existing heading) instead. Treat explicit annotations as evidence assertions: add them
+only when the specific code entity is truly governed by that exact spec section. Do not
+blanket-map files to `PROJECT_PROFILE.md`, broad requirements sections, or convenient
+specs just to raise compliance coverage; report missing guidance or propose the needed
+spec when no exact governing section exists.
 
 Use `specreg code-map --report` to upload the traceability report to the registry. The CLI
 uses `--type` or the local `specs/.specregistry.json` manifest to identify the project type.

@@ -247,7 +247,9 @@ Before editing code, configuration, tests, docs, or generated artifacts:
 7. Use MCP \`search_specs\` and \`resolve_guidance\` before guessing missing standards.
 8. Report unclear, contradictory, outdated, or missing-intent specs with \`report_spec_feedback\`; report uncovered topics with the same tool using \`error_type: "missing_guidance"\`.
 9. Before claiming completion, call MCP \`finish_task\` with the \`session_id\` from \`begin_task\` or run \`specreg comply\`. Use MCP \`check_compliance\` for direct compliance checks.
-10. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run, cannot reach the registry, or exits non-zero from a server/MCP availability failure, halt before claiming completion. Notify the user that objective SpecRegistry compliance could not be verified and include the exact tool or command output.
+10. Remediate failed compliance with targeted evidence only. Add \`@spec[FILE#section]\` annotations only when that exact section truly governs the code entity. Do not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage; report a missing-guidance gap or propose the needed spec instead.
+11. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, halt autonomous remediation and show the user the exact latest output.
+12. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run, cannot reach the registry, or exits non-zero from a server/MCP availability failure, halt before claiming completion. Notify the user that objective SpecRegistry compliance could not be verified and include the exact tool or command output.
 
 Local governance files:
 
@@ -358,6 +360,14 @@ Before you report a task as done, run the completion gate and keep working until
   are flagged. If the verdict is NOT COMPLIANT, address the listed outstanding items
   (e.g. add inline \`// @spec[FILE#section]\` annotations, link unmapped routes/schemas) and
   re-run the check. Loop until it reports compliant; only then report the task complete.
+- Treat compliance remediation as evidence work, not annotation stuffing. Add \`@spec\`
+  annotations only when a specific code entity is truly governed by the named spec section.
+  Do not blanket-map files to \`PROJECT_PROFILE.md\`, broad "Requirements" sections, or any
+  convenient spec just to raise coverage. If no exact governing section exists, report a
+  missing-guidance gap or propose the needed spec instead of modifying code annotations.
+- If repeated \`specreg comply\` / \`finish_task\` attempts still fail, halt autonomous
+  remediation. Show the user the exact latest output and ask whether to add missing specs,
+  narrow the task scope, or continue with targeted mappings.
 - If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the
   SpecRegistry server appears unavailable, halt. Tell the user objective compliance could not
   be verified, paste the exact tool or command output, and do not substitute local-only checks

@@ -118,7 +118,7 @@ server.tool(
 
 server.tool(
   "finish_task",
-  "Call this instead of directly claiming done. It records completion evidence, runs the objective compliance gate, updates the agent session, and blocks completion until compliance passes.",
+  "Call this instead of directly claiming done. It records completion evidence, runs the objective compliance gate, updates the agent session, and blocks completion until compliance passes. Failed compliance must be remediated with targeted spec evidence only; do not add speculative or blanket @spec annotations, and halt with the exact output after repeated failures.",
   {
     session_id: z.string().optional().describe("Session id returned by begin_task."),
     summary: z.string().optional().describe("What changed and why it satisfies the specs."),
@@ -235,7 +235,7 @@ server.tool(
 
 server.tool(
   "check_compliance",
-  "Call this BEFORE declaring a task complete. It returns an objective compliance verdict for this repo (traceability coverage, drift, and unmapped entities vs the project's policy) plus a directive. If it is NOT compliant, keep working on the outstanding items and call it again — do not report the task done until it returns compliant. Run `specreg code-map --report` first (or use `specreg comply`) so the verdict reflects your latest code. Pass your honest self_assessed_score; over-claims are flagged.",
+  "Call this BEFORE declaring a task complete. It returns an objective compliance verdict for this repo (traceability coverage, drift, and unmapped entities vs the project's policy) plus a directive. If it is NOT compliant, remediate only with truthful, entity-specific spec evidence: add @spec[FILE#section] annotations only when the exact section governs the entity, or report/propose missing guidance. Do not blanket-map to PROJECT_PROFILE.md or broad requirements just to raise coverage. If repeated attempts fail, halt and show the user the exact output. Run `specreg code-map --report` first (or use `specreg comply`) so the verdict reflects your latest code. Pass your honest self_assessed_score; over-claims are flagged.",
   {
     self_assessed_score: z.number().optional().describe("Your honest 0-100 estimate of how fully the work satisfies the specs."),
     project_type: z.string().optional().describe("Project type name. Defaults to the repo's configured type."),

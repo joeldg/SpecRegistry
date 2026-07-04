@@ -1823,6 +1823,21 @@ describe("compliance verification loop", () => {
     expect(checks).toEqual(["coverage", "drift", "mapping", "mapping"].sort());
     expect(v.directive).toMatch(/NOT COMPLIANT/);
     expect(v.directive).toMatch(/self-assessed 100/);
+    expect(v.outstanding.find((o: any) => o.check === "coverage").recommended_action).toContain("Do not blanket-map files to PROJECT_PROFILE.md");
+  });
+
+  it("halts autonomous remediation after repeated failed compliance attempts", async () => {
+    const repo = "github.com/acme/repeated-fail";
+    await app.inject({ method: "POST", url: "/api/v1/ai/compliance-check", payload: { project_type: "Acme Edge Device", repo, trace: failingTrace } });
+    await app.inject({ method: "POST", url: "/api/v1/ai/compliance-check", payload: { project_type: "Acme Edge Device", repo, trace: failingTrace } });
+    const third = await app.inject({ method: "POST", url: "/api/v1/ai/compliance-check", payload: { project_type: "Acme Edge Device", repo, trace: failingTrace } });
+
+    const v = third.json();
+    expect(v.iteration).toBe(3);
+    expect(v.compliant).toBe(false);
+    expect(v.directive).toContain("Halt autonomous remediation");
+    expect(v.directive).toContain("do not add speculative or blanket @spec annotations");
+    expect(v.recommended_actions.join("\n")).toContain("show the exact compliance output to the user");
   });
 
   it("flags missing trace data", async () => {

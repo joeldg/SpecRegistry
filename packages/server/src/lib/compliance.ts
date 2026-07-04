@@ -134,14 +134,16 @@ export function evaluateCompliance(db: Db, input: EvaluateInput): ComplianceVerd
       outstanding.push({
         check: "coverage",
         detail: `Traceability coverage ${(signals.coverage_ratio * 100).toFixed(0)}% is below the required ${(policy.min_coverage * 100).toFixed(0)}%.`,
-        recommended_action: "Add inline `// @spec[FILE#section]` annotations to governed code entities, then regenerate the code map.",
+        recommended_action:
+          "Add or correct only truthful, entity-specific `// @spec[FILE#section]` annotations that point to the concrete governing section. Do not blanket-map files to PROJECT_PROFILE.md or broad specs just to raise coverage; report missing_guidance or propose a spec when no governing section exists.",
       });
     }
     if (signals.drift_score > policy.max_drift) {
       outstanding.push({
         check: "drift",
         detail: `Drift score ${(signals.drift_score * 100).toFixed(0)}% exceeds the allowed ${(policy.max_drift * 100).toFixed(0)}%.`,
-        recommended_action: "Link unmapped entities to the specs that govern them (annotations or spec updates), then regenerate.",
+        recommended_action:
+          "Reduce drift by linking only entities with clear spec authority to exact sections, updating/proposing specs for uncovered behavior, or removing unintended code. Do not add speculative annotations.",
       });
     }
     for (const kind of policy.required_mapped_kinds) {
@@ -150,12 +152,16 @@ export function evaluateCompliance(db: Db, input: EvaluateInput): ComplianceVerd
         outstanding.push({
           check: "mapping",
           detail: `${unmapped} ${kind} entit${unmapped === 1 ? "y is" : "ies are"} not mapped to any spec.`,
-          recommended_action: `Map every ${kind} to a governing spec section, or report a spec gap if none exists.`,
+          recommended_action: `Map every ${kind} to a specific governing spec section only when the mapping is true. If no section governs it, stop changing code annotations and report a missing_guidance spec gap.`,
         });
       }
     }
   }
 
+  const priorCount = input.repo
+    ? (db.prepare("SELECT COUNT(*) AS n FROM compliance_attestations WHERE repo = ?").get(input.repo) as { n: number }).n
+    : 0;
+  const iteration = priorCount + 1;
   const compliant = outstanding.length === 0;
   // Objective score blends coverage and (1 - drift); 0 when no trace exists.
   const objective_score =
@@ -166,21 +172,25 @@ export function evaluateCompliance(db: Db, input: EvaluateInput): ComplianceVerd
   const over_claimed = selfScore !== null && !compliant && selfScore > objective_score + 10;
 
   const recommended_actions = outstanding.map((g) => g.recommended_action);
-  if (!compliant) recommended_actions.push("Re-run the compliance check after remediation; do not report the task complete until it passes.");
+  if (!compliant && iteration >= 3) {
+    recommended_actions.push(
+      "This repo has repeated failed compliance attempts. Halt autonomous remediation, show the exact compliance output to the user, and ask whether to add missing specs, narrow the task scope, or continue with targeted mappings."
+    );
+  } else if (!compliant) {
+    recommended_actions.push("Re-run the compliance check after targeted remediation; do not report the task complete until it passes.");
+  }
 
   let directive: string;
   if (compliant) {
     directive = "COMPLIANT — objective thresholds satisfied. You may report this task complete.";
+  } else if (iteration >= 3) {
+    directive =
+      "NOT COMPLIANT — repeated compliance attempts are still failing. Halt autonomous remediation, show this exact output to the user, and do not add speculative or blanket @spec annotations.";
   } else if (over_claimed) {
     directive = `NOT COMPLIANT — you self-assessed ${selfScore} but measured compliance is ${objective_score}. Continue remediation and re-run the compliance check; do not report the task complete.`;
   } else {
-    directive = "NOT COMPLIANT — continue remediation and re-run the compliance check. Do not report the task complete.";
+    directive = "NOT COMPLIANT — continue targeted remediation and re-run the compliance check. Do not report the task complete.";
   }
-
-  const priorCount = input.repo
-    ? (db.prepare("SELECT COUNT(*) AS n FROM compliance_attestations WHERE repo = ?").get(input.repo) as { n: number }).n
-    : 0;
-  const iteration = priorCount + 1;
 
   db.prepare(
     `INSERT INTO compliance_attestations

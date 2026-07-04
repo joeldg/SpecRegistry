@@ -109,6 +109,7 @@ Agents should make SpecRegistry usage repeatable and observable. They must load 
 11. Agents must authenticate only with their own enrolled agent identity. They must never log in as \`admin\` or a human account, never seek shared credentials, and never escalate privileges to merge a change.
 12. Agents may create, edit, and publish project-scoped specs for their own repo, but must only **propose** changes to global and project-type specs. They must never approve or publish a change they proposed; approval is a human action and separation of duties is enforced by the server.
 13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry's objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
+14. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.
 
 ## Non-Goals
 This spec does not grant an agent permission to access production, secrets, protected branches, or external systems. Host approval and least-privilege rules still apply.
@@ -128,7 +129,7 @@ Workflow rule. Load by default for agents, but keep concise and operational.
 - \`IMPLEMENTATION_EVIDENCE.md\`
 
 ## AI Agent Directives
-Use governed specs as authority. Prefer registry search over broad context loading. Stop on missing or conflicting guidance. Never treat local generated files or examples as published specifications. Stay within the MCP tools, documented agent API, and \`specreg\` CLI — do not explore or probe the registry server itself.
+Use governed specs as authority. Prefer registry search over broad context loading. Stop on missing or conflicting guidance. Never treat local generated files or examples as published specifications. Stay within the MCP tools, documented agent API, and \`specreg\` CLI — do not explore or probe the registry server itself. If the compliance gate cannot run because MCP or the registry server appears unavailable, halt and show the user the exact output.
 `,
   },
   {

@@ -716,6 +716,20 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
     version: 27,
     sql: "ALTER TABLE tokens ADD COLUMN expires_at TEXT",
   },
+  {
+    // Tighten the built-in compliance-loop skill so agents halt when objective
+    // registry compliance cannot be verified. Gated on the exact shipped text so
+    // customized built-in skills keep local edits.
+    version: 28,
+    sql: `
+      UPDATE agent_skills
+      SET instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run -- a self-assessed ''done'' is not sufficient. If finish_task, check_compliance, or specreg comply cannot run because MCP or the SpecRegistry server appears unavailable, halt and notify the user with the exact tool or command output. Do not report completion while objective compliance is failing or unavailable.',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE slug = 'run-compliance-loop'
+        AND built_in = 1
+        AND instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed ''done'' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.';
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [
@@ -771,7 +785,7 @@ const DEFAULT_AGENT_SKILLS = [
     slug: "run-compliance-loop",
     name: "Run the compliance loop",
     description: "Confirm objective compliance before claiming a task is complete, and keep working until it passes.",
-    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed 'done' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.",
+    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run -- a self-assessed 'done' is not sufficient. If finish_task, check_compliance, or specreg comply cannot run because MCP or the SpecRegistry server appears unavailable, halt and notify the user with the exact tool or command output. Do not report completion while objective compliance is failing or unavailable.",
   },
   {
     slug: "propose-not-publish",

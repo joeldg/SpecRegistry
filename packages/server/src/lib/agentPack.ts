@@ -56,6 +56,7 @@ Do not edit code, configuration, tests, or generated artifacts until the pre-imp
 7. Do not silently ignore a governed requirement. Either follow it or report feedback.
 8. If MCP is unavailable, use only the documented agent API fallback, record that MCP was unavailable, and do not browse/probe registry routes.
 9. Before reporting completion, call \`finish_task\` with the \`session_id\` from \`begin_task\`; keep working until the objective verdict passes. Use \`check_compliance\` or \`specreg comply\` for direct compliance checks and CI gates.
+10. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, halt before reporting completion. Notify the user that objective compliance could not be verified, include the exact tool or command output, and do not substitute local-only checks for the registry completion gate.
 
 ## MCP Tools
 

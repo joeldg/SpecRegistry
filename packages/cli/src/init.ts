@@ -247,6 +247,7 @@ Before editing code, configuration, tests, docs, or generated artifacts:
 7. Use MCP \`search_specs\` and \`resolve_guidance\` before guessing missing standards.
 8. Report unclear, contradictory, outdated, or missing-intent specs with \`report_spec_feedback\`; report uncovered topics with the same tool using \`error_type: "missing_guidance"\`.
 9. Before claiming completion, call MCP \`finish_task\` with the \`session_id\` from \`begin_task\` or run \`specreg comply\`. Use MCP \`check_compliance\` for direct compliance checks.
+10. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run, cannot reach the registry, or exits non-zero from a server/MCP availability failure, halt before claiming completion. Notify the user that objective SpecRegistry compliance could not be verified and include the exact tool or command output.
 
 Local governance files:
 
@@ -357,6 +358,10 @@ Before you report a task as done, run the completion gate and keep working until
   are flagged. If the verdict is NOT COMPLIANT, address the listed outstanding items
   (e.g. add inline \`// @spec[FILE#section]\` annotations, link unmapped routes/schemas) and
   re-run the check. Loop until it reports compliant; only then report the task complete.
+- If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the
+  SpecRegistry server appears unavailable, halt. Tell the user objective compliance could not
+  be verified, paste the exact tool or command output, and do not substitute local-only checks
+  for the registry completion gate.
 ${styleGuides.length > 0 ? `
 ## External Style Guides
 
@@ -404,6 +409,7 @@ Required MCP flow:
 5. Report ambiguity, contradiction, or outdated guidance with \`report_spec_feedback\`; report missing language/domain coverage with the same tool using \`error_type: "missing_guidance"\`.
 6. Call \`finish_task\` with the \`session_id\` returned by \`begin_task\` before claiming completion.
 7. Use \`specreg check\` to verify this repo is still using current approved spec versions.
+8. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because the registry or MCP server is unavailable, halt and notify the user with the exact output. Do not claim completion until objective compliance can be verified.
 
 ## Missing Guidance
 
@@ -427,7 +433,7 @@ and only these endpoints:
 - \`POST ${server}/api/v1/ai/agent-sessions/finish\` — record completion evidence and run the completion gate.
 - \`POST ${server}/api/v1/ai/feedback\` — report a spec problem, or (\`error_type: "missing_guidance"\`) a coverage gap with no spec_id.
 
-Use the \`specreg\` CLI for everything else (\`check\`, \`sync\`, \`compile\`, \`verify\`,
+Use the \`specreg\` CLI for everything else (\`check\`, \`comply\`, \`sync\`, \`compile\`, \`verify\`,
 \`styleguide add\`). Do not call other server routes directly.
 `,
     "utf8"

@@ -743,6 +743,9 @@ describe("agent MCP guide", () => {
     expect(guide.content).toContain("get_specs");
     expect(guide.content).toContain("pre-implementation gate");
     expect(guide.content).toContain("check_compliance");
+    expect(guide.content).toContain("specreg comply");
+    expect(guide.content).toContain("halt before reporting completion");
+    expect(guide.content).toContain("exact tool or command output");
     expect(guide.content).toContain("SPECREG_TOKEN");
     expect(guide.mcp_config.mcpServers.specregistry.command).toBe("specreg");
     expect(guide.mcp_config.mcpServers.specregistry.args).toEqual(["mcp"]);

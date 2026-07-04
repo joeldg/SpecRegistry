@@ -19,4 +19,7 @@ test("AGENTS bootstrap points first-run agents at governed MCP, specs, and skill
   assert.match(content, /github\.com\/acme\/app/);
   assert.match(content, /\.spec\/skills/);
   assert.match(content, /check_compliance/);
+  assert.match(content, /specreg comply/);
+  assert.match(content, /halt before claiming completion/);
+  assert.match(content, /exact tool or command output/);
 });

@@ -6,6 +6,8 @@ import { createDb } from "../src/db.js";
 
 const OLD_LOAD_SPECS_TEXT =
   "Before non-trivial work, use the SpecRegistry MCP get_specs tool for the configured project type and repository. Check the local manifest for drift. Treat published specs as authoritative and do not treat drafts as approved guidance.";
+const OLD_RUN_COMPLIANCE_TEXT =
+  "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed 'done' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.";
 
 const NEW_DEFAULT_SLUGS = [
   "register-task-session",
@@ -70,6 +72,40 @@ describe("agent skill migration (v22)", () => {
       instructions: string;
     };
     expect(load.instructions).toBe(custom);
+    db.close();
+  });
+});
+
+describe("agent skill migration (v28)", () => {
+  it("tightens the shipped run-compliance-loop skill to halt when registry compliance is unavailable", () => {
+    const dbPath = tmpDbPath();
+    const setup = createDb(dbPath);
+    setup.prepare("UPDATE agent_skills SET instructions = ? WHERE slug = 'run-compliance-loop'").run(OLD_RUN_COMPLIANCE_TEXT);
+    setup.prepare("UPDATE settings SET value = '27' WHERE key = 'schema_version'").run();
+    setup.close();
+
+    const db = createDb(dbPath);
+    const skill = db.prepare("SELECT instructions FROM agent_skills WHERE slug = 'run-compliance-loop'").get() as {
+      instructions: string;
+    };
+    expect(skill.instructions).toContain("halt and notify the user");
+    expect(skill.instructions).toContain("exact tool or command output");
+    db.close();
+  });
+
+  it("does not clobber a run-compliance-loop skill an admin has customized", () => {
+    const dbPath = tmpDbPath();
+    const custom = "CUSTOM completion gate instructions.";
+    const setup = createDb(dbPath);
+    setup.prepare("UPDATE agent_skills SET instructions = ? WHERE slug = 'run-compliance-loop'").run(custom);
+    setup.prepare("UPDATE settings SET value = '27' WHERE key = 'schema_version'").run();
+    setup.close();
+
+    const db = createDb(dbPath);
+    const skill = db.prepare("SELECT instructions FROM agent_skills WHERE slug = 'run-compliance-loop'").get() as {
+      instructions: string;
+    };
+    expect(skill.instructions).toBe(custom);
     db.close();
   });
 });

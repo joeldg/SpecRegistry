@@ -208,6 +208,18 @@ export default function SpecDetailPage() {
         <Markdown content={shownVersion ? shownVersion.content : spec.content} />
       )}
 
+      <SpecAssistPanel
+        spec={spec}
+        currentContent={draft}
+        onGenerated={(content) => {
+          setDraft(content);
+          setEditing(true);
+          setNotice("Generated content applied to the editor.");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onError={setError}
+      />
+
       {spec.feedback.length > 0 && (
         <div className="section" style={{ marginTop: 28 }}>
           <h2>AI agent feedback</h2>
@@ -305,6 +317,85 @@ export default function SpecDetailPage() {
 
       <EfficacyPanel spec={spec} onRan={reload} onError={setError} />
     </>
+  );
+}
+
+function SpecAssistPanel({
+  spec,
+  currentContent,
+  onGenerated,
+  onError,
+}: {
+  spec: SpecDetail;
+  currentContent: string;
+  onGenerated: (content: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [mode, setMode] = useState<"example" | "rewrite">("rewrite");
+  const [guidance, setGuidance] = useState("");
+  const [generated, setGenerated] = useState("");
+  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function generate() {
+    if (!guidance.trim()) return;
+    setLoading(true);
+    try {
+      const result = await api.specAssist(spec.id, {
+        mode,
+        guidance: guidance.trim(),
+        current_content: currentContent,
+      });
+      setGenerated(result.content);
+      setModel(result.model);
+      setProvider(result.provider);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="section" style={{ marginTop: 28 }}>
+      <h2>Spec assist</h2>
+      <div className="card">
+        <div className="form-row" style={{ alignItems: "flex-start" }}>
+          <select value={mode} onChange={(e) => setMode(e.target.value as "example" | "rewrite")} disabled={loading}>
+            <option value="rewrite">Rewrite current spec</option>
+            <option value="example">Generate example spec</option>
+          </select>
+          <textarea
+            className="audit-guidance-input"
+            style={{ minHeight: 84, flex: 1, minWidth: 320 }}
+            placeholder="Guidance for the generated specification"
+            value={guidance}
+            onChange={(e) => setGuidance(e.target.value)}
+            disabled={loading}
+          />
+          <button className="primary" onClick={generate} disabled={loading || !guidance.trim()}>
+            {loading ? "Generating..." : "Generate"}
+          </button>
+        </div>
+        {generated && (
+          <>
+            <div className="toolbar" style={{ marginTop: 12 }}>
+              <button className="success" onClick={() => onGenerated(generated)}>
+                Apply to editor
+              </button>
+              <span className="faint">
+                {provider}/{model}
+              </span>
+            </div>
+            <div className="split" style={{ marginTop: 12 }}>
+              <textarea className="editor" value={generated} onChange={(e) => setGenerated(e.target.value)} spellCheck={false} />
+              <Markdown content={generated} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

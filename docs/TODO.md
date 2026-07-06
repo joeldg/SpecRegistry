@@ -24,6 +24,7 @@
 - [x] Spec improvement suggestions based on feedback clusters, weak efficacy, audit findings, and low token ROI.
 - [x] Spec pack composer for reusable global and project-type packs such as AI-SDD, SaaS backend, embedded systems, web app, and data platform packs.
 - [x] Generated audit prompts per spec for reverse conformance checks.
+- [x] Spec editor LLM assist for guided example generation and rewrites that align with related published specs.
 - [x] Spec section classifier for invariants, acceptance criteria, examples, non-goals, operational requirements, security requirements, and reference detail.
 - [x] Context budget optimizer that selects the highest-value specs/sections for an agent task under a token budget.
 - [x] Configurable LLM Tiering: Split LLM routing in settings to send simpler tasks (classification, simple linting, initial summarization) to a local/cheap LLM (e.g., Ollama, LM Studio) and complex tasks (spec generation, final audits, draft-fixes) to frontier/expensive models (Anthropic, OpenAI).

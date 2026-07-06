@@ -29,6 +29,15 @@ export type SpecDetail = Spec & {
   feedback: AgentFeedback[];
   efficacy_runs: EfficacyRun[];
 };
+export interface SpecAssistResponse {
+  spec_id: string;
+  filename: string;
+  mode: "example" | "rewrite";
+  guidance: string;
+  content: string;
+  model: string;
+  provider: string;
+}
 export type ReviewRow = ChangeRequest & {
   filename: string;
   current_version: string;
@@ -702,6 +711,8 @@ export const api = {
   specs: () => request<SpecSummary[]>("/api/v1/specs"),
   spec: (id: string) => request<SpecDetail>(`/api/v1/specs/${id}`),
   specImpact: (id: string, delta = "minor") => request<SpecImpactResponse>(`/api/v1/specs/${id}/impact?delta=${encodeURIComponent(delta)}`),
+  specAssist: (id: string, body: { mode: "example" | "rewrite"; guidance: string; current_content?: string }) =>
+    request<SpecAssistResponse>(`/api/v1/specs/${id}/assist`, { method: "POST", body: JSON.stringify(body) }),
   createSpec: (body: { project_type_id: string; filename: string; content: string; updated_by: string }) =>
     request<Spec>("/api/v1/specs", { method: "POST", body: JSON.stringify(body) }),
   deleteSpec: (id: string) =>

@@ -27,6 +27,7 @@ import { sha256, signManifest } from "../lib/sign.js";
 import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
+import { assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
 
 const SUMMARY_SELECT = `
   SELECT s.id, s.project_type_id, s.project_id, s.filename, s.current_version, s.status,
@@ -109,6 +110,25 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       impact: reviewImpact(app.db, spec, versionDelta),
       migration_checklist: migrationChecklist(app.db, spec, versionDelta),
       pr_summary_markdown: specChangeSummaryMarkdown(app.db, spec, versionDelta),
+    };
+  });
+
+  app.post("/specs/:key/assist", async (req) => {
+    const { key } = req.params as { key: string };
+    const spec = requireSpec(app.db, key);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const mode = requireOneOf(body, "mode", ["example", "rewrite"] as const satisfies readonly SpecAssistMode[]);
+    const guidance = requireString(body, "guidance");
+    const currentContent = typeof body.current_content === "string" ? body.current_content : undefined;
+    const result = await assistSpec(app.db, { spec, mode, guidance, currentContent });
+    return {
+      spec_id: spec.id,
+      filename: spec.filename,
+      mode,
+      guidance,
+      content: result.content,
+      model: result.model,
+      provider: result.provider,
     };
   });
 

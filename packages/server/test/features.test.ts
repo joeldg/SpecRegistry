@@ -15,6 +15,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
@@ -661,6 +662,59 @@ describe("AI draft-fix", () => {
       if (previousBase !== undefined) process.env.LLM_BASE_URL = previousBase;
       if (previousKey !== undefined) process.env.LLM_API_KEY = previousKey;
     }
+  });
+});
+
+describe("Spec editor LLM assist", () => {
+  it("generates a complete SpecRegistry-style rewrite from guidance and current content", async () => {
+    vi.stubEnv("LLM_PROVIDER", "openai_compatible");
+    vi.stubEnv("LLM_BASE_URL", "http://assist-llm.local/v1");
+    vi.stubEnv("LLM_API_KEY", "test-key");
+    vi.stubEnv("LLM_MODEL", "assist-model");
+    let requestBody: any;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "notes before markdown\n\n# Gateway Routing\n\n## Scope\n\nGateway behavior.\n\n## Intent\n\nRoute requests safely.\n\n## Requirements\n\n1. Requests must be classified.\n\n## Non-Goals\n\nNo model hosting.\n\n## Acceptance Evidence\n\n- Routing tests pass.\n\n## Token Budget Class\n\nProject invariant.\n\n## Related Specs\n\n- `API.md`\n\n## AI Agent Directives\n\nLoad before gateway work.",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }) as any
+    );
+
+    const spec = await findSpec("API.md", "Acme Edge Device");
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/specs/${spec.id}/assist`,
+      payload: {
+        mode: "rewrite",
+        guidance: "Add OpenAI-compatible gateway routing requirements.",
+        current_content: "# API\n\n## Scope\n\nCurrent API surface.\n",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      spec_id: spec.id,
+      filename: "API.md",
+      mode: "rewrite",
+      provider: "openai_compatible",
+      model: "assist-model",
+    });
+    expect(res.json().content.startsWith("# Gateway Routing")).toBe(true);
+    expect(res.json().content).toContain("## AI Agent Directives");
+    expect(JSON.stringify(requestBody.messages)).toContain("Add OpenAI-compatible gateway routing requirements.");
+    expect(JSON.stringify(requestBody.messages)).toContain("Current API surface.");
   });
 });
 

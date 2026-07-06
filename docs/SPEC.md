@@ -36,6 +36,7 @@ The system ensures that both human developers and AI agents operate against unif
     * **Project Type Level:** Domain-specific groupings (e.g., Acme Hardware Specs, Acme Firmware Specs, Web App Standard). Fully configurable via UI to support any industry pivot.
 * **Specification Lifecycle Management:**
     * Markdown editor with side-by-side preview.
+    * LLM-assisted spec drafting can generate an example SpecRegistry-style specification or rewrite the current draft from author guidance while keeping tone, sections, and governance boundaries aligned with related published specs.
     * Author attribution, date tracking, and strict Semantic Versioning (`MAJOR.MINOR.PATCH`).
 * **Change Management & Review Workflow:**
     * Proposed changes to a spec enter a "Pending Review" status.
@@ -138,6 +139,7 @@ A command-line interface deployed to developer environments to synchronize local
 
 * `GET /api/v1/specs` - Retrieve all global and project-type specs.
 * `GET /api/v1/specs/:project_type/download` - Fetch zipped spec folder for CLI initialization.
+* `POST /api/v1/specs/:id/assist` - Generate an example spec or rewrite the current spec using author guidance and the configured server LLM.
 * `POST /api/v1/specs/review` - Submit a markdown change request.
 
 ### 4.2. AI Feedback & Telemetry

@@ -872,7 +872,8 @@ Use the LDAP tester in Settings before switching users over.
   database schemas, test strategies, observability, security/privacy, agent operating
   rules, deployment runbooks, and quality models), generates prompts or server-LLM drafts,
   and creates reviewed registry drafts rather than publishing directly. It also provides
-  task planning, spec-aware PR/ticket checklists, generated audit prompts, section
+  task planning, spec-aware PR/ticket checklists, generated audit prompts, editor-side
+  guidance for example specs and rewrites, section
   classification, context budget optimization, improvement suggestions, and spec pack
   composition. Automation features are individually flaggable, and LLM-backed variants
   run only when requested and enabled.
@@ -957,6 +958,7 @@ GET  /api/v1/project-types              POST /api/v1/project-types
 GET  /api/v1/specs                      POST /api/v1/specs
 GET  /api/v1/specs/:id                  PUT  /api/v1/specs/:id          (drafts only)
 GET  /api/v1/specs/:id/impact?delta=patch|minor|major
+POST /api/v1/specs/:id/assist
 POST /api/v1/specs/:id/publish          GET  /api/v1/specs/:type/download   (zip)
 POST /api/v1/specs/review               GET  /api/v1/reviews[?status=]
 GET  /api/v1/reviews/sla

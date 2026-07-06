@@ -1740,6 +1740,29 @@ describe("missing_guidance feedback (spec-less coverage gap reports)", () => {
     expect(cluster.spec_id).toBeNull();
   });
 
+  it("ignores spec_id on missing_guidance reports because the gap has no governing spec yet", async () => {
+    const specs = await getJson("/api/v1/specs?project_type=Acme%20Edge%20Device");
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/feedback",
+      payload: {
+        spec_id: specs[0].id,
+        error_type: "missing_guidance",
+        project_type: "Acme Edge Device",
+        languages: ["Python"],
+        topic: "Missing project-scoped technical specs for the NIM gateway",
+        description: "No reviewed project-scoped spec governs the gateway endpoints, routing, model discovery, keys, observability, or cost surfaces.",
+        agent_identifier: "test-agent",
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    const body = created.json();
+    expect(body.spec_id).toBeNull();
+    expect(body.error_type).toBe("missing_guidance");
+    expect(body.topic).toBe("Missing project-scoped technical specs for the NIM gateway");
+  });
+
   it("still requires spec_id for ambiguity/contradiction/outdated reports", async () => {
     const res = await app.inject({
       method: "POST",

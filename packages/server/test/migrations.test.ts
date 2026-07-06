@@ -222,6 +222,53 @@ describe("agent feedback gap metadata migrations", () => {
     );
     migrated.close();
   });
+
+  it("repairs databases where agent_feedback.spec_id is still NOT NULL after prior migrations", () => {
+    const dbPath = tmpDbPath();
+    const setup = createDb(dbPath);
+    setup.exec(`
+      PRAGMA foreign_keys = OFF;
+      ALTER TABLE agent_feedback RENAME TO agent_feedback_current;
+      CREATE TABLE agent_feedback (
+        id TEXT PRIMARY KEY,
+        spec_id TEXT NOT NULL REFERENCES specs(id),
+        spec_version TEXT,
+        agent_identifier TEXT NOT NULL,
+        error_type TEXT NOT NULL CHECK (error_type IN ('ambiguity', 'contradiction', 'outdated', 'missing_guidance')),
+        context_code_snippet TEXT,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved')),
+        project_type_id TEXT REFERENCES project_types(id),
+        languages TEXT,
+        topic TEXT,
+        created_at TEXT NOT NULL
+      );
+      DROP TABLE agent_feedback_current;
+      PRAGMA foreign_keys = ON;
+      UPDATE settings SET value = '31' WHERE key = 'schema_version';
+    `);
+    setup.close();
+
+    const migrated = createDb(dbPath);
+    const specId = migrated.prepare("PRAGMA table_info(agent_feedback)").all().find((column: any) => column.name === "spec_id") as {
+      notnull: number;
+    };
+    expect(specId.notnull).toBe(0);
+    migrated
+      .prepare(
+        `INSERT INTO agent_feedback
+          (id, agent_identifier, error_type, description, status, project_type_id, languages, topic, created_at)
+         VALUES ('gap-1', 'agent', 'missing_guidance', 'missing gateway specs', 'open', NULL, '["Python"]', 'gateway', '2026-07-05T00:00:00.000Z')`
+      )
+      .run();
+    const row = migrated.prepare("SELECT spec_id, error_type FROM agent_feedback WHERE id = 'gap-1'").get() as {
+      spec_id: string | null;
+      error_type: string;
+    };
+    expect(row.spec_id).toBeNull();
+    expect(row.error_type).toBe("missing_guidance");
+    migrated.close();
+  });
 });
 
 describe("token expiry migration", () => {

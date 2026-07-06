@@ -836,6 +836,38 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         AND content NOT LIKE '%SpecRegistry-Compliance:%';
     `,
   },
+  {
+    // Repair any live database that advanced past the v21 widening migration but
+    // still has agent_feedback.spec_id declared NOT NULL. Rebuilding is safe even
+    // when the column is already nullable and preserves v25 gap metadata columns.
+    version: 32,
+    sql: `
+      PRAGMA foreign_keys = OFF;
+      ALTER TABLE agent_feedback RENAME TO agent_feedback_v32_old;
+      CREATE TABLE agent_feedback (
+        id TEXT PRIMARY KEY,
+        spec_id TEXT REFERENCES specs(id),
+        spec_version TEXT,
+        agent_identifier TEXT NOT NULL,
+        error_type TEXT NOT NULL CHECK (error_type IN ('ambiguity', 'contradiction', 'outdated', 'missing_guidance')),
+        context_code_snippet TEXT,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved')),
+        project_type_id TEXT REFERENCES project_types(id),
+        languages TEXT,
+        topic TEXT,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO agent_feedback
+        (id, spec_id, spec_version, agent_identifier, error_type, context_code_snippet, description, status,
+         project_type_id, languages, topic, created_at)
+        SELECT id, spec_id, spec_version, agent_identifier, error_type, context_code_snippet, description, status,
+               project_type_id, languages, topic, created_at
+        FROM agent_feedback_v32_old;
+      DROP TABLE agent_feedback_v32_old;
+      PRAGMA foreign_keys = ON;
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [

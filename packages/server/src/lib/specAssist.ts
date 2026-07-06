@@ -5,6 +5,14 @@ import { sanitizeDraftFixOutput } from "./aifix.js";
 
 export type SpecAssistMode = "example" | "rewrite";
 
+interface SpecAssistTarget {
+  id?: string;
+  projectTypeId: string;
+  projectId?: string | null;
+  filename: string;
+  content: string;
+}
+
 const SYSTEM = `You are a senior SpecRegistry specification editor.
 
 Produce one complete Markdown specification document that follows SpecRegistry's governed style.
@@ -19,20 +27,20 @@ Rules:
 - Keep terminology, tone, and governance boundaries consistent with the related specs provided.
 - Do not invent secrets, credentials, product claims, or implementation facts not present in the guidance/current spec/context.`;
 
-function summarizeRelatedSpecs(db: Db, spec: Spec): string {
+function summarizeRelatedSpecs(db: Db, target: SpecAssistTarget): string {
   const rows = db
     .prepare(
       `SELECT filename, content
        FROM specs
        WHERE deleted_at IS NULL
          AND status != 'draft'
-         AND id != ?
+         AND (? IS NULL OR id != ?)
          AND project_id IS ?
          AND project_type_id = ?
        ORDER BY filename
        LIMIT 8`
     )
-    .all(spec.id, spec.project_id ?? null, spec.project_type_id) as Array<{ filename: string; content: string }>;
+    .all(target.id ?? null, target.id ?? null, target.projectId ?? null, target.projectTypeId) as Array<{ filename: string; content: string }>;
   const fallback = rows.length
     ? rows
     : (db
@@ -41,12 +49,12 @@ function summarizeRelatedSpecs(db: Db, spec: Spec): string {
            FROM specs
            WHERE deleted_at IS NULL
              AND status != 'draft'
-             AND id != ?
+             AND (? IS NULL OR id != ?)
              AND project_id IS NULL
            ORDER BY project_type_id = ? DESC, filename
            LIMIT 8`
         )
-        .all(spec.id, spec.project_type_id) as Array<{ filename: string; content: string }>);
+        .all(target.id ?? null, target.id ?? null, target.projectTypeId) as Array<{ filename: string; content: string }>);
 
   return fallback
     .map((row) => {
@@ -60,13 +68,48 @@ export async function assistSpec(
   db: Db,
   input: { spec: Spec; mode: SpecAssistMode; guidance: string; currentContent?: string }
 ): Promise<{ content: string; model: string; provider: string }> {
-  const current = input.currentContent?.trim() || input.spec.content;
-  const related = summarizeRelatedSpecs(db, input.spec);
+  return assistSpecTarget(db, {
+    target: {
+      id: input.spec.id,
+      projectTypeId: input.spec.project_type_id,
+      projectId: input.spec.project_id,
+      filename: input.spec.filename,
+      content: input.spec.content,
+    },
+    mode: input.mode,
+    guidance: input.guidance,
+    currentContent: input.currentContent,
+  });
+}
+
+export async function assistNewSpecDraft(
+  db: Db,
+  input: { projectTypeId: string; projectId?: string | null; filename: string; mode?: SpecAssistMode; guidance: string; currentContent?: string }
+): Promise<{ content: string; model: string; provider: string }> {
+  return assistSpecTarget(db, {
+    target: {
+      projectTypeId: input.projectTypeId,
+      projectId: input.projectId ?? null,
+      filename: input.filename,
+      content: input.currentContent?.trim() || `# ${input.filename.replace(/\.md$/i, "")}\n\n_Draft._\n`,
+    },
+    mode: input.mode ?? "example",
+    guidance: input.guidance,
+    currentContent: input.currentContent,
+  });
+}
+
+async function assistSpecTarget(
+  db: Db,
+  input: { target: SpecAssistTarget; mode: SpecAssistMode; guidance: string; currentContent?: string }
+): Promise<{ content: string; model: string; provider: string }> {
+  const current = input.currentContent?.trim() || input.target.content;
+  const related = summarizeRelatedSpecs(db, input.target);
   const user = `## Task
 ${input.mode === "rewrite" ? "Rewrite the current specification using the guidance." : "Generate a complete example specification using the guidance and the current specification as style/context."}
 
 ## Target file
-${input.spec.filename}
+${input.target.filename}
 
 ## Mode
 ${input.mode}

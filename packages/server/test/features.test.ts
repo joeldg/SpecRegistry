@@ -716,6 +716,57 @@ describe("Spec editor LLM assist", () => {
     expect(JSON.stringify(requestBody.messages)).toContain("Add OpenAI-compatible gateway routing requirements.");
     expect(JSON.stringify(requestBody.messages)).toContain("Current API surface.");
   });
+
+  it("generates a starter draft before a spec exists", async () => {
+    vi.stubEnv("LLM_PROVIDER", "openai_compatible");
+    vi.stubEnv("LLM_BASE_URL", "http://assist-llm.local/v1");
+    vi.stubEnv("LLM_API_KEY", "test-key");
+    vi.stubEnv("LLM_MODEL", "assist-model");
+    let requestBody: any;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "# Gateway Security\n\n## Scope\n\nGateway security.\n\n## AI Agent Directives\n\nLoad before key handling.",
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }) as any
+    );
+
+    const types = await getJson("/api/v1/project-types");
+    const pt = types.find((item: any) => item.name === "Acme Edge Device");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs/assist-draft",
+      payload: {
+        project_type_id: pt.id,
+        filename: "GATEWAY_SECURITY.md",
+        guidance: "Create a project-type spec for gateway API key rotation.",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      project_type_id: pt.id,
+      project_type: "Acme Edge Device",
+      filename: "GATEWAY_SECURITY.md",
+      mode: "example",
+      provider: "openai_compatible",
+      model: "assist-model",
+    });
+    expect(res.json().content).toContain("# Gateway Security");
+    expect(JSON.stringify(requestBody.messages)).toContain("GATEWAY_SECURITY.md");
+    expect(JSON.stringify(requestBody.messages)).toContain("gateway API key rotation");
+  });
 });
 
 describe("LLM settings", () => {

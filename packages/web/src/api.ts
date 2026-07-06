@@ -38,6 +38,16 @@ export interface SpecAssistResponse {
   model: string;
   provider: string;
 }
+export interface NewSpecAssistResponse {
+  project_type_id: string;
+  project_type: string;
+  filename: string;
+  mode: "example" | "rewrite";
+  guidance: string;
+  content: string;
+  model: string;
+  provider: string;
+}
 export type ReviewRow = ChangeRequest & {
   filename: string;
   current_version: string;
@@ -713,6 +723,8 @@ export const api = {
   specImpact: (id: string, delta = "minor") => request<SpecImpactResponse>(`/api/v1/specs/${id}/impact?delta=${encodeURIComponent(delta)}`),
   specAssist: (id: string, body: { mode: "example" | "rewrite"; guidance: string; current_content?: string }) =>
     request<SpecAssistResponse>(`/api/v1/specs/${id}/assist`, { method: "POST", body: JSON.stringify(body) }),
+  newSpecAssist: (body: { project_type_id: string; filename: string; guidance: string; current_content?: string }) =>
+    request<NewSpecAssistResponse>("/api/v1/specs/assist-draft", { method: "POST", body: JSON.stringify(body) }),
   createSpec: (body: { project_type_id: string; filename: string; content: string; updated_by: string }) =>
     request<Spec>("/api/v1/specs", { method: "POST", body: JSON.stringify(body) }),
   deleteSpec: (id: string) =>

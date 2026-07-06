@@ -139,6 +139,7 @@ A command-line interface deployed to developer environments to synchronize local
 
 * `GET /api/v1/specs` - Retrieve all global and project-type specs.
 * `GET /api/v1/specs/:project_type/download` - Fetch zipped spec folder for CLI initialization.
+* `POST /api/v1/specs/assist-draft` - Generate a starter draft for a not-yet-created spec using author guidance and related published specs.
 * `POST /api/v1/specs/:id/assist` - Generate an example spec or rewrite the current spec using author guidance and the configured server LLM.
 * `POST /api/v1/specs/review` - Submit a markdown change request.
 

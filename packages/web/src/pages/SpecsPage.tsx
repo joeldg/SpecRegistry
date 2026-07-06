@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { SpecSummary, SpecTemplate } from "@specregistry/shared";
 import { api, getAuthor, type ProjectTypeWithCount } from "../api";
-import { StatusBadge, timeAgo } from "../components";
+import { Markdown, StatusBadge, timeAgo } from "../components";
 
 type DeletedSpec = SpecSummary & { deleted_at: string };
 
@@ -14,6 +14,11 @@ export default function SpecsPage() {
   const [creating, setCreating] = useState(false);
   const [newTypeId, setNewTypeId] = useState("");
   const [newFilename, setNewFilename] = useState("");
+  const [assistGuidance, setAssistGuidance] = useState("");
+  const [assistContent, setAssistContent] = useState("");
+  const [assistModel, setAssistModel] = useState("");
+  const [assistProvider, setAssistProvider] = useState("");
+  const [assisting, setAssisting] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletedSpecs, setDeletedSpecs] = useState<DeletedSpec[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -56,12 +61,33 @@ export default function SpecsPage() {
       const spec = await api.createSpec({
         project_type_id: newTypeId,
         filename,
-        content: template?.content_template ?? `# ${filename.replace(/\.md$/i, "")}\n\n_Draft._\n`,
+        content: assistContent.trim() || template?.content_template || `# ${filename.replace(/\.md$/i, "")}\n\n_Draft._\n`,
         updated_by: getAuthor(),
       });
       navigate(`/specs/${spec.id}`);
     } catch (e) {
       setError((e as Error).message);
+    }
+  }
+
+  async function generateAssistedDraft() {
+    if (!newTypeId || !newFilename.trim() || !assistGuidance.trim()) return;
+    setAssisting(true);
+    setError(undefined);
+    try {
+      const result = await api.newSpecAssist({
+        project_type_id: newTypeId,
+        filename: newFilename.trim(),
+        guidance: assistGuidance.trim(),
+        current_content: assistContent || undefined,
+      });
+      setAssistContent(result.content);
+      setAssistModel(result.model);
+      setAssistProvider(result.provider);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAssisting(false);
     }
   }
 
@@ -89,13 +115,54 @@ export default function SpecsPage() {
               type="text"
               placeholder="FILENAME.md"
               value={newFilename}
-              onChange={(e) => setNewFilename(e.target.value)}
+              onChange={(e) => {
+                setNewFilename(e.target.value);
+                setAssistContent("");
+                setAssistModel("");
+                setAssistProvider("");
+              }}
               onKeyDown={(e) => e.key === "Enter" && createSpec()}
             />
             <button className="primary" onClick={createSpec}>
               Create draft
             </button>
           </div>
+          <div className="form-row" style={{ alignItems: "flex-start" }}>
+            <textarea
+              className="audit-guidance-input"
+              style={{ minHeight: 76, flex: 1, minWidth: 320 }}
+              placeholder="Guidance for an LLM-generated starter spec"
+              value={assistGuidance}
+              onChange={(e) => setAssistGuidance(e.target.value)}
+              disabled={assisting}
+            />
+            <button
+              className="primary"
+              onClick={generateAssistedDraft}
+              disabled={assisting || !newFilename.trim() || !assistGuidance.trim()}
+            >
+              {assisting ? "Generating..." : assistContent ? "Regenerate" : "Generate draft"}
+            </button>
+          </div>
+          {assistContent && (
+            <>
+              <div className="toolbar" style={{ marginTop: 12 }}>
+                <span className="faint">
+                  {assistProvider}/{assistModel}
+                </span>
+              </div>
+              <div className="split" style={{ marginTop: 12 }}>
+                <textarea
+                  className="editor"
+                  style={{ minHeight: 360 }}
+                  value={assistContent}
+                  onChange={(e) => setAssistContent(e.target.value)}
+                  spellCheck={false}
+                />
+                <Markdown content={assistContent} />
+              </div>
+            </>
+          )}
           <span className="faint">New specs start as 0.1.0 drafts; publishing makes them 1.0.0.</span>
         </div>
       )}

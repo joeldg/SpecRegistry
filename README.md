@@ -958,6 +958,7 @@ GET  /api/v1/project-types              POST /api/v1/project-types
 GET  /api/v1/specs                      POST /api/v1/specs
 GET  /api/v1/specs/:id                  PUT  /api/v1/specs/:id          (drafts only)
 GET  /api/v1/specs/:id/impact?delta=patch|minor|major
+POST /api/v1/specs/assist-draft
 POST /api/v1/specs/:id/assist
 POST /api/v1/specs/:id/publish          GET  /api/v1/specs/:type/download   (zip)
 POST /api/v1/specs/review               GET  /api/v1/reviews[?status=]

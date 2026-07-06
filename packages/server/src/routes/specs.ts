@@ -27,7 +27,7 @@ import { sha256, signManifest } from "../lib/sign.js";
 import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
-import { assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
+import { assistNewSpecDraft, assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
 
 const SUMMARY_SELECT = `
   SELECT s.id, s.project_type_id, s.project_id, s.filename, s.current_version, s.status,
@@ -110,6 +110,30 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       impact: reviewImpact(app.db, spec, versionDelta),
       migration_checklist: migrationChecklist(app.db, spec, versionDelta),
       pr_summary_markdown: specChangeSummaryMarkdown(app.db, spec, versionDelta),
+    };
+  });
+
+  app.post("/specs/assist-draft", async (req) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const projectTypeId = requireString(body, "project_type_id");
+    const filename = requireString(body, "filename");
+    const guidance = requireString(body, "guidance");
+    const pt = findProjectType(app.db, projectTypeId);
+    if (!pt) throw new HttpError(404, `Unknown project type: ${projectTypeId}`);
+    const projectId = typeof body.project_id === "string" && body.project_id ? body.project_id : null;
+    if (projectId) requireProjectConsumer(app.db, projectId, pt.id);
+    const mode = typeof body.mode === "string" && body.mode === "rewrite" ? "rewrite" : "example";
+    const currentContent = typeof body.current_content === "string" ? body.current_content : undefined;
+    const result = await assistNewSpecDraft(app.db, { projectTypeId: pt.id, projectId, filename, mode, guidance, currentContent });
+    return {
+      project_type_id: pt.id,
+      project_type: pt.name,
+      filename,
+      mode,
+      guidance,
+      content: result.content,
+      model: result.model,
+      provider: result.provider,
     };
   });
 

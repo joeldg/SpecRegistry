@@ -111,7 +111,8 @@ Agents should make SpecRegistry usage repeatable and observable. They must load 
 13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry's objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
 14. Agents must remediate failed compliance with targeted evidence only. They may add \`@spec[FILE#section]\` annotations only when the code entity is truly governed by that exact section. They must not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage. If no exact governing section exists, report missing guidance or propose the needed spec.
 15. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, agents must halt autonomous remediation, notify the user, and include the exact latest output instead of continuing speculative changes.
-16. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.
+16. Before creating a git commit for implementation work, agents must include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
+17. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion or committing, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.
 
 ## Non-Goals
 This spec does not grant an agent permission to access production, secrets, protected branches, or external systems. Host approval and least-privilege rules still apply.
@@ -314,12 +315,14 @@ Completed work should prove what changed, which specs governed it, what was veri
 5. Generated specs and examples must be reviewed separately from implementation evidence.
 6. CI annotations should identify drift, unmapped code entities, stale local specs, and audit findings when available.
 7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.
+8. Git commit messages for implementation work must include compact SpecRegistry compliance evidence: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
 
 ## Non-Goals
 This spec does not prescribe a single PR template. It defines the minimum evidence required for SDD confidence.
 
 ## Acceptance Evidence
 - PR/change summaries include commands run and observed results.
+- Commit messages include the compact SpecRegistry compliance trailer or equivalent \`finish_task\` evidence.
 - Code trace coverage is uploaded for repositories where \`specreg code-map --report\` is available.
 - Missing or ambiguous specs create feedback items or draft specs rather than hidden assumptions.
 - Migration checklists accompany breaking spec changes.

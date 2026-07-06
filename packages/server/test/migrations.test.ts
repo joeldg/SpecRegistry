@@ -8,6 +8,26 @@ const OLD_LOAD_SPECS_TEXT =
   "Before non-trivial work, use the SpecRegistry MCP get_specs tool for the configured project type and repository. Check the local manifest for drift. Treat published specs as authoritative and do not treat drafts as approved guidance.";
 const OLD_RUN_COMPLIANCE_TEXT =
   "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed 'done' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.";
+const V29_RUN_COMPLIANCE_TEXT =
+  "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Do not report completion while objective compliance is failing or unavailable.";
+const OLD_COLLECT_EVIDENCE_TEXT =
+  "Summarize commands run, test outcomes, affected specs, known residual risks, and any unverified requirement. Do not claim a check passed unless it was actually executed and its result observed.";
+const OLD_OPERATING_SPEC_TEXT = `# Agent Operating Rules
+
+## Requirements
+13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry's objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
+
+## Non-Goals
+Host approval still applies.
+`;
+const OLD_EVIDENCE_SPEC_TEXT = `# Implementation Evidence
+
+## Requirements
+7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.
+
+## Acceptance Evidence
+- PR/change summaries include commands run and observed results.
+`;
 
 const NEW_DEFAULT_SLUGS = [
   "register-task-session",
@@ -108,6 +128,65 @@ describe("agent skill migrations (v28-v29)", () => {
       instructions: string;
     };
     expect(skill.instructions).toBe(custom);
+    db.close();
+  });
+});
+
+describe("agent evidence migrations (v30-v31)", () => {
+  it("adds commit evidence requirements to built-in skills and seeded operating specs", () => {
+    const dbPath = tmpDbPath();
+    const setup = createDb(dbPath);
+    setup.prepare("UPDATE agent_skills SET instructions = ? WHERE slug = 'collect-delivery-evidence'").run(OLD_COLLECT_EVIDENCE_TEXT);
+    setup.prepare("UPDATE agent_skills SET instructions = ? WHERE slug = 'run-compliance-loop'").run(V29_RUN_COMPLIANCE_TEXT);
+    const ts = "2026-07-05T00:00:00.000Z";
+    setup
+      .prepare(
+        `INSERT OR IGNORE INTO project_types
+          (id, name, scope, industry, description, required_reviewers, created_at, updated_at)
+         VALUES ('pt-global', 'Global', 'global', NULL, NULL, '[]', ?, ?)`
+      )
+      .run(ts, ts);
+    setup
+      .prepare(
+        `INSERT OR REPLACE INTO specs
+          (id, project_type_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', NULL, ?, ?)`
+      )
+      .run("spec-agent-rules", "pt-global", "AGENT_OPERATING_RULES.md", OLD_OPERATING_SPEC_TEXT, ts, ts);
+    setup
+      .prepare(
+        `INSERT OR REPLACE INTO specs
+          (id, project_type_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', NULL, ?, ?)`
+      )
+      .run("spec-evidence", "pt-global", "IMPLEMENTATION_EVIDENCE.md", OLD_EVIDENCE_SPEC_TEXT, ts, ts);
+    setup
+      .prepare("INSERT OR REPLACE INTO spec_versions (id, spec_id, version, content, published_by, published_at) VALUES (?, ?, '1.0.0', ?, 'seed', ?)")
+      .run("version-agent-rules", "spec-agent-rules", OLD_OPERATING_SPEC_TEXT, ts);
+    setup
+      .prepare("INSERT OR REPLACE INTO spec_versions (id, spec_id, version, content, published_by, published_at) VALUES (?, ?, '1.0.0', ?, 'seed', ?)")
+      .run("version-evidence", "spec-evidence", OLD_EVIDENCE_SPEC_TEXT, ts);
+    setup.prepare("UPDATE settings SET value = '29' WHERE key = 'schema_version'").run();
+    setup.close();
+
+    const db = createDb(dbPath);
+    const delivery = db.prepare("SELECT instructions FROM agent_skills WHERE slug = 'collect-delivery-evidence'").get() as {
+      instructions: string;
+    };
+    const compliance = db.prepare("SELECT instructions FROM agent_skills WHERE slug = 'run-compliance-loop'").get() as {
+      instructions: string;
+    };
+    const operating = db.prepare("SELECT content FROM specs WHERE filename = 'AGENT_OPERATING_RULES.md'").get() as {
+      content: string;
+    };
+    const evidence = db.prepare("SELECT content FROM specs WHERE filename = 'IMPLEMENTATION_EVIDENCE.md'").get() as {
+      content: string;
+    };
+
+    expect(delivery.instructions).toContain("SpecRegistry-Compliance");
+    expect(compliance.instructions).toContain("commit");
+    expect(operating.content).toContain("SpecRegistry-Compliance:");
+    expect(evidence.content).toContain("commit messages");
     db.close();
   });
 });

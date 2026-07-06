@@ -24,4 +24,6 @@ test("AGENTS bootstrap points first-run agents at governed MCP, specs, and skill
   assert.match(content, /exact tool or command output/);
   assert.match(content, /Do not blanket-map files to `PROJECT_PROFILE\.md`/);
   assert.match(content, /missing-guidance gap/);
+  assert.match(content, /SpecRegistry-Compliance:/);
+  assert.match(content, /commit message body/);
 });

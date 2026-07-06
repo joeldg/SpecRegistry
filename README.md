@@ -519,6 +519,19 @@ uses `--type` or the local `specs/.specregistry.json` manifest to identify the p
 Uploaded reports appear on the Reports page as code-to-spec coverage, drift severity, and
 unmapped implementation counts.
 
+Use `specreg comply` before committing governed implementation work. It prints a compact
+commit evidence trailer:
+
+```text
+SpecRegistry-Compliance: PASS objective=100/100 attempt=1
+SpecRegistry-Signals: coverage=100% drift=0%
+SpecRegistry-Command: specreg comply
+```
+
+Agents should include that trailer, or equivalent `finish_task` evidence with verdict,
+objective score, and session id, in the commit message body. If compliance cannot run or
+does not pass, halt and show the exact output instead of committing.
+
 Use `specreg trace-check` in CI to fail on insufficient code-to-spec coverage, excessive
 drift, or critical unmapped entity kinds. In GitHub Actions it emits native annotations
 that point at unmapped files/lines from `.spec/code-trace.json`.

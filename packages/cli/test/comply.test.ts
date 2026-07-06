@@ -17,6 +17,7 @@ function response(body: unknown, init: ResponseInit = {}): Response {
 test("comply resolves the initialized registry root from a subdirectory", async () => {
   const originalFetch = globalThis.fetch;
   const originalCwd = process.cwd();
+  const originalLog = console.log;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-comply-root-"));
   fs.mkdirSync(path.join(root, "specs"), { recursive: true });
   fs.writeFileSync(
@@ -47,6 +48,8 @@ test("comply resolves the initialized registry root from a subdirectory", async 
   }) as typeof fetch;
 
   try {
+    const logs: string[] = [];
+    console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
     process.chdir(nested);
     const workspace = resolveRegistryWorkspace("specs");
     assert.equal(fs.realpathSync(workspace.root), fs.realpathSync(root));
@@ -57,8 +60,14 @@ test("comply resolves the initialized registry root from a subdirectory", async 
       dir: workspace.specsDir,
       root: workspace.root,
     });
+    const output = logs.join("\n");
+    assert.match(output, /Commit evidence trailer:/);
+    assert.match(output, /SpecRegistry-Compliance: PASS objective=100\/100 attempt=1/);
+    assert.match(output, /SpecRegistry-Signals: coverage=100% drift=0%/);
+    assert.match(output, /SpecRegistry-Command: specreg comply/);
   } finally {
     globalThis.fetch = originalFetch;
+    console.log = originalLog;
     process.chdir(originalCwd);
   }
 

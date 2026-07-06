@@ -31,7 +31,7 @@ Usage:
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
-  specreg comply    Verify spec compliance (coverage/drift) before declaring work done; exit 1 if not
+  specreg comply    Verify spec compliance (coverage/drift) before declaring work done or committing; exit 1 if not
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
   specreg mcp       Run the SpecRegistry MCP stdio server for configured agents

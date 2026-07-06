@@ -74,5 +74,13 @@ export async function runComply(opts: ComplyOptions): Promise<void> {
     }
   }
   console.log(`\n${verdict.directive}`);
+  console.log("\nCommit evidence trailer:");
+  console.log(`SpecRegistry-Compliance: ${verdict.compliant ? "PASS" : "FAIL"} objective=${verdict.objective_score}/100 attempt=${verdict.iteration}`);
+  console.log(
+    `SpecRegistry-Signals: coverage=${verdict.coverage_ratio === null ? "n/a" : `${Math.round(verdict.coverage_ratio * 100)}%`} drift=${
+      verdict.drift_score === null ? "n/a" : `${Math.round(verdict.drift_score * 100)}%`
+    }`
+  );
+  console.log("SpecRegistry-Command: specreg comply");
   if (!verdict.compliant) process.exit(1);
 }

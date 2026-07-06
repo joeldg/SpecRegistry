@@ -743,6 +743,99 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         AND instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run -- a self-assessed ''done'' is not sufficient. If finish_task, check_compliance, or specreg comply cannot run because MCP or the SpecRegistry server appears unavailable, halt and notify the user with the exact tool or command output. Do not report completion while objective compliance is failing or unavailable.';
     `,
   },
+  {
+    // Require compact compliance evidence in implementation commit messages.
+    // Gated on shipped built-in text so customized skills remain untouched.
+    version: 30,
+    sql: `
+      UPDATE agent_skills
+      SET instructions = 'Summarize commands run, test outcomes, affected specs, known residual risks, and any unverified requirement. Before creating a git commit for implementation work, include compact compliance evidence in the commit message body: the SpecRegistry-Compliance, SpecRegistry-Signals, and SpecRegistry-Command trailer emitted by specreg comply, or equivalent finish_task evidence with verdict, objective score, and session id. Do not claim a check passed unless it was actually executed and its result observed.',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE slug = 'collect-delivery-evidence'
+        AND built_in = 1
+        AND instructions = 'Summarize commands run, test outcomes, affected specs, known residual risks, and any unverified requirement. Do not claim a check passed unless it was actually executed and its result observed.';
+
+      UPDATE agent_skills
+      SET instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Before creating a git commit for implementation work, include the compact SpecRegistry-Compliance/SpecRegistry-Signals/SpecRegistry-Command trailer emitted by specreg comply, or equivalent finish_task evidence. Do not report completion while objective compliance is failing or unavailable.',
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE slug = 'run-compliance-loop'
+        AND built_in = 1
+        AND instructions = 'Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Do not report completion while objective compliance is failing or unavailable.';
+    `,
+  },
+  {
+    // Update already-seeded global operating specs in existing registries. This
+    // only touches built-in seed-authored specs and is guarded against duplicates.
+    version: 31,
+    sql: `
+      UPDATE specs
+      SET content = replace(
+            content,
+            '16. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.',
+            '16. Before creating a git commit for implementation work, agents must include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
+17. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion or committing, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'AGENT_OPERATING_RULES.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%16. If \`finish_task\`%'
+        AND content NOT LIKE '%SpecRegistry-Compliance:%';
+
+      UPDATE specs
+      SET content = replace(
+            content,
+            '13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry''s objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.',
+            '13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry''s objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
+14. Agents must remediate failed compliance with targeted evidence only. They may add \`@spec[FILE#section]\` annotations only when the code entity is truly governed by that exact section. They must not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage. If no exact governing section exists, report missing guidance or propose the needed spec.
+15. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, agents must halt autonomous remediation, notify the user, and include the exact latest output instead of continuing speculative changes.
+16. Before creating a git commit for implementation work, agents must include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
+17. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion or committing, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'AGENT_OPERATING_RULES.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%13. Before declaring a task complete%'
+        AND content NOT LIKE '%SpecRegistry-Compliance:%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            content,
+            '13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry''s objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.',
+            '13. Before declaring a task complete, agents must call \`finish_task\` with their \`begin_task\` session id, or run \`specreg comply\` for CLI/CI workflows, and continue working until objective compliance passes. \`check_compliance\` remains available for direct compliance checks. A self-assessment of "done" is not sufficient; the registry''s objective coverage/drift gate decides. Agents must not claim completion while the check still reports outstanding items.
+14. Agents must remediate failed compliance with targeted evidence only. They may add \`@spec[FILE#section]\` annotations only when the code entity is truly governed by that exact section. They must not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage. If no exact governing section exists, report missing guidance or propose the needed spec.
+15. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, agents must halt autonomous remediation, notify the user, and include the exact latest output instead of continuing speculative changes.
+16. Before creating a git commit for implementation work, agents must include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
+17. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, agents must halt before claiming completion or committing, notify the user that objective compliance could not be verified, and include the exact tool or command output. Local specs and skills may guide work, but they are not a substitute for the registry completion gate.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'AGENT_OPERATING_RULES.md' AND updated_by = 'seed')
+        AND content LIKE '%13. Before declaring a task complete%'
+        AND content NOT LIKE '%SpecRegistry-Compliance:%';
+
+      UPDATE specs
+      SET content = replace(
+            content,
+            '7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.',
+            '7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.
+8. Git commit messages for implementation work must include compact SpecRegistry compliance evidence: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'IMPLEMENTATION_EVIDENCE.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%7. Reviewers must be able to trace acceptance evidence%'
+        AND content NOT LIKE '%SpecRegistry-Compliance:%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            content,
+            '7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.',
+            '7. Reviewers must be able to trace acceptance evidence back to specific spec sections or explicit gaps.
+8. Git commit messages for implementation work must include compact SpecRegistry compliance evidence: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'IMPLEMENTATION_EVIDENCE.md' AND updated_by = 'seed')
+        AND content LIKE '%7. Reviewers must be able to trace acceptance evidence%'
+        AND content NOT LIKE '%SpecRegistry-Compliance:%';
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [
@@ -792,13 +885,13 @@ const DEFAULT_AGENT_SKILLS = [
     slug: "collect-delivery-evidence",
     name: "Collect delivery evidence",
     description: "Record the tests, checks, and operational evidence that support a completed change.",
-    instructions: "Summarize commands run, test outcomes, affected specs, known residual risks, and any unverified requirement. Do not claim a check passed unless it was actually executed and its result observed.",
+    instructions: "Summarize commands run, test outcomes, affected specs, known residual risks, and any unverified requirement. Before creating a git commit for implementation work, include compact compliance evidence in the commit message body: the SpecRegistry-Compliance, SpecRegistry-Signals, and SpecRegistry-Command trailer emitted by specreg comply, or equivalent finish_task evidence with verdict, objective score, and session id. Do not claim a check passed unless it was actually executed and its result observed.",
   },
   {
     slug: "run-compliance-loop",
     name: "Run the compliance loop",
     description: "Confirm objective compliance before claiming a task is complete, and keep working until it passes.",
-    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Do not report completion while objective compliance is failing or unavailable.",
+    instructions: "Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Before creating a git commit for implementation work, include the compact SpecRegistry-Compliance/SpecRegistry-Signals/SpecRegistry-Command trailer emitted by specreg comply, or equivalent finish_task evidence. Do not report completion while objective compliance is failing or unavailable.",
   },
   {
     slug: "propose-not-publish",

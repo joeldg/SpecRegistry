@@ -249,7 +249,8 @@ Before editing code, configuration, tests, docs, or generated artifacts:
 9. Before claiming completion, call MCP \`finish_task\` with the \`session_id\` from \`begin_task\` or run \`specreg comply\`. Use MCP \`check_compliance\` for direct compliance checks.
 10. Remediate failed compliance with targeted evidence only. Add \`@spec[FILE#section]\` annotations only when that exact section truly governs the code entity. Do not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage; report a missing-guidance gap or propose the needed spec instead.
 11. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, halt autonomous remediation and show the user the exact latest output.
-12. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run, cannot reach the registry, or exits non-zero from a server/MCP availability failure, halt before claiming completion. Notify the user that objective SpecRegistry compliance could not be verified and include the exact tool or command output.
+12. Before creating a git commit for implementation work, run \`specreg comply\` or \`finish_task\`. Put the compact \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\` (or equivalent \`finish_task\` evidence) in the commit message body.
+13. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run, cannot reach the registry, or exits non-zero from a server/MCP availability failure, halt before claiming completion or committing. Notify the user that objective SpecRegistry compliance could not be verified and include the exact tool or command output.
 
 Local governance files:
 
@@ -372,6 +373,13 @@ Before you report a task as done, run the completion gate and keep working until
   SpecRegistry server appears unavailable, halt. Tell the user objective compliance could not
   be verified, paste the exact tool or command output, and do not substitute local-only checks
   for the registry completion gate.
+- Before creating a git commit for implementation work, include compact compliance evidence in
+  the commit body. Prefer the trailer emitted by \`specreg comply\`:
+  \`SpecRegistry-Compliance: PASS objective=... attempt=...\`,
+  \`SpecRegistry-Signals: coverage=... drift=...\`, and
+  \`SpecRegistry-Command: specreg comply\`. If using MCP \`finish_task\` instead, include the
+  equivalent verdict, objective score, and session id. Do not commit without passing evidence
+  unless the user explicitly accepts the blocked state.
 ${styleGuides.length > 0 ? `
 ## External Style Guides
 
@@ -420,6 +428,7 @@ Required MCP flow:
 6. Call \`finish_task\` with the \`session_id\` returned by \`begin_task\` before claiming completion.
 7. Use \`specreg check\` to verify this repo is still using current approved spec versions.
 8. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because the registry or MCP server is unavailable, halt and notify the user with the exact output. Do not claim completion until objective compliance can be verified.
+9. Before committing implementation changes, include the compact compliance evidence trailer from \`specreg comply\` (or equivalent \`finish_task\` evidence) in the git commit message body.
 
 ## Missing Guidance
 

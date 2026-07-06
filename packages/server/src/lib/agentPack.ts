@@ -58,7 +58,8 @@ Do not edit code, configuration, tests, or generated artifacts until the pre-imp
 9. Before reporting completion, call \`finish_task\` with the \`session_id\` from \`begin_task\`; keep working until the objective verdict passes. Use \`check_compliance\` or \`specreg comply\` for direct compliance checks and CI gates.
 10. Fix failed compliance with targeted evidence only: add \`@spec[FILE#section]\` annotations only when the code entity is truly governed by that exact section. Do not blanket-map files to \`PROJECT_PROFILE.md\`, broad requirements sections, or convenient specs just to raise coverage; report missing_guidance or propose a spec when no section governs the behavior.
 11. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, halt autonomous remediation and show the user the exact latest output.
-12. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, halt before reporting completion. Notify the user that objective compliance could not be verified, include the exact tool or command output, and do not substitute local-only checks for the registry completion gate.
+12. Before creating a git commit for implementation work, include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
+13. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, halt before reporting completion or committing. Notify the user that objective compliance could not be verified, include the exact tool or command output, and do not substitute local-only checks for the registry completion gate.
 
 ## MCP Tools
 

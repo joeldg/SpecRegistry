@@ -275,10 +275,18 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     const publishedBy = req.user?.role === "agent" ? req.user.username : requireString(body, "published_by");
     const ts = now();
     const version = "1.0.0";
+    // Recompute the stored audit prompt so its embedded @version matches the
+    // published version (it was created at the 0.1.0 draft version).
+    const auditPrompt = auditPromptForSpec({
+      id: spec.id,
+      filename: spec.filename,
+      content: spec.content,
+      current_version: version,
+    });
     const publish = app.db.transaction(() => {
       app.db
-        .prepare("UPDATE specs SET status = 'published', current_version = ?, updated_by = ?, updated_at = ? WHERE id = ?")
-        .run(version, publishedBy, ts, spec.id);
+        .prepare("UPDATE specs SET status = 'published', current_version = ?, audit_prompt = ?, updated_by = ?, updated_at = ? WHERE id = ?")
+        .run(version, auditPrompt, publishedBy, ts, spec.id);
       app.db
         .prepare(
           `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at)
@@ -370,10 +378,16 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     if (conflict) throw new HttpError(409, `Stable version ${stableVersion} already exists`);
 
     const ts = now();
+    const auditPrompt = auditPromptForSpec({
+      id: spec.id,
+      filename: spec.filename,
+      content: beta.content,
+      current_version: stableVersion,
+    });
     const promote = app.db.transaction(() => {
       app.db
-        .prepare("UPDATE specs SET content = ?, current_version = ?, updated_by = ?, updated_at = ? WHERE id = ?")
-        .run(beta.content, stableVersion, promotedBy, ts, spec.id);
+        .prepare("UPDATE specs SET content = ?, current_version = ?, audit_prompt = ?, updated_by = ?, updated_at = ? WHERE id = ?")
+        .run(beta.content, stableVersion, auditPrompt, promotedBy, ts, spec.id);
       app.db
         .prepare(
           `INSERT INTO spec_versions (id, spec_id, version, content, published_by, published_at, channel)

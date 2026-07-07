@@ -8,6 +8,7 @@ import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { dispatchWebhooks } from "../lib/events.js";
 import { enqueueSyncJobs, processSyncJobs } from "../lib/github.js";
 import { reindexSpecSearch } from "../lib/search.js";
+import { auditPromptForSpec } from "../lib/specAutomation.js";
 import { getAppKeyConfig } from "../lib/appKeys.js";
 import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
@@ -223,6 +224,17 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
       newVersion = `${bumped}-beta.${priorBetas.n + 1}`;
     }
     const ts = now();
+    // Recompute the stored audit prompt so its embedded @version tracks the
+    // newly published version instead of freezing at the draft's 0.1.0.
+    const auditPrompt =
+      channel === "stable"
+        ? auditPromptForSpec({
+            id: spec.id,
+            filename: spec.filename,
+            content: cr.proposed_content,
+            current_version: newVersion,
+          })
+        : null;
 
     const approve = app.db.transaction(() => {
       app.db
@@ -233,9 +245,9 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
       if (channel === "stable") {
         app.db
           .prepare(
-            `UPDATE specs SET content = ?, current_version = ?, status = 'published', updated_by = ?, updated_at = ? WHERE id = ?`
+            `UPDATE specs SET content = ?, current_version = ?, status = 'published', audit_prompt = ?, updated_by = ?, updated_at = ? WHERE id = ?`
           )
-          .run(cr.proposed_content, newVersion, cr.proposed_by, ts, spec.id);
+          .run(cr.proposed_content, newVersion, auditPrompt, cr.proposed_by, ts, spec.id);
       } else {
         // The stable head is untouched; the spec leaves pending_review.
         app.db.prepare("UPDATE specs SET status = 'published', updated_at = ? WHERE id = ?").run(ts, spec.id);

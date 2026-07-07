@@ -389,6 +389,41 @@ describe("sync-check (CLI drift detection)", () => {
     expect(body.missing_locally.length).toBe(currentManifest.length - 1);
   });
 
+  it("refreshes the stored audit prompt to the published version on a CR bump", async () => {
+    const spec = await findSpec("DESIGN.md", "Acme Edge Device");
+    const db = (app as unknown as { db: import("../src/db.js").Db }).db;
+
+    const before = db
+      .prepare("SELECT audit_prompt, current_version FROM specs WHERE id = ?")
+      .get(spec.id) as { audit_prompt: string; current_version: string };
+    expect(before.current_version).toBe("1.0.0");
+    expect(before.audit_prompt).toContain("DESIGN.md@1.0.0");
+
+    const cr = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/specs/review",
+        payload: {
+          spec_id: spec.id,
+          proposed_content:
+            "DESIGN.md\n\n# Acme Edge Device — Design Specification\n\n## System Architecture\nv2\n\n## Design Patterns\nv2\n\n## Data Flow\nv2\n",
+          version_delta: "minor",
+          proposed_by: "joel",
+        },
+      })
+    ).json();
+    await app.inject({ method: "POST", url: `/api/v1/reviews/${cr.id}/approve`, payload: { reviewed_by: "r" } });
+
+    const after = db
+      .prepare("SELECT audit_prompt, current_version FROM specs WHERE id = ?")
+      .get(spec.id) as { audit_prompt: string; current_version: string };
+    expect(after.current_version).toBe("1.1.0");
+    // The embedded @version must track the newly published version, not freeze.
+    expect(after.audit_prompt).toContain("DESIGN.md@1.1.0");
+    expect(after.audit_prompt).not.toContain("@1.0.0");
+    expect(after.audit_prompt).not.toContain("@0.1.0");
+  });
+
   it("diagnoses an uploaded manifest without storing a project report", async () => {
     const res = await app.inject({
       method: "POST",

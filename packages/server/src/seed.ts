@@ -653,17 +653,28 @@ function seedAdmin(db: Db): void {
 export function seed(db: Db): boolean {
   seedTemplates(db);
   seedAdmin(db);
-  // Backfill missing audit prompts for existing specs (runs once after migration 15)
-  const missing = db.prepare("SELECT COUNT(*) AS n FROM specs WHERE (audit_prompt IS NULL OR audit_prompt = '') AND deleted_at IS NULL").get() as { n: number };
-  if (missing.n > 0) {
-    const specs = db.prepare("SELECT id, filename, content, current_version FROM specs WHERE (audit_prompt IS NULL OR audit_prompt = '') AND deleted_at IS NULL").all() as Array<{
+  // Backfill missing audit prompts, and repair baseline prompts whose embedded
+  // @version drifted from current_version (older specs stored the prompt at the
+  // 0.1.0 draft version and never refreshed it on publish). Custom prompts —
+  // those not in the generated baseline format — are left untouched.
+  const stale = db
+    .prepare(
+      `SELECT id, filename, content, current_version FROM specs
+       WHERE deleted_at IS NULL AND (
+         audit_prompt IS NULL OR audit_prompt = ''
+         OR (audit_prompt LIKE 'Audit an implementation for conformance with%'
+             AND audit_prompt NOT LIKE ('%@' || current_version || '%'))
+       )`
+    )
+    .all() as Array<{
       id: string;
       filename: string;
       content: string;
       current_version: string;
     }>;
+  if (stale.length > 0) {
     const update = db.prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?");
-    for (const spec of specs) {
+    for (const spec of stale) {
       const prompt = auditPromptForSpec(spec);
       update.run(prompt, now(), spec.id);
     }

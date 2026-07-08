@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
@@ -784,16 +785,24 @@ describe("agent MCP guide", () => {
 
 describe("CLI download", () => {
   it("embeds the resolved public registry URL as the CLI default server", async () => {
+    const priorPublicUrl = process.env.SPECREG_PUBLIC_URL;
     process.env.SPECREG_PUBLIC_URL = "https://specreg.example.com";
-    const res = await app.inject({ method: "GET", url: "/api/v1/cli/download" });
-    expect(res.statusCode).toBe(200);
     const tgz = path.join(os.tmpdir(), `specreg-cli-${crypto.randomUUID()}.tgz`);
-    fs.writeFileSync(tgz, res.rawPayload);
+    const liveDefaultServer = fileURLToPath(new URL("../../cli/dist/default-server.json", import.meta.url));
     try {
+      const res = await app.inject({ method: "GET", url: "/api/v1/cli/download" });
+      expect(res.statusCode).toBe(200);
+      fs.writeFileSync(tgz, res.rawPayload);
       const stamped = execFileSync("tar", ["-xOf", tgz, "package/dist/default-server.json"], { encoding: "utf8" });
       expect(JSON.parse(stamped)).toEqual({ server: "https://specreg.example.com" });
+      // The stamped default server must ship in the tarball but must NOT be left in the
+      // live dev dist, or the locally-run CLI would resolve this placeholder instead of
+      // its configured registry.
+      expect(fs.existsSync(liveDefaultServer)).toBe(false);
     } finally {
       fs.rmSync(tgz, { force: true });
+      if (priorPublicUrl === undefined) delete process.env.SPECREG_PUBLIC_URL;
+      else process.env.SPECREG_PUBLIC_URL = priorPublicUrl;
     }
   });
 });

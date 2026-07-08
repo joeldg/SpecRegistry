@@ -57,23 +57,32 @@ function ensureCliTarball(repoRoot: string, serverUrl: string): string {
     execFileSync("npm", ["run", "build", "-w", "@specregistry/shared"], { cwd: repoRoot, env, stdio: "pipe" });
     execFileSync("npm", ["run", "build", "-w", "@specregistry/cli"], { cwd: repoRoot, env, stdio: "pipe" });
   }
+  // The default server must live in dist while `npm pack` runs so it ships inside the
+  // tarball, but it must NOT be left behind in the live dev dist afterwards: the
+  // locally-run CLI reads dist/default-server.json via readInstalledDefaultServer(),
+  // so a lingering copy would make it resolve whatever URL the last download used
+  // instead of SPECREG_SERVER/--server. Stamp it, pack, then always remove it.
   fs.writeFileSync(defaultServerPath, `${JSON.stringify({ server: serverUrl }, null, 2)}\n`, "utf8");
-  for (const file of fs.readdirSync(cacheDir)) {
-    if (file.endsWith(".tgz")) fs.rmSync(path.join(cacheDir, file), { force: true });
+  try {
+    for (const file of fs.readdirSync(cacheDir)) {
+      if (file.endsWith(".tgz")) fs.rmSync(path.join(cacheDir, file), { force: true });
+    }
+    const packed = execFileSync("npm", ["pack", "-w", "@specregistry/cli", "--pack-destination", cacheDir], {
+      cwd: repoRoot,
+      env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+      .trim()
+      .split(/\r?\n/)
+      .pop();
+    const packedPath = path.join(cacheDir, packed || `specregistry-cli-${cliPackage.version ?? "0.1.0"}.tgz`);
+    if (!fs.existsSync(packedPath)) throw new Error("npm pack did not produce a CLI tarball");
+    fs.renameSync(packedPath, target);
+    return target;
+  } finally {
+    fs.rmSync(defaultServerPath, { force: true });
   }
-  const packed = execFileSync("npm", ["pack", "-w", "@specregistry/cli", "--pack-destination", cacheDir], {
-    cwd: repoRoot,
-    env,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  })
-    .trim()
-    .split(/\r?\n/)
-    .pop();
-  const packedPath = path.join(cacheDir, packed || `specregistry-cli-${cliPackage.version ?? "0.1.0"}.tgz`);
-  if (!fs.existsSync(packedPath)) throw new Error("npm pack did not produce a CLI tarball");
-  fs.renameSync(packedPath, target);
-  return target;
 }
 
 export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {

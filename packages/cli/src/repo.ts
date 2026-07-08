@@ -11,9 +11,20 @@ export interface ManifestSpec {
   pin?: string;
 }
 
+export interface ManifestRegistry {
+  /** the registry this repo is governed by */
+  url?: string;
+  /** the registry's ed25519 public key — a stable fingerprint of the instance */
+  public_key?: string;
+  /** when the repo was last migrated/stamped to this registry */
+  stamped_at?: string;
+}
+
 export interface Manifest {
   project_type: string;
   specs: ManifestSpec[];
+  /** identity of the governing registry, used to detect a migration to a different one */
+  registry?: ManifestRegistry;
 }
 
 function git(args: string[]): string | undefined {

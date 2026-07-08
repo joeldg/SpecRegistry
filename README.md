@@ -473,6 +473,34 @@ local manifest back to the registry. The Settings page shows these projects so a
 see which repositories are using which project type, manifest path, spec count, and outdated
 spec count.
 
+#### Migrating a repo to a different registry
+
+`specreg migrate` moves a governed repository from one registry to another. Each registry
+has a stable ed25519 identity key (exposed at `GET /api/v1/meta/public-key`, the same key
+that signs spec bundles); the manifest records the key of the registry it was last stamped to. `migrate` compares that
+recorded key with the target's key — a **different key means a genuinely different
+registry**, so it reconciles the repo's specs instead of assuming they already match.
+
+```sh
+# Dry run: show what would move (safe, read-only)
+specreg migrate --server https://new-registry.example.com --token sreg_...
+
+# Apply: upload the diffs for review and stamp the manifest
+specreg migrate --server https://new-registry.example.com --token sreg_... --apply
+```
+
+What it does:
+
+- Reads the target's identity key; if it matches the recorded one, it reports "nothing to
+  migrate" (override with `--force`).
+- Diffs the repo's **project-scoped** specs against the target by content hash and
+  classifies each as unchanged, new, or changed.
+- With `--apply`, uploads new and changed specs **as review drafts / change requests**
+  (never auto-published — the human approval gate still applies) and re-stamps the manifest
+  with the new registry's URL and key.
+- Global and project-type specs are org-owned; `migrate` reports any missing on the target
+  but never pushes them, since defining org-wide specs is a registry admin's responsibility.
+
 Compile governed specs into agent context files:
 
 ```sh

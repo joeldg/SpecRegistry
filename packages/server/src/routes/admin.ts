@@ -46,6 +46,7 @@ import { getFeatureConfig, getHarnessImprovementFeatureFlags, saveFeatureConfig,
 import { DEFAULT_COMPLIANCE_POLICY, getCompliancePolicy } from "../lib/compliance.js";
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
 import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
+import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -1488,5 +1489,34 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
       throw new HttpError(409, message);
     }
+  });
+
+  // On-demand registry backup (the built-in scheduler also runs on a cadence). Admin-gated.
+  app.get("/admin/backups", async () => {
+    const config = readBackupConfig();
+    return {
+      configured: Boolean(config.dir),
+      dir: config.dir || null,
+      interval_seconds: config.intervalSeconds,
+      keep: config.keep,
+      backups: config.dir ? listBackups(config.dir) : [],
+    };
+  });
+
+  app.post("/admin/backup", async (req) => {
+    const config = readBackupConfig();
+    if (!config.dir) {
+      throw new HttpError(400, "Backups are not configured. Set SPECREG_BACKUP_DIR (and optionally SPECREG_BACKUP_INTERVAL/SPECREG_BACKUP_KEEP).");
+    }
+    const info = await runBackup(app.db, config);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "registry.backup_created",
+      target_type: "backup",
+      target_id: info.name,
+      summary: `Manual registry backup ${info.name} (${info.bytes} bytes)`,
+      detail: { file: info.file, bytes: info.bytes, sha256: info.sha256 },
+    });
+    return info;
   });
 }

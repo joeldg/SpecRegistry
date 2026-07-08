@@ -8,6 +8,7 @@ import { loadServerEnv } from "./env.js";
 import { assertSecurePosture } from "./lib/auth.js";
 import { publicUrl } from "./lib/publicUrl.js";
 import { seed } from "./seed.js";
+import { readBackupConfig, startBackupScheduler } from "./lib/backup.js";
 
 loadServerEnv();
 
@@ -49,3 +50,12 @@ if (fs.existsSync(webDist)) {
 
 await app.listen({ port, host: "0.0.0.0" });
 console.log(`SpecRegistry API listening on ${publicUrl(db)}`);
+
+// Built-in scheduled backups (enabled by SPECREG_BACKUP_DIR + SPECREG_BACKUP_INTERVAL).
+const backupConfig = readBackupConfig();
+if (backupConfig.dir && backupConfig.intervalSeconds > 0) {
+  startBackupScheduler(db, backupConfig);
+  console.log(
+    `Scheduled registry backups every ${backupConfig.intervalSeconds}s to ${backupConfig.dir} (keeping ${backupConfig.keep}).`
+  );
+}

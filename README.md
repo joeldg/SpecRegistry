@@ -766,6 +766,34 @@ Run Grafana Alloy through Compose:
 docker compose --profile metrics up --build
 ```
 
+### Backup and Restore
+
+The registry is a single SQLite database, so backups are consistent point-in-time
+snapshots. Set `SPECREG_BACKUP_DIR` to turn on the **built-in scheduler**: the server
+writes a snapshot (using SQLite's online backup, safe while running) plus a `.sha256`
+sidecar every `SPECREG_BACKUP_INTERVAL` seconds and keeps the newest `SPECREG_BACKUP_KEEP`.
+
+Admins can also trigger and list backups over the API:
+
+```sh
+curl -X POST -H "authorization: Bearer $ADMIN_TOKEN" http://localhost:4000/api/v1/admin/backup
+curl -H "authorization: Bearer $ADMIN_TOKEN" http://localhost:4000/api/v1/admin/backups
+```
+
+Or use the ops CLI (honors `SPECREG_DB`, `SPECREG_BACKUP_DIR`, `SPECREG_BACKUP_KEEP`):
+
+```sh
+npm run backup -w @specregistry/server -- now              # take a snapshot now
+npm run backup -w @specregistry/server -- list             # list snapshots + checksums
+npm run backup -w @specregistry/server -- verify <file>    # checksum + PRAGMA integrity_check
+npm run backup -w @specregistry/server -- restore <file>   # restore (run with the server stopped)
+```
+
+Restore verifies the snapshot (checksum + integrity), replaces the database file, and
+clears any stale WAL/SHM sidecars. Because the ed25519 signing key lives in the database,
+a restored server keeps the **same registry identity** — governed repos keep trusting it,
+and signed bundles stay verifiable.
+
 ### Integration Usage
 
 Use webhooks and chat integrations to push SDD events into the places teams already work:
@@ -1062,6 +1090,9 @@ Admins can revoke individual API keys or bulk-revoke all tokens for a user.
 | `SPECREG_AUTH_RATE_LIMIT_MAX` | Failed login/enroll attempts allowed per identity/window (default 5) |
 | `SPECREG_AUTH_RATE_LIMIT_WINDOW_SECONDS` / `SPECREG_AUTH_RATE_LIMIT_LOCK_SECONDS` | Rate-limit counting window and lockout duration (defaults 900 seconds) |
 | `SPECREG_SELF_UPDATE` | Enable the in-app `git pull` + rebuild self-update (`POST /admin/update`). Defaults on in dev, **off when `SPECREG_AUTH=required`**; set `true`/`false` to override |
+| `SPECREG_BACKUP_DIR` | Directory for scheduled registry backups; set to enable the built-in scheduler and `POST /admin/backup` |
+| `SPECREG_BACKUP_INTERVAL` | Seconds between scheduled backups (default 86400) |
+| `SPECREG_BACKUP_KEEP` | Number of recent backups to retain (default 14) |
 | `ANTHROPIC_API_KEY` | Anthropic key fallback for server LLM features |
 | `OPENAI_API_KEY` | OpenAI key fallback for server LLM features |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini key fallback for server LLM features |

@@ -11,6 +11,7 @@ import { uuid as makeId } from "../db.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { searchSpecsByMode, type SearchMode, type SearchResult } from "../lib/search.js";
 import { evaluateCompliance } from "../lib/compliance.js";
+import { ensureConsumer, persistCodeTrace } from "../lib/codeTrace.js";
 import { splitSections } from "../lib/sections.js";
 import { bundleSpecs } from "../lib/compile.js";
 
@@ -318,9 +319,18 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
             : undefined;
     const trace = body.trace && typeof body.trace === "object" ? (body.trace as Record<string, unknown>) : undefined;
     const selfAssessedScore = typeof body.self_assessed_score === "number" ? body.self_assessed_score : null;
+    // Persist an inline trace so this and later no-trace gates agree (see compliance-check).
+    const consumerId =
+      project?.id ??
+      session?.consumer_id ??
+      (trace && typeof body.repo === "string" ? ensureConsumer(app, body, pt.id) : undefined);
+    if (trace && consumerId) {
+      const cid = consumerId;
+      app.db.transaction(() => persistCodeTrace(app.db, cid, trace))();
+    }
     const verdict = evaluateCompliance(app.db, {
       pt,
-      consumerId: project?.id ?? session?.consumer_id ?? undefined,
+      consumerId,
       repo: project?.repo ?? session?.repo ?? optionalString(body, "repo"),
       trace,
       selfAssessedScore,
@@ -420,9 +430,18 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const trace = body.trace && typeof body.trace === "object" ? (body.trace as Record<string, unknown>) : undefined;
     const selfAssessedScore = typeof body.self_assessed_score === "number" ? body.self_assessed_score : null;
     recordUsage(app.db, "sync_check", pt.id, "compliance-check");
+    // Persist an inline trace as the repo's latest stored signals so a later no-trace
+    // check_compliance/finish_task reads the same data. Without this, `specreg comply`
+    // (sends the trace inline) and finish_task (reads stored signals) contradict each
+    // other — comply passes while finish_task reports "No code-trace data available".
+    const consumerId = project?.id ?? (trace && typeof body.repo === "string" ? ensureConsumer(app, body, pt.id) : undefined);
+    if (trace && consumerId) {
+      const cid = consumerId;
+      app.db.transaction(() => persistCodeTrace(app.db, cid, trace))();
+    }
     return evaluateCompliance(app.db, {
       pt,
-      consumerId: project?.id,
+      consumerId,
       repo: project?.repo ?? (typeof body.repo === "string" ? body.repo : undefined),
       trace,
       selfAssessedScore,

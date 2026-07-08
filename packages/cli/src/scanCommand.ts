@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { buildCodeInventory, type CodeEntity, type TraceabilityLink } from "./codeMetadata.js";
+import { scanReportDocument } from "./scanHtml.js";
 
 export interface ScanOptions {
   /** repo/directory to scan (default: cwd) */
@@ -7,6 +10,8 @@ export interface ScanOptions {
   dir?: string;
   /** emit the machine-readable report to stdout instead of the human summary */
   json?: boolean;
+  /** also write a self-contained, shareable HTML report to this path */
+  html?: string;
 }
 
 export interface ScanReport {
@@ -166,5 +171,11 @@ export function runScan(opts: ScanOptions = {}): void {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(formatSummary(report));
+  }
+  if (opts.html) {
+    const target = path.resolve(opts.root ?? process.cwd(), opts.html);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, scanReportDocument(report), "utf8");
+    if (!opts.json) console.log(`\nWrote shareable HTML report to ${opts.html}.`);
   }
 }

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { buildScanReport } from "../src/scanCommand.js";
+import { scanReportDocument } from "../src/scanHtml.js";
 
 function makeRepo(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-scan-"));
@@ -77,6 +78,22 @@ export function placeOrder() {
     assert.ok(report.annotation_theater_count >= 1, "dangling @spec ref should count as theater");
     // Theater must not inflate the score above a repo with real coverage of the same size.
     assert.ok((report.governance_score ?? 100) <= report.coverage_pct);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("HTML report is a self-contained document carrying the scary number", () => {
+  const root = makeRepo();
+  try {
+    const report = buildScanReport({ root });
+    const html = scanReportDocument(report);
+    assert.match(html, /^<!doctype html>/i);
+    assert.match(html, /governed by nothing/);
+    assert.match(html, new RegExp(`${report.ungoverned_pct}%`));
+    // Self-contained: no external asset fetches that a strict CSP / offline share would break.
+    assert.doesNotMatch(html, /https?:\/\//);
+    assert.doesNotMatch(html, /<script/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

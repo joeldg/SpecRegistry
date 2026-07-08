@@ -68,6 +68,7 @@ Options:
   --ci              audit: exit 1 when findings exist
   --score <n>       comply: your honest 0-100 self-assessed compliance score
   --json            scan: print the machine-readable report instead of the summary
+  --html <path>     scan: also write a self-contained, shareable HTML report
   -h, --help        Show this help
 `;
 
@@ -146,6 +147,7 @@ try {
       root: process.cwd(),
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       json: flags.json === true,
+      html: typeof flags.html === "string" ? flags.html : undefined,
     });
   } else if (command === "init") {
     await runInit({

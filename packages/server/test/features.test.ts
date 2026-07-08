@@ -2024,6 +2024,50 @@ describe("compliance verification loop", () => {
     expect(log.length).toBe(2);
   });
 
+  it("persists an inline trace so a later no-trace check_compliance agrees (comply → check)", async () => {
+    const repo = "github.com/acme/inline-persist";
+    // `specreg comply` sends the freshly generated trace inline and passes.
+    const comply = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/compliance-check",
+      payload: { project_type: "Acme Edge Device", repo, trace: compliantTrace },
+    });
+    expect(comply.json().compliant).toBe(true);
+    expect(comply.json().coverage_ratio).toBe(1);
+
+    // A later gate with NO inline trace must read the stored signals, not report
+    // "No code-trace data available for this repo".
+    const noTrace = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/compliance-check",
+      payload: { project_type: "Acme Edge Device", repo },
+    });
+    const v = noTrace.json();
+    expect(v.outstanding.find((o: any) => o.check === "trace")).toBeUndefined();
+    expect(v.compliant).toBe(true);
+    expect(v.coverage_ratio).toBe(1);
+  });
+
+  it("comply's inline trace lets a later finish_task pass instead of reporting no trace", async () => {
+    const repo = "github.com/acme/comply-then-finish";
+    const comply = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/compliance-check",
+      payload: { project_type: "Acme Edge Device", repo, trace: compliantTrace },
+    });
+    expect(comply.json().compliant).toBe(true);
+
+    // The exact reported flow: finish_task with no inline trace after a passing comply.
+    const finish = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/finish",
+      payload: { project_type: "Acme Edge Device", repo, summary: "done" },
+    });
+    const v = finish.json();
+    expect(v.compliant).toBe(true);
+    expect(v.compliance.outstanding.find((o: any) => o.check === "trace")).toBeUndefined();
+  });
+
   it("honors an admin-tightened per-project-type policy", async () => {
     await app.inject({
       method: "PUT",

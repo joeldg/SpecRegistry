@@ -190,6 +190,10 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
 
 ## Developer Workflow
 
+- [x] Read-only `specreg scan`: a zero-config governance snapshot (single 0-100 Governance
+  Score, coverage/drift/ungoverned-entity counts, annotation-theater detection, `--json`
+  report) that needs no server, login, or enrollment and never fails CI. A fast on-ramp
+  that shows an ungoverned repo where it stands before `specreg init`/`comply` are adopted.
 - [x] Comprehensive guided new-project setup in `specreg init`, with custom stack choices,
   premade project-type fallback, structured profile output, and project-scoped draft submission.
 - [x] Governed agent skill catalog with safe defaults, risk labels, admin registration,

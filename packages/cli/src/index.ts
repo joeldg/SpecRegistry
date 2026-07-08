@@ -12,6 +12,7 @@ import { runAudit } from "./audit.js";
 import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
 import { readStoredCredentials } from "./credentials.js";
 import { runComply } from "./comply.js";
+import { runScan } from "./scanCommand.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
@@ -22,6 +23,7 @@ import { resolveRegistryWorkspace } from "./workspace.js";
 const HELP = `specreg — SpecRegistry developer CLI
 
 Usage:
+  specreg scan      Score this repo's spec governance (read-only, no server/login needed)
   specreg init      Walk through a new project setup, or pull a premade project type
   specreg generate  Scan this codebase and fetch LLM prompts to generate missing specs
   specreg submit-drafts  Submit generated draft specs into the registry workflow
@@ -65,6 +67,7 @@ Options:
   --force           Overwrite protected/generated files where supported
   --ci              audit: exit 1 when findings exist
   --score <n>       comply: your honest 0-100 self-assessed compliance score
+  --json            scan: print the machine-readable report instead of the summary
   -h, --help        Show this help
 `;
 
@@ -109,7 +112,7 @@ const token =
   process.env.SPECREG_TOKEN ??
   readStoredCredentials()?.token;
 
-if (command && command !== "help" && !flags.help && !server) {
+if (command && command !== "help" && command !== "scan" && !flags.help && !server) {
   throw new Error(
     "No registry server configured. Install the CLI from SpecRegistry Settings, set SPECREG_SERVER, or pass --server <url>."
   );
@@ -138,6 +141,12 @@ function manifestProjectType(dir: string): string | undefined {
 try {
   if (flags.help || command === undefined || command === "help") {
     console.log(HELP);
+  } else if (command === "scan") {
+    runScan({
+      root: process.cwd(),
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      json: flags.json === true,
+    });
   } else if (command === "init") {
     await runInit({
       server: requireServer(),

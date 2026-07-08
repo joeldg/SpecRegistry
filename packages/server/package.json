@@ -13,6 +13,8 @@
     "start": "node dist/index.js",
     "preseed": "node scripts/ensure-native.mjs",
     "seed": "tsx src/seed-cli.ts",
+    "prebackup": "node scripts/ensure-native.mjs",
+    "backup": "tsx src/backup-cli.ts",
     "pretest": "node scripts/ensure-native.mjs",
     "test": "vitest run"
   },

@@ -407,6 +407,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST/, path: /^\/api\/v1\/automation\//, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/sync-jobs\/run$/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/admin\/update$/, min: "admin" },
+  { method: /GET|POST/, path: /^\/api\/v1\/admin\/backups?$/, min: "admin" },
   { method: /PUT/, path: /^\/api\/v1\/auth\/users\/[^/]+\/password$/, min: "agent" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/api-keys(\/|$)/, min: "admin" },

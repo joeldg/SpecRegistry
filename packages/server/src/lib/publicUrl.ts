@@ -55,14 +55,31 @@ function portFromHost(host?: string): string | undefined {
 
 function isLoopbackHostname(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  return host === "localhost" || host === "::1" || host === "0.0.0.0" || host === "127.0.0.1" || /^127\./.test(host);
+  return host === "localhost" || host === "::1" || host === "127.0.0.1" || /^127\./.test(host);
 }
 
-function normalizeUrl(url: string, detectedIp: string): string {
-  const parsed = new URL(trimTrailingSlash(url));
-  if (isLoopbackHostname(parsed.hostname)) {
+/** The wildcard bind address — never a valid client-facing URL, even if set explicitly. */
+function isUnspecifiedHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "0.0.0.0" || host === "::";
+}
+
+/**
+ * Replace an unreachable hostname with the detected server IP. A wildcard bind
+ * address (0.0.0.0) is always replaced. A loopback address (localhost/127.x) is
+ * replaced only when it was *auto-detected* — when an operator sets it explicitly
+ * (SPECREG_PUBLIC_URL or the public-hostname setting) it is honored, so a co-located
+ * single-host deployment can advertise http://127.0.0.1:4000 on purpose.
+ */
+function rewriteUnreachable(parsed: URL, detectedIp: string, preserveLoopback: boolean): void {
+  if (isUnspecifiedHostname(parsed.hostname) || (isLoopbackHostname(parsed.hostname) && !preserveLoopback)) {
     parsed.hostname = detectedIp;
   }
+}
+
+function normalizeUrl(url: string, detectedIp: string, preserveLoopback = false): string {
+  const parsed = new URL(trimTrailingSlash(url));
+  rewriteUnreachable(parsed, detectedIp, preserveLoopback);
   return parsed.toString().replace(/\/+$/, "");
 }
 
@@ -70,13 +87,11 @@ function isUrlLike(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-function hostToUrl(hostValue: string, proto: string, fallbackPort: string | undefined, detectedIp: string): string {
+function hostToUrl(hostValue: string, proto: string, fallbackPort: string | undefined, detectedIp: string, preserveLoopback = false): string {
   const trimmed = hostValue.trim();
   if (!trimmed || trimmed.includes("/")) throw new HttpError(400, "Public hostname must be a hostname, host:port, or http(s) URL.");
   const parsed = new URL(`${proto}://${trimmed}`);
-  if (isLoopbackHostname(parsed.hostname)) {
-    parsed.hostname = detectedIp;
-  }
+  rewriteUnreachable(parsed, detectedIp, preserveLoopback);
   if (!parsed.port && fallbackPort && !((proto === "http" && fallbackPort === "80") || (proto === "https" && fallbackPort === "443"))) {
     parsed.port = fallbackPort;
   }
@@ -102,14 +117,16 @@ export function resolvePublicUrl(input: ResolvePublicUrlInput): { url: string; s
   const requestPort = portFromHost(input.forwardedHost) ?? portFromHost(input.host);
   const fallbackPort = requestPort ?? input.port;
   const envPublicUrl = input.envPublicUrl ? trimTrailingSlash(input.envPublicUrl) : "";
-  if (envPublicUrl) return { url: normalizeUrl(envPublicUrl, input.detectedIp), source: "env" };
+  // Explicit operator configuration (env + setting) is honored verbatim, including an
+  // intentional loopback host for a co-located single-host deployment.
+  if (envPublicUrl) return { url: normalizeUrl(envPublicUrl, input.detectedIp, true), source: "env" };
 
   const publicHostname = input.publicHostname ? input.publicHostname.trim() : "";
   if (publicHostname) {
     return {
       url: isUrlLike(publicHostname)
-        ? normalizeUrl(publicHostname, input.detectedIp)
-        : hostToUrl(publicHostname, proto, fallbackPort, input.detectedIp),
+        ? normalizeUrl(publicHostname, input.detectedIp, true)
+        : hostToUrl(publicHostname, proto, fallbackPort, input.detectedIp, true),
       source: "setting",
     };
   }

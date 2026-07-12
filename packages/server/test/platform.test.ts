@@ -694,21 +694,32 @@ describe("secrets at rest", () => {
 });
 
 describe("agent MCP guide", () => {
-  it("rewrites loopback public URL inputs to the detected server IP", () => {
+  it("honors an explicitly configured loopback public URL but rewrites auto-detected/wildcard ones", () => {
+    // Explicit operator config (env + setting) is honored verbatim, so a co-located
+    // single-host deployment can advertise localhost on purpose.
     expect(
       resolvePublicUrl({
-        envPublicUrl: "http://localhost:4000",
+        envPublicUrl: "http://127.0.0.1:4000",
+        detectedIp: "10.42.0.9",
+        port: "4000",
+      }).url
+    ).toBe("http://127.0.0.1:4000");
+    expect(
+      resolvePublicUrl({
+        publicHostname: "localhost:4100",
+        detectedIp: "10.42.0.9",
+        port: "4000",
+      }).url
+    ).toBe("http://localhost:4100");
+    // A wildcard bind address is never client-reachable, even when set explicitly.
+    expect(
+      resolvePublicUrl({
+        envPublicUrl: "http://0.0.0.0:4000",
         detectedIp: "10.42.0.9",
         port: "4000",
       }).url
     ).toBe("http://10.42.0.9:4000");
-    expect(
-      resolvePublicUrl({
-        publicHostname: "127.0.0.1:4100",
-        detectedIp: "10.42.0.9",
-        port: "4000",
-      }).url
-    ).toBe("http://10.42.0.9:4100");
+    // With no explicit config, the auto-detected fallback still avoids loopback.
     expect(
       resolvePublicUrl({
         host: "localhost:4000",

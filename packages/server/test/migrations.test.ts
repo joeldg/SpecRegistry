@@ -28,6 +28,22 @@ const OLD_EVIDENCE_SPEC_TEXT = `# Implementation Evidence
 ## Acceptance Evidence
 - PR/change summaries include commands run and observed results.
 `;
+const OLD_GOVERNANCE_SPEC_TEXT = `# Spec Governance
+
+## Requirements
+8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+`;
+const OLD_PROFILE_SPEC_TEXT = `# Project Profile
+
+## Intent
+A repository's profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+
+## Requirements
+6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+
+## Acceptance Evidence
+- Agent summaries respect published project-scoped profile constraints.
+`;
 
 const NEW_DEFAULT_SLUGS = [
   "register-task-session",
@@ -267,6 +283,51 @@ describe("agent feedback gap metadata migrations", () => {
     };
     expect(row.spec_id).toBeNull();
     expect(row.error_type).toBe("missing_guidance");
+    migrated.close();
+  });
+});
+
+describe("baseline/project separation migration (v33)", () => {
+  it("adds reusable baseline guidance to seed-authored governance specs", () => {
+    const dbPath = tmpDbPath();
+    const setup = createDb(dbPath);
+    const ts = "2026-07-13T00:00:00.000Z";
+    setup
+      .prepare(
+        `INSERT OR IGNORE INTO project_types
+          (id, name, scope, industry, description, required_reviewers, created_at, updated_at)
+         VALUES ('pt-global-v33', 'Global v33', 'global', NULL, NULL, '[]', ?, ?)`
+      )
+      .run(ts, ts);
+    setup
+      .prepare(
+        `INSERT OR REPLACE INTO specs
+          (id, project_type_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', NULL, ?, ?)`
+      )
+      .run("spec-governance-v33", "pt-global-v33", "SPEC_GOVERNANCE.md", OLD_GOVERNANCE_SPEC_TEXT, ts, ts);
+    setup
+      .prepare(
+        `INSERT OR REPLACE INTO specs
+          (id, project_type_id, filename, current_version, status, content, updated_by, audit_prompt, created_at, updated_at)
+         VALUES (?, ?, ?, '1.0.0', 'published', ?, 'seed', NULL, ?, ?)`
+      )
+      .run("spec-profile-v33", "pt-global-v33", "PROJECT_PROFILE.md", OLD_PROFILE_SPEC_TEXT, ts, ts);
+    setup
+      .prepare("INSERT OR REPLACE INTO spec_versions (id, spec_id, version, content, published_by, published_at) VALUES (?, ?, '1.0.0', ?, 'seed', ?)")
+      .run("version-governance-v33", "spec-governance-v33", OLD_GOVERNANCE_SPEC_TEXT, ts);
+    setup
+      .prepare("INSERT OR REPLACE INTO spec_versions (id, spec_id, version, content, published_by, published_at) VALUES (?, ?, '1.0.0', ?, 'seed', ?)")
+      .run("version-profile-v33", "spec-profile-v33", OLD_PROFILE_SPEC_TEXT, ts);
+    setup.prepare("UPDATE settings SET value = '32' WHERE key = 'schema_version'").run();
+    setup.close();
+
+    const migrated = createDb(dbPath);
+    const governance = migrated.prepare("SELECT content FROM specs WHERE id = 'spec-governance-v33'").get() as { content: string };
+    const profile = migrated.prepare("SELECT content FROM specs WHERE id = 'spec-profile-v33'").get() as { content: string };
+    expect(governance.content).toContain("Project types must represent reusable baselines");
+    expect(profile.content).toContain("projects are concrete repositories");
+    expect(profile.content).toContain("must be project-scoped");
     migrated.close();
   });
 });

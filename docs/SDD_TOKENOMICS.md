@@ -50,7 +50,7 @@ Every governed repository should follow this workflow.
 1. **Initialize**
    For a new project, run interactive `specreg init` and complete the structured project
    walkthrough. It captures intended technology and operating constraints, attaches the repo
-   to an existing or newly-created project type, pulls approved baseline specs, and submits a
+   to an existing or newly-created reusable baseline/project type, pulls approved baseline specs, and submits a
    project-scoped `PROJECT_PROFILE.md` draft for review. For an established/premade baseline
    or non-interactive automation, use `specreg init --type <name>`.
    Initialization writes `specs/.specregistry.json`, MCP configuration, a root `AGENTS.md`
@@ -73,6 +73,8 @@ Every governed repository should follow this workflow.
    Generated `.mcp.json` uses `specreg mcp` so the same CLI installed from the dashboard
    can run the MCP server. In a concrete repository, configure `SPECREG_REPO` so the agent
    receives the repo's project-scoped specs in addition to global and project-type specs.
+   Repo-specific product behavior belongs in project-scoped specs; reusable rules belong in
+   the project type baseline.
    If an agent cannot use MCP, provide the generated `CLAUDE.md`, `AGENTS.md`,
    `.cursorrules`, or the full agent pack from `GET /api/v1/specs/:type/agent-pack`.
    In server or Docker deployments, configure `SPECREG_PUBLIC_URL` so generated MCP config points to the reachable registry URL rather than the container's local bind address.

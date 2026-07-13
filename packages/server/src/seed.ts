@@ -194,6 +194,9 @@ SpecRegistry must make rule changes deliberate, reviewable, versioned, and expla
 6. Global specs apply to every project type unless a reviewed project-type or project-scoped spec explicitly narrows the rule.
 7. Deletions must preserve audit history and must not be treated as proof that old implementations were compliant.
 8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+9. Project types must represent reusable baselines for a family of similar repositories, not one-off product instances.
+10. Product-specific behavior, local deployment choices, repo-only API contracts, and implementation constraints must be captured as project-scoped specs attached to the concrete repository.
+11. When a project-type spec starts to describe only one repository, reviewers should split the reusable baseline guidance from the project-specific guidance before publication.
 
 ## Non-Goals
 This spec does not define individual reviewer identities or approval counts. Approval policies define those details.
@@ -202,6 +205,7 @@ This spec does not define individual reviewer identities or approval counts. App
 - Published changes have change request records, approvals, semver delta, and audit log entries.
 - Publish preview identifies affected consumers, dependencies, feedback, usage, and migration steps.
 - Project-scoped specs appear in reports as project-specific, not project-type-wide.
+- Project type pages show reusable baseline specs separately from concrete project specs.
 
 ## Token Budget Class
 Workflow rule. Load for spec review, approval, publishing, and migration tasks.
@@ -389,6 +393,7 @@ This specification defines the standard project-scoped profile that \`specreg in
 
 ## Intent
 A repository's profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.
 
 ## Requirements
 1. Every initialized repository should submit a project-scoped \`PROJECT_PROFILE.md\` draft for review.
@@ -397,6 +402,8 @@ A repository's profile captures the local choices that make generic project-type
 4. Material changes to stack, platform, deployment, data stores, external interfaces, or compliance scope must update the profile through review.
 5. Project profile guidance may narrow project-type guidance only for the attached repository and only when explicit.
 6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
+8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.
 
 ## Non-Goals
 This profile is not a replacement for technical contract specs such as API, database, security, observability, or architecture specs.
@@ -406,6 +413,7 @@ This profile is not a replacement for technical contract specs such as API, data
 - The profile is submitted as project-scoped draft or review request.
 - Reports show the concrete project as a consumer attached to a project type.
 - Agent summaries respect published project-scoped profile constraints.
+- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.
 
 ## Token Budget Class
 Project contract. Load for the attached repository; do not load for unrelated repositories.

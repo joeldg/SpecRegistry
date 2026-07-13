@@ -38,8 +38,8 @@ export default function ProjectTypesPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Project Types</h1>
-        <span className="sub">The organization hierarchy — fully configurable, nothing hardcoded</span>
+        <h1>Baselines</h1>
+        <span className="sub">Reusable project-type guidance inherited by concrete projects</span>
       </div>
       {error && <div className="error-banner">{error}</div>}
 
@@ -60,7 +60,7 @@ export default function ProjectTypesPage() {
             style={{ flex: 1, minWidth: 240 }}
           />
           <button className="primary" onClick={create}>
-            Add project type
+            Add baseline
           </button>
         </div>
       </div>
@@ -72,7 +72,9 @@ export default function ProjectTypesPage() {
             <th>Scope</th>
             <th>Industry</th>
             <th>Description</th>
-            <th>Specs</th>
+            <th>Baseline specs</th>
+            <th>Projects</th>
+            <th>Project specs</th>
             <th>Required reviewers</th>
             <th>Created</th>
           </tr>
@@ -81,10 +83,17 @@ export default function ProjectTypesPage() {
           {types.map((t) => (
             <tr key={t.id}>
               <td>{t.name}</td>
-              <td>{t.scope === "global" ? <span className="badge global">global</span> : "project type"}</td>
+              <td>{t.scope === "global" ? <span className="badge global">global</span> : "baseline"}</td>
               <td className="dim">{t.industry ?? "—"}</td>
-              <td className="dim">{t.description ?? "—"}</td>
+              <td className="dim">
+                {t.description ?? "—"}
+                {t.project_type_smell ? (
+                  <div className="badge pending" style={{ marginTop: 4 }}>looks project-specific</div>
+                ) : null}
+              </td>
               <td className="mono">{t.spec_count}</td>
+              <td className="mono">{t.project_count ?? 0}</td>
+              <td className="mono">{t.project_spec_count ?? 0}</td>
               <td>
                 <ReviewerEditor type={t} onSaved={reload} onError={setError} />
               </td>

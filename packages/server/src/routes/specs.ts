@@ -86,7 +86,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     }
     if (project_type_id) {
       return app.db
-        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND s.project_type_id = ? ORDER BY s.filename`)
+        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND s.project_type_id = ? AND s.project_id IS NULL ORDER BY s.filename`)
         .all(project_type_id);
     }
     return app.db

@@ -171,11 +171,12 @@ For the full metric catalog and source queries, see
 3. Sign in with the default admin account: **username `admin`, password `admin`**.
    Override the default password with `SPECREG_ADMIN_PASSWORD` in `.env` or the environment.
    Change the password after first login via **Settings → Users → Reset password**.
-4. Create or edit project types. Use one global project type for organization-wide specs.
-5. Add spec files such as `DESIGN.md`, `STRUCTURE.md`, `API.md`, or domain-specific docs.
-6. Publish initial drafts once they are ready to become governed contracts.
-7. Configure templates, compliance policies, approval policies, subscriptions, LDAP, and integrations as needed.
-8. Install or link the CLI as shown in [Developer CLI](#developer-cli), then have each
+4. Create or edit reusable baselines under **Baselines**. Use one global project type for organization-wide specs.
+5. Add concrete repositories under **Projects** so repo-specific specs stay project-scoped instead of taking over a baseline.
+6. Add spec files such as `DESIGN.md`, `STRUCTURE.md`, `API.md`, or domain-specific docs.
+7. Publish initial drafts once they are ready to become governed contracts.
+8. Configure templates, compliance policies, approval policies, subscriptions, LDAP, and integrations as needed.
+9. Install or link the CLI as shown in [Developer CLI](#developer-cli), then have each
    repository initialize its approved specs and agent MCP config.
 
 ## Usage Examples
@@ -184,7 +185,7 @@ For the full metric catalog and source queries, see
 
 Use the web dashboard to manage the registry:
 
-- Create project types and organization-wide global specs.
+- Create reusable baselines, concrete projects, and organization-wide global specs.
 - Edit drafts and publish initial versions.
 - Submit, review, approve, reject, and promote change requests.
 - Triage AI feedback clusters.
@@ -835,7 +836,7 @@ Use the LDAP tester in Settings before switching users over.
 
 ## Concepts
 
-- **Hierarchy** — project types are rows, not code. A seeded `scope=global` type holds
+- **Hierarchy** — project types are reusable baselines, not individual projects. A seeded `scope=global` type holds
   organization-wide specs; every download/agent query bundles global + type specs.
   The built-in SpecRegistry Operating Baseline is the default global SDD process pack.
   The Acme types are demo seed data; additional built-in starter types include MCP Server
@@ -879,7 +880,9 @@ Use the LDAP tester in Settings before switching users over.
 - **Project-scoped specs** — repo projects are first-class consumers attached to a
   project type. Global specs define the shared baseline, project-type specs define the
   domain baseline, and project specs override only that repo when local behavior needs
-  governed guidance without changing every consumer of the type.
+  governed guidance without changing every consumer of the type. If a spec names one repo,
+  one deployment, one customer, or one product instance, it usually belongs on the project,
+  not on the baseline.
 - **Search & analytics** — `GET /api/v1/ai/search?q=&mode=fts|semantic|hybrid` serves
   section-level FTS5, embedding, or combined search hits to agents and the Search page;
   usage events (pulls, agent reads, searches, drift checks) roll up on the dashboard,
@@ -983,6 +986,7 @@ Use the LDAP tester in Settings before switching users over.
 
 ```
 GET  /api/v1/project-types              POST /api/v1/project-types
+GET  /api/v1/projects                   POST /api/v1/projects
 GET  /api/v1/specs                      POST /api/v1/specs
 GET  /api/v1/specs/:id                  PUT  /api/v1/specs/:id          (drafts only)
 GET  /api/v1/specs/:id/impact?delta=patch|minor|major

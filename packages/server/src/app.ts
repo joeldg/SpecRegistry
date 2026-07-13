@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import type { Db } from "./db.js";
 import { projectTypeRoutes } from "./routes/projectTypes.js";
+import { projectRoutes } from "./routes/projects.js";
 import { specRoutes } from "./routes/specs.js";
 import { reviewRoutes } from "./routes/reviews.js";
 import { feedbackRoutes } from "./routes/feedback.js";
@@ -72,6 +73,7 @@ export async function buildApp(db: Db, opts: AppOptions = {}): Promise<FastifyIn
   await app.register(metricsRoutes);
 
   await app.register(projectTypeRoutes, { prefix: "/api/v1" });
+  await app.register(projectRoutes, { prefix: "/api/v1" });
   await app.register(specRoutes, { prefix: "/api/v1" });
   await app.register(reviewRoutes, { prefix: "/api/v1" });
   await app.register(feedbackRoutes, { prefix: "/api/v1" });

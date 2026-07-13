@@ -390,6 +390,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/promote$/, min: "reviewer" },
   { method: /POST/, path: /^\/api\/v1\/specs\/assist-draft$/, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/assist$/, min: "author" },
+  { method: /GET|POST/, path: /^\/api\/v1\/projects(\/|$)/, min: "author" },
   { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/restore$/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/specs\/deleted$/, min: "admin" },
   { method: /POST/, path: /^\/api\/v1\/specs\/purge$/, min: "admin" },

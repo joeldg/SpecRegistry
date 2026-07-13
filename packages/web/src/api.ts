@@ -11,7 +11,12 @@ import type {
   Webhook,
 } from "@specregistry/shared";
 
-export type ProjectTypeWithCount = ProjectType & { spec_count: number };
+export type ProjectTypeWithCount = ProjectType & {
+  spec_count: number;
+  project_spec_count?: number;
+  project_count?: number;
+  project_type_smell?: number;
+};
 export interface EfficacyRun {
   id: string;
   spec_id: string;
@@ -161,6 +166,11 @@ export interface RepoConsumerRow {
   last_seen_at: string;
   spec_count: number;
   outdated_count: number;
+}
+export interface ProjectRow extends RepoConsumerRow {
+  project_spec_count: number;
+  open_feedback_count: number;
+  code_trace_reported_at: string | null;
 }
 export interface AnalyticsSummary {
   window_days: number;
@@ -717,15 +727,24 @@ export const api = {
   projectTypes: () => request<ProjectTypeWithCount[]>("/api/v1/project-types"),
   createProjectType: (body: { name: string; industry?: string; description?: string }) =>
     request<ProjectType>("/api/v1/project-types", { method: "POST", body: JSON.stringify(body) }),
+  projects: () => request<ProjectRow[]>("/api/v1/projects"),
+  project: (id: string) => request<ProjectRow>(`/api/v1/projects/${encodeURIComponent(id)}`),
+  createProject: (body: { repo: string; project_type_id: string; branch?: string; specs_path?: string; manifest_path?: string }) =>
+    request<ProjectRow>("/api/v1/projects", { method: "POST", body: JSON.stringify(body) }),
 
-  specs: () => request<SpecSummary[]>("/api/v1/specs"),
+  specs: (params?: { project_type_id?: string; project_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.project_type_id) qs.set("project_type_id", params.project_type_id);
+    if (params?.project_id) qs.set("project_id", params.project_id);
+    return request<SpecSummary[]>(`/api/v1/specs${qs.size ? `?${qs.toString()}` : ""}`);
+  },
   spec: (id: string) => request<SpecDetail>(`/api/v1/specs/${id}`),
   specImpact: (id: string, delta = "minor") => request<SpecImpactResponse>(`/api/v1/specs/${id}/impact?delta=${encodeURIComponent(delta)}`),
   specAssist: (id: string, body: { mode: "example" | "rewrite"; guidance: string; current_content?: string }) =>
     request<SpecAssistResponse>(`/api/v1/specs/${id}/assist`, { method: "POST", body: JSON.stringify(body) }),
-  newSpecAssist: (body: { project_type_id: string; filename: string; guidance: string; current_content?: string }) =>
+  newSpecAssist: (body: { project_type_id: string; project_id?: string; filename: string; guidance: string; current_content?: string }) =>
     request<NewSpecAssistResponse>("/api/v1/specs/assist-draft", { method: "POST", body: JSON.stringify(body) }),
-  createSpec: (body: { project_type_id: string; filename: string; content: string; updated_by: string }) =>
+  createSpec: (body: { project_type_id: string; project_id?: string; filename: string; content: string; updated_by: string }) =>
     request<Spec>("/api/v1/specs", { method: "POST", body: JSON.stringify(body) }),
   deleteSpec: (id: string) =>
     requestVoid(`/api/v1/specs/${encodeURIComponent(id)}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) }),

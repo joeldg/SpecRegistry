@@ -869,6 +869,87 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       PRAGMA foreign_keys = ON;
     `,
   },
+  {
+    // Clarify the shipped baseline/project separation in existing registries.
+    // This touches only seed-authored built-in specs and preserves admin-authored
+    // project type/project content.
+    version: 33,
+    sql: `
+      UPDATE specs
+      SET content = replace(
+            content,
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.',
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+9. Project types must represent reusable baselines for a family of similar repositories, not one-off product instances.
+10. Product-specific behavior, local deployment choices, repo-only API contracts, and implementation constraints must be captured as project-scoped specs attached to the concrete repository.
+11. When a project-type spec starts to describe only one repository, reviewers should split the reusable baseline guidance from the project-specific guidance before publication.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'SPEC_GOVERNANCE.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%8. Webhooks, sync jobs%'
+        AND content NOT LIKE '%Project types must represent reusable baselines%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            content,
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.',
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+9. Project types must represent reusable baselines for a family of similar repositories, not one-off product instances.
+10. Product-specific behavior, local deployment choices, repo-only API contracts, and implementation constraints must be captured as project-scoped specs attached to the concrete repository.
+11. When a project-type spec starts to describe only one repository, reviewers should split the reusable baseline guidance from the project-specific guidance before publication.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'SPEC_GOVERNANCE.md' AND updated_by = 'seed')
+        AND content LIKE '%8. Webhooks, sync jobs%'
+        AND content NOT LIKE '%Project types must represent reusable baselines%';
+
+      UPDATE specs
+      SET content = replace(
+            replace(
+              replace(
+                content,
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.',
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.'
+              ),
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.',
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
+8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.'
+            ),
+            '- Agent summaries respect published project-scoped profile constraints.',
+            '- Agent summaries respect published project-scoped profile constraints.
+- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'PROJECT_PROFILE.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%A repository''s profile captures%'
+        AND content NOT LIKE '%projects are concrete repositories%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            replace(
+              replace(
+                content,
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.',
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.'
+              ),
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.',
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
+8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.'
+            ),
+            '- Agent summaries respect published project-scoped profile constraints.',
+            '- Agent summaries respect published project-scoped profile constraints.
+- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'PROJECT_PROFILE.md' AND updated_by = 'seed')
+        AND content LIKE '%A repository''s profile captures%'
+        AND content NOT LIKE '%projects are concrete repositories%';
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [

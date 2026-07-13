@@ -29,6 +29,8 @@ describe("project types & specs", () => {
     expect(types.length).toBe(11);
     expect(types[0].scope).toBe("global");
     expect(types.map((t: any) => t.name)).toContain("Acme Edge Device");
+    expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_count");
+    expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_type_smell");
     expect(types.map((t: any) => t.name)).toEqual(
       expect.arrayContaining([
         "MCP Server / Agent Integration",
@@ -109,6 +111,52 @@ describe("project types & specs", () => {
     expect(published.statusCode).toBe(200);
     expect(published.json().current_version).toBe("1.0.0");
     expect(published.json().status).toBe("published");
+  });
+
+  it("creates concrete projects and project-scoped specs without polluting the baseline", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const webType = types.find((t: any) => t.name === "Web App Standard");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: {
+        repo: "github.com/acme/nvidia_router",
+        project_type_id: webType.id,
+        branch: "main",
+      },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const projectSpec = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: webType.id,
+        project_id: project.id,
+        filename: "ROUTING.md",
+        content: "# NVIDIA Router Routing\n\n## Scope\n\nOnly this repo.\n",
+        updated_by: "joel",
+      },
+    });
+    expect(projectSpec.statusCode).toBe(201);
+    expect(projectSpec.json().project_id).toBe(project.id);
+
+    const projectSpecs = await getJson(`/api/v1/specs?project_id=${project.id}`);
+    expect(projectSpecs.find((s: any) => s.filename === "ROUTING.md")).toMatchObject({
+      effective_scope: "project",
+      project_name: "github.com/acme/nvidia_router",
+    });
+
+    const baselineSpecs = await getJson(`/api/v1/specs?project_type_id=${webType.id}`);
+    expect(baselineSpecs.some((s: any) => s.filename === "ROUTING.md")).toBe(false);
+
+    const projects = await getJson("/api/v1/projects");
+    expect(projects.find((p: any) => p.id === project.id)).toMatchObject({
+      repo: "github.com/acme/nvidia_router",
+      project_type_name: "Web App Standard",
+      project_spec_count: 1,
+    });
   });
 
   it("rejects duplicate filenames within a project type", async () => {

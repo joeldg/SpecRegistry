@@ -6,9 +6,23 @@ export async function projectTypeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/project-types", async () => {
     return app.db
       .prepare(
-        `SELECT pt.*, COUNT(s.id) AS spec_count
+        `SELECT pt.*,
+                SUM(CASE WHEN s.project_id IS NULL THEN 1 ELSE 0 END) AS spec_count,
+                SUM(CASE WHEN s.project_id IS NOT NULL THEN 1 ELSE 0 END) AS project_spec_count,
+                COUNT(DISTINCT rc.id) AS project_count,
+                CASE
+                  WHEN pt.scope = 'project_type'
+                   AND COUNT(DISTINCT rc.id) <= 1
+                   AND (
+                     lower(pt.name) LIKE '%\\_%' ESCAPE '\\'
+                     OR lower(pt.name) LIKE '%router%'
+                     OR lower(pt.name) LIKE '%research%'
+                   )
+                  THEN 1 ELSE 0
+                END AS project_type_smell
          FROM project_types pt
          LEFT JOIN specs s ON s.project_type_id = pt.id AND s.deleted_at IS NULL
+         LEFT JOIN repo_consumers rc ON rc.project_type_id = pt.id
          GROUP BY pt.id
          ORDER BY pt.scope = 'global' DESC, pt.name`
       )

@@ -76,7 +76,7 @@ export default function ProjectsPage() {
             <th>Baseline</th>
             <th>Reported</th>
             <th>Project specs</th>
-            <th>Drift</th>
+            <th>Spec currency</th>
             <th>Branch</th>
             <th>Last seen</th>
           </tr>
@@ -89,8 +89,11 @@ export default function ProjectsPage() {
               <td className="mono">{project.spec_count}</td>
               <td className="mono">{project.project_spec_count}</td>
               <td>
-                {project.outdated_count > 0 ? <StatusBadge status="pending" /> : <StatusBadge status="approved" />}
-                <span className="mono" style={{ marginLeft: 6 }}>{project.outdated_count}</span>
+                {project.outdated_count > 0 ? (
+                  <span className="badge pending">{project.outdated_count} outdated</span>
+                ) : (
+                  <span className="badge approved">current</span>
+                )}
               </td>
               <td className="mono">{project.branch ?? "—"}</td>
               <td className="faint">{timeAgo(project.last_seen_at)}</td>

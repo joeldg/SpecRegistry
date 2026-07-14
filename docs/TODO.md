@@ -389,7 +389,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
   `specreg skills list`, `specreg skills check`, `specreg skills sync`,
   `specreg skills search`, `specreg skills sources list`, and
   `specreg skills sources add <url>`.
-- [ ] Add MCP tools for agent-visible skill discovery without broad context loading:
+- [x] Add MCP tools for agent-visible skill discovery without broad context loading:
   list assigned skills, fetch one skill by slug/version, search approved skills, and report
   ambiguous/stale/missing skill guidance.
 - [ ] Add recommendation engine for suggested skills based on project type, project profile,

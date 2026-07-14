@@ -256,3 +256,126 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
     real_usage: realUsage,
   };
 }
+
+export function recordLlmUsageReport(
+  db: Db,
+  input: {
+    project_type_id?: string | null;
+    consumer_id?: string | null;
+    repo?: string | null;
+    agent_session_id?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    route?: string | null;
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+    cached_tokens?: number | null;
+    input_cost_usd?: number | null;
+    output_cost_usd?: number | null;
+    total_cost_usd?: number | null;
+    latency_ms?: number | null;
+    related_context_event_ids?: string[];
+    detail?: string | null;
+    actor?: string | null;
+  }
+): string | null {
+  const promptTokens = Math.max(0, Math.floor(Number(input.prompt_tokens ?? 0) || 0));
+  const completionTokens = Math.max(0, Math.floor(Number(input.completion_tokens ?? 0) || 0));
+  const totalTokens = Math.max(promptTokens + completionTokens, Math.floor(Number(input.total_tokens ?? 0) || 0));
+  if (totalTokens === 0) return null;
+  const id = uuid();
+  db.prepare(
+    `INSERT INTO llm_usage_reports
+      (id, project_type_id, consumer_id, repo, agent_session_id, provider, model, route,
+       prompt_tokens, completion_tokens, total_tokens, cached_tokens, input_cost_usd,
+       output_cost_usd, total_cost_usd, latency_ms, related_context_event_ids, detail, actor, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.project_type_id ?? null,
+    input.consumer_id ?? null,
+    input.repo ?? null,
+    input.agent_session_id ?? null,
+    input.provider ?? null,
+    input.model ?? null,
+    input.route ?? null,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    Math.max(0, Math.floor(Number(input.cached_tokens ?? 0) || 0)),
+    input.input_cost_usd ?? null,
+    input.output_cost_usd ?? null,
+    input.total_cost_usd ?? null,
+    input.latency_ms == null ? null : Math.max(0, Math.floor(Number(input.latency_ms) || 0)),
+    JSON.stringify(input.related_context_event_ids ?? []),
+    input.detail ?? null,
+    input.actor ?? null,
+    now()
+  );
+  return id;
+}
+
+function csvCell(value: unknown): string {
+  const text = value == null ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+export function tokenUsageCsv(report: ReturnType<typeof tokenUsageReport>): string {
+  const rows: unknown[][] = [
+    [
+      "record_type",
+      "project",
+      "project_type",
+      "spec",
+      "section",
+      "event_type",
+      "provider",
+      "model",
+      "route",
+      "projected_tokens",
+      "real_prompt_tokens",
+      "real_completion_tokens",
+      "real_total_tokens",
+      "delivered_sections",
+      "events_or_reports",
+      "last_seen",
+    ],
+  ];
+  for (const row of report.projects as Array<Record<string, unknown>>) {
+    rows.push([
+      "project",
+      row.repo,
+      row.project_type_name,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      row.projected_tokens,
+      row.real_prompt_tokens,
+      row.real_completion_tokens,
+      row.real_total_tokens,
+      row.delivered_sections,
+      row.context_events,
+      row.last_reported_at,
+    ]);
+  }
+  for (const row of report.by_spec as Array<Record<string, unknown>>) {
+    rows.push(["spec", "", "", row.filename, "", "", "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.by_section as Array<Record<string, unknown>>) {
+    rows.push(["section", "", "", row.filename, row.section_title, "", "", "", "", row.projected_tokens, "", "", "", row.deliveries, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.by_event_type as Array<Record<string, unknown>>) {
+    rows.push(["retrieval", "", "", "", "", row.event_type, "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.sessions as Array<Record<string, unknown>>) {
+    rows.push(["session", row.repo, "", "", row.task, "", "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.real_usage as Array<Record<string, unknown>>) {
+    rows.push(["real_usage", "", "", "", "", "", row.provider, row.model, row.route, "", row.prompt_tokens, row.completion_tokens, row.total_tokens, "", row.reports, row.last_reported_at]);
+  }
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
+}

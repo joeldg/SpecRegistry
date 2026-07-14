@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Db } from "../db.js";
 import { HttpError } from "../helpers.js";
 import { decryptSecret, encryptSecret } from "./secretCrypto.js";
+import { recordLlmUsageReport } from "./tokenUsage.js";
 
 export type LlmProvider = "anthropic" | "openai" | "gemini" | "openai_compatible" | "openrouter" | "bitdeer" | "together" | "vultr" | "nvidia";
 
@@ -565,10 +566,45 @@ export interface LlmTextInput {
   tier?: LlmTier;
 }
 
+interface LlmUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cached_tokens?: number;
+}
+
+interface LlmTextResult {
+  text: string;
+  model: string;
+  provider: LlmProvider;
+  usage?: LlmUsage;
+}
+
+function usageFromOpenAi(body: unknown): LlmUsage | undefined {
+  const usage = (body as { usage?: Record<string, unknown> })?.usage;
+  if (!usage) return undefined;
+  const prompt = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0) || 0;
+  const completion = Number(usage.completion_tokens ?? usage.output_tokens ?? 0) || 0;
+  const total = Number(usage.total_tokens ?? prompt + completion) || 0;
+  const promptDetails = usage.prompt_tokens_details as Record<string, unknown> | undefined;
+  const cached = Number(promptDetails?.cached_tokens ?? usage.cached_tokens ?? 0) || 0;
+  return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: total, cached_tokens: cached };
+}
+
+function usageFromGemini(body: unknown): LlmUsage | undefined {
+  const usage = (body as { usageMetadata?: Record<string, unknown> })?.usageMetadata;
+  if (!usage) return undefined;
+  const prompt = Number(usage.promptTokenCount ?? 0) || 0;
+  const completion = Number(usage.candidatesTokenCount ?? 0) || 0;
+  const total = Number(usage.totalTokenCount ?? prompt + completion) || 0;
+  const cached = Number(usage.cachedContentTokenCount ?? 0) || 0;
+  return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: total, cached_tokens: cached };
+}
+
 async function runLlmTextWithConfig(
   config: LlmConfig,
   input: { system: string; user: string; maxTokens: number }
-): Promise<{ text: string; model: string; provider: LlmProvider }> {
+): Promise<LlmTextResult> {
   const maxTokens = input.maxTokens;
   if (config.provider === "anthropic") {
     requireHostedApiKey(config);
@@ -590,7 +626,15 @@ async function runLlmTextWithConfig(
       .join("")
       .trim();
     if (!text) throw new HttpError(502, `LLM returned no text (stop_reason: ${message.stop_reason})`);
-    return { text, model: config.model, provider: config.provider };
+    const usage = message.usage
+      ? {
+          prompt_tokens: Number(message.usage.input_tokens ?? 0),
+          completion_tokens: Number(message.usage.output_tokens ?? 0),
+          total_tokens: Number(message.usage.input_tokens ?? 0) + Number(message.usage.output_tokens ?? 0),
+          cached_tokens: Number(message.usage.cache_read_input_tokens ?? 0) + Number(message.usage.cache_creation_input_tokens ?? 0),
+        }
+      : undefined;
+    return { text, model: config.model, provider: config.provider, usage };
   }
 
   if (config.provider === "gemini") {
@@ -607,10 +651,10 @@ async function runLlmTextWithConfig(
       }),
     });
     if (!res.ok) throw new HttpError(502, `LLM provider error ${res.status}: ${await res.text()}`);
-    const body = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const body = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: Record<string, unknown> };
     const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim() ?? "";
     if (!text) throw new HttpError(502, "LLM returned no text");
-    return { text, model: config.model, provider: config.provider };
+    return { text, model: config.model, provider: config.provider, usage: usageFromGemini(body) };
   }
 
   const openAiBase = openAiCompatibleBase(config);
@@ -639,7 +683,7 @@ async function runLlmTextWithConfig(
   const body = await res.json();
   const text = textFromOpenAiChoice(body);
   if (!text) throw new HttpError(502, noTextDetail(body));
-  return { text, model: config.model, provider: config.provider };
+  return { text, model: config.model, provider: config.provider, usage: usageFromOpenAi(body) };
 }
 
 export async function runLlmText(
@@ -650,7 +694,18 @@ export async function runLlmText(
   const tier = input.tier ?? getLlmRouteTier(db, route);
   const config = getLlmTierConfig(db, tier);
   const maxTokens = input.maxTokens ?? config.max_tokens;
-  return { ...(await runLlmTextWithConfig(config, { system: input.system, user: input.user, maxTokens })), tier, route };
+  const result = await runLlmTextWithConfig(config, { system: input.system, user: input.user, maxTokens });
+  if (result.usage) {
+    recordLlmUsageReport(db, {
+      provider: result.provider,
+      model: result.model,
+      route,
+      ...result.usage,
+      detail: "server-side llm route",
+    });
+  }
+  const { usage: _usage, ...publicResult } = result;
+  return { ...publicResult, tier, route };
 }
 
 export async function runLlmProviderTest(
@@ -658,7 +713,18 @@ export async function runLlmProviderTest(
   provider: LlmProvider,
   input: { system: string; user: string; maxTokens: number }
 ): Promise<{ text: string; model: string; provider: LlmProvider }> {
-  return runLlmTextWithConfig(getLlmProviderConfig(db, provider), input);
+  const result = await runLlmTextWithConfig(getLlmProviderConfig(db, provider), input);
+  if (result.usage) {
+    recordLlmUsageReport(db, {
+      provider: result.provider,
+      model: result.model,
+      route: "test",
+      ...result.usage,
+      detail: "provider test",
+    });
+  }
+  const { usage: _usage, ...publicResult } = result;
+  return publicResult;
 }
 
 async function listLlmModelsForConfig(config: LlmConfig): Promise<{ provider: LlmProvider; models: string[] }> {

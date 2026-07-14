@@ -15,6 +15,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import SearchPage from "./pages/SearchPage";
 import TemplatesPage from "./pages/TemplatesPage";
+import SkillsMarketplacePage from "./pages/SkillsMarketplacePage";
 import SettingsPage from "./pages/SettingsPage";
 import GenerationWorkbenchPage from "./pages/GenerationWorkbenchPage";
 import ImpactExplorerPage from "./pages/ImpactExplorerPage";
@@ -66,6 +67,9 @@ export default function App() {
         </NavLink>
         <NavLink to="/templates" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
           Templates
+        </NavLink>
+        <NavLink to="/skills" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
+          Skills
         </NavLink>
         <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
           Settings
@@ -120,6 +124,7 @@ export default function App() {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
+          <Route path="/skills" element={<SkillsMarketplacePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<LoginPage />} />
         </Routes>

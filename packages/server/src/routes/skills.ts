@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
-import { now, uuid } from "../db.js";
+import { now, uuid, type Db } from "../db.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
+import { getAppKeyConfig } from "../lib/appKeys.js";
 import { HttpError, requireString } from "../helpers.js";
 
 type RiskLevel = "safe" | "restricted";
@@ -14,6 +15,27 @@ type CandidateStatus = "candidate" | "converted" | "rejected" | "archived";
 type GateStatus = "pass" | "review" | "block" | "pending";
 type SkillReviewAction = "update" | "enable" | "disable" | "delete";
 type SkillAssignmentScope = "global" | "project_type" | "project";
+
+interface SkillSourceRecord {
+  id: string;
+  url: string;
+  provider: string;
+  source_type: SourceType;
+  license: string | null;
+  default_branch: string | null;
+  last_fetched_commit: string | null;
+  last_scan_at: string | null;
+  status: SourceStatus;
+  trust_decision: TrustDecision;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CreatedCandidate {
+  row: Record<string, unknown>;
+  created: boolean;
+}
 
 function slugValue(value: unknown): string {
   const slug = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -177,6 +199,194 @@ function evaluateCandidateGates(input: {
       ? "review"
       : "pass";
   return { gate_status: gateStatus, gate_results: JSON.stringify(gateResults) };
+}
+
+function createSkillCandidateRecord(db: Db, input: {
+  raw_content: string;
+  proposed_name: string;
+  proposed_slug?: string;
+  source?: SkillSourceRecord | null;
+  source_url?: string | null;
+  source_path?: string | null;
+  source_commit?: string | null;
+  detected_format?: string | null;
+  license?: string | null;
+  category?: string | null;
+  candidate_type?: CandidateType | null;
+  risk_level?: RiskLevel | null;
+  risk_summary?: string | null;
+  classifier_notes?: string | null;
+  status?: CandidateStatus;
+}): CreatedCandidate {
+  const rawContent = bounded(input.raw_content, "raw_content", 100000);
+  const proposedName = bounded(input.proposed_name, "proposed_name", 160);
+  const proposedSlug = slugValue(input.proposed_slug ?? proposedName);
+  const sourcePath = optionalBounded(input.source_path, "source_path", 500);
+  const hash = contentHash(rawContent);
+  const existing = db
+    .prepare(
+      `SELECT * FROM skill_candidates
+       WHERE COALESCE(source_id, '') = COALESCE(?, '')
+         AND COALESCE(source_path, '') = COALESCE(?, '')
+         AND raw_content_hash = ?`
+    )
+    .get(input.source?.id ?? null, sourcePath, hash) as Record<string, unknown> | undefined;
+  if (existing) return { row: existing, created: false };
+  const detected = detectCandidateSignals(rawContent);
+  const classification = classifyCandidate({
+    content: rawContent,
+    source_path: sourcePath,
+    proposed_name: proposedName,
+  });
+  const candidateType = input.candidate_type ?? classification.candidate_type;
+  const status = input.status ?? "candidate";
+  const id = uuid();
+  const ts = now();
+  const duplicate = db.prepare("SELECT COUNT(*) AS n FROM skill_candidates WHERE raw_content_hash = ?").get(hash) as { n: number };
+  const license = optionalBounded(input.license, "license", 120) ?? input.source?.license ?? null;
+  const gates = evaluateCandidateGates({
+    content: rawContent,
+    content_hash: hash,
+    candidate_type: candidateType,
+    license,
+    detected,
+    duplicate_count: duplicate.n,
+  });
+  db.prepare(
+    `INSERT INTO skill_candidates
+      (id, source_id, source_url, source_path, source_commit, detected_format, raw_content_hash,
+       raw_content, license, category, candidate_type, proposed_name, proposed_slug, risk_level,
+       risk_summary, detected_commands, detected_network, detected_secrets, gate_status, gate_results, classifier_notes,
+       status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.source?.id ?? null,
+    optionalBounded(input.source_url, "source_url", 1000) ?? input.source?.url ?? null,
+    sourcePath,
+    optionalBounded(input.source_commit, "source_commit", 120) ?? input.source?.last_fetched_commit ?? null,
+    optionalBounded(input.detected_format, "detected_format", 120) ?? "unknown",
+    hash,
+    rawContent,
+    license,
+    optionalBounded(input.category, "category", 120) ?? classification.category,
+    candidateType,
+    proposedName,
+    proposedSlug,
+    input.risk_level ?? (candidateType === "unsafe" ? "restricted" : detected.risk_level),
+    optionalBounded(input.risk_summary, "risk_summary", 1000) ?? detected.risk_summary,
+    jsonList(detected.commands),
+    jsonList(detected.network),
+    jsonList(detected.secrets),
+    gates.gate_status,
+    gates.gate_results,
+    optionalBounded(input.classifier_notes, "classifier_notes", 4000) ?? classification.notes,
+    status,
+    ts,
+    ts
+  );
+  return { row: db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as Record<string, unknown>, created: true };
+}
+
+function parseGithubRepoUrl(url: string): { owner: string; repo: string } | null {
+  const trimmed = url.trim().replace(/\.git$/i, "");
+  const ssh = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+)$/i);
+  if (ssh) return { owner: ssh[1], repo: ssh[2] };
+  const https = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)(?:[/#?].*)?$/i);
+  if (https) return { owner: https[1], repo: https[2] };
+  const shorthand = trimmed.match(/^([^/\s]+)\/([^/\s]+)$/);
+  if (shorthand) return { owner: shorthand[1], repo: shorthand[2] };
+  return null;
+}
+
+function githubHeaders(token?: string): HeadersInit {
+  return {
+    accept: "application/vnd.github+json",
+    "user-agent": "specregistry",
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function githubJson<T>(path: string, token?: string): Promise<T> {
+  const res = await fetch(`https://api.github.com${path}`, {
+    headers: githubHeaders(token),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`GitHub API ${path} failed: ${res.status} ${await res.text()}`);
+  return await res.json() as T;
+}
+
+function encodeGithubPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function skillCandidateFormat(path: string): string | null {
+  if (/^\.codex\/skills\/[^/]+\/SKILL\.md$/i.test(path)) return "codex_skill_markdown";
+  if (/(^|\/)SKILL\.md$/i.test(path)) return "skill_markdown";
+  if (/^\.claude\/agents\/[^/]+\.md$/i.test(path)) return "claude_agent_markdown";
+  if (/^agents\/[^/]+\.md$/i.test(path)) return "agent_markdown";
+  if (/(^|\/)AGENTS\.md$/i.test(path)) return "agents_markdown";
+  if (/(^|\/)(skill|skills|agent-skills)\.(json|ya?ml)$/i.test(path)) return "skill_manifest";
+  if (/^\.spec\/skills\/manifest\.json$/i.test(path)) return "skill_manifest";
+  if (/(^|\/)README\.md$/i.test(path)) return "readme_markdown";
+  return null;
+}
+
+function shouldImportScannedContent(path: string, content: string): boolean {
+  const format = skillCandidateFormat(path);
+  if (!format) return false;
+  if (format !== "readme_markdown") return true;
+  return /\b(agent skill|skills?|workflow|playbook|procedure|when to use|use this skill|agent should)\b/i.test(content);
+}
+
+function proposedNameFromPath(path: string): string {
+  const parts = path.split("/");
+  const file = parts[parts.length - 1];
+  const basis = /^SKILL\.md$/i.test(file) && parts.length > 1 ? parts[parts.length - 2] : file.replace(/\.(md|ya?ml|json)$/i, "");
+  return basis
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .slice(0, 120);
+}
+
+async function scanGithubSkillSource(source: SkillSourceRecord, token?: string): Promise<Array<{
+  path: string;
+  sha: string;
+  content: string;
+  detected_format: string;
+  proposed_name: string;
+}>> {
+  const parsed = parseGithubRepoUrl(source.url);
+  if (!parsed) throw new HttpError(400, `Source is not a GitHub repository URL: ${source.url}`);
+  const repo = await githubJson<{ default_branch: string; pushed_at?: string }>(`/repos/${parsed.owner}/${parsed.repo}`, token);
+  const ref = source.default_branch || repo.default_branch;
+  const tree = await githubJson<{ tree: Array<{ path: string; type: string; sha: string; size?: number }>; truncated?: boolean }>(
+    `/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
+    token
+  );
+  if (tree.truncated) throw new Error("GitHub tree response was truncated; narrow the source before scanning");
+  const matches = tree.tree
+    .filter((entry) => entry.type === "blob" && skillCandidateFormat(entry.path) && (entry.size ?? 0) <= 100000)
+    .slice(0, 50);
+  const scanned: Array<{ path: string; sha: string; content: string; detected_format: string; proposed_name: string }> = [];
+  for (const entry of matches) {
+    const contentResponse = await githubJson<{ content: string; encoding: string; sha: string }>(
+      `/repos/${parsed.owner}/${parsed.repo}/contents/${encodeGithubPath(entry.path)}?ref=${encodeURIComponent(ref)}`,
+      token
+    );
+    if (contentResponse.encoding !== "base64") continue;
+    const content = Buffer.from(contentResponse.content.replace(/\s+/g, ""), "base64").toString("utf8");
+    const detectedFormat = skillCandidateFormat(entry.path);
+    if (!detectedFormat || !shouldImportScannedContent(entry.path, content)) continue;
+    scanned.push({
+      path: entry.path,
+      sha: contentResponse.sha || entry.sha,
+      content,
+      detected_format: detectedFormat,
+      proposed_name: proposedNameFromPath(entry.path),
+    });
+  }
+  return scanned;
 }
 
 function normalizeCandidateInstructions(candidate: {
@@ -409,6 +619,57 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM skill_sources WHERE id = ?").get(id);
   });
 
+  app.post("/skills/sources/:id/scan", async (req) => {
+    const { id } = req.params as { id: string };
+    const source = app.db.prepare("SELECT * FROM skill_sources WHERE id = ?").get(id) as SkillSourceRecord | undefined;
+    if (!source) throw new HttpError(404, `Unknown skill source: ${id}`);
+    if (source.status !== "active") throw new HttpError(409, "Only active skill sources can be scanned");
+    if (source.trust_decision === "blocked") throw new HttpError(409, "Blocked skill sources cannot be scanned");
+    if (source.source_type !== "github_repo") throw new HttpError(409, "Only github_repo sources can be scanned in this release");
+
+    const token = getAppKeyConfig(app.db).github_token || undefined;
+    const scanned = await scanGithubSkillSource(source, token);
+    const candidates: Array<{ id: unknown; source_path: unknown; proposed_name: unknown; candidate_type: unknown; gate_status: unknown; created: boolean }> = [];
+    for (const item of scanned) {
+      const candidate = createSkillCandidateRecord(app.db, {
+        source,
+        raw_content: item.content,
+        proposed_name: item.proposed_name,
+        source_path: item.path,
+        source_commit: item.sha,
+        detected_format: item.detected_format,
+        classifier_notes: `Scanned from GitHub source ${source.url}.`,
+      });
+      candidates.push({
+        id: candidate.row.id,
+        source_path: candidate.row.source_path,
+        proposed_name: candidate.row.proposed_name,
+        candidate_type: candidate.row.candidate_type,
+        gate_status: candidate.row.gate_status,
+        created: candidate.created,
+      });
+    }
+    const created = candidates.filter((candidate) => candidate.created).length;
+    const skipped = candidates.length - created;
+    const ts = now();
+    app.db.prepare("UPDATE skill_sources SET last_scan_at = ?, updated_at = ? WHERE id = ?").run(ts, ts, id);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "skill_source.scanned",
+      target_type: "skill_source",
+      target_id: id,
+      summary: `Skill source scanned: ${source.url}`,
+      detail: { scanned: scanned.length, created, skipped },
+    });
+    return {
+      source_id: id,
+      scanned: scanned.length,
+      created,
+      skipped,
+      candidates,
+    };
+  });
+
   app.get("/skills/candidates", async (req) => {
     const { source_id, status } = req.query as { source_id?: string; status?: string };
     const where: string[] = [];
@@ -428,74 +689,36 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/skills/candidates", async (req, reply) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const rawContent = bounded(requireString(body, "raw_content"), "raw_content", 100000);
     const source = body.source_id
-      ? app.db.prepare("SELECT * FROM skill_sources WHERE id = ?").get(String(body.source_id)) as Record<string, unknown> | undefined
+      ? app.db.prepare("SELECT * FROM skill_sources WHERE id = ?").get(String(body.source_id)) as SkillSourceRecord | undefined
       : undefined;
     if (body.source_id && !source) throw new HttpError(404, `Unknown skill source: ${body.source_id}`);
-    const proposedName = bounded(requireString(body, "proposed_name"), "proposed_name", 160);
-    const proposedSlug = slugValue(body.proposed_slug ?? proposedName);
-    const detected = detectCandidateSignals(rawContent);
-    const classification = classifyCandidate({
-      content: rawContent,
-      source_path: optionalBounded(body.source_path, "source_path", 500),
-      proposed_name: proposedName,
-    });
     const candidateType = body.candidate_type
       ? enumValue<CandidateType>(body.candidate_type, ["agent_skill", "spec_seed", "project_type_template", "reference_only", "unsafe", "unknown"], "candidate_type", "unknown")
-      : classification.candidate_type;
+      : null;
     const status = enumValue<CandidateStatus>(body.status, ["candidate", "converted", "rejected", "archived"], "status", "candidate");
-    const id = uuid();
-    const ts = now();
-    const sourcePath = optionalBounded(body.source_path, "source_path", 500);
-    const hash = contentHash(rawContent);
-    const duplicate = app.db.prepare("SELECT COUNT(*) AS n FROM skill_candidates WHERE raw_content_hash = ?").get(hash) as { n: number };
-    const sourceLicense = typeof source?.license === "string" ? source.license : null;
-    const license = optionalBounded(body.license, "license", 120) ?? sourceLicense;
-    const gates = evaluateCandidateGates({
-      content: rawContent,
-      content_hash: hash,
+    const created = createSkillCandidateRecord(app.db, {
+      source,
+      raw_content: requireString(body, "raw_content"),
+      proposed_name: requireString(body, "proposed_name"),
+      proposed_slug: body.proposed_slug == null ? undefined : String(body.proposed_slug),
+      source_url: body.source_url == null ? null : String(body.source_url),
+      source_path: body.source_path == null ? null : String(body.source_path),
+      source_commit: body.source_commit == null ? null : String(body.source_commit),
+      detected_format: body.detected_format == null ? null : String(body.detected_format),
+      license: body.license == null ? null : String(body.license),
+      category: body.category == null ? null : String(body.category),
       candidate_type: candidateType,
-      license,
-      detected,
-      duplicate_count: duplicate.n,
-    });
-    app.db.prepare(
-      `INSERT INTO skill_candidates
-        (id, source_id, source_url, source_path, source_commit, detected_format, raw_content_hash,
-         raw_content, license, category, candidate_type, proposed_name, proposed_slug, risk_level,
-         risk_summary, detected_commands, detected_network, detected_secrets, gate_status, gate_results, classifier_notes,
-         status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id,
-      source ? source.id : null,
-      optionalBounded(body.source_url, "source_url", 1000) ?? source?.url ?? null,
-      sourcePath,
-      optionalBounded(body.source_commit, "source_commit", 120) ?? source?.last_fetched_commit ?? null,
-      optionalBounded(body.detected_format, "detected_format", 120) ?? "unknown",
-      hash,
-      rawContent,
-      license,
-      optionalBounded(body.category, "category", 120) ?? classification.category,
-      candidateType,
-      proposedName,
-      proposedSlug,
-      body.risk_level ? riskValue(body.risk_level) : candidateType === "unsafe" ? "restricted" : detected.risk_level,
-      optionalBounded(body.risk_summary, "risk_summary", 1000) ?? detected.risk_summary,
-      jsonList(detected.commands),
-      jsonList(detected.network),
-      jsonList(detected.secrets),
-      gates.gate_status,
-      gates.gate_results,
-      optionalBounded(body.classifier_notes, "classifier_notes", 4000) ?? classification.notes,
+      risk_level: body.risk_level ? riskValue(body.risk_level) : null,
+      risk_summary: body.risk_summary == null ? null : String(body.risk_summary),
+      classifier_notes: body.classifier_notes == null ? null : String(body.classifier_notes),
       status,
-      ts,
-      ts
-    );
-    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.created", target_type: "skill_candidate", target_id: id, summary: `Skill candidate created: ${proposedName}`, detail: { source_id: source?.id ?? null, candidate_type: candidateType, status } });
+    });
+    if (!created.created) throw new HttpError(409, "Skill candidate already exists for this source path and content hash");
+    const row = created.row;
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.created", target_type: "skill_candidate", target_id: String(row.id), summary: `Skill candidate created: ${row.proposed_name}`, detail: { source_id: source?.id ?? null, candidate_type: row.candidate_type, status } });
     reply.code(201);
-    return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
+    return row;
   });
 
   app.post("/skills/candidates/:id/classify", async (req) => {

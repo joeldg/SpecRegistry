@@ -335,7 +335,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
   - `google/skills`
   - `agentskills/agentskills`
   - curated `awesome-agent-skills` style lists
-- [ ] Add GitHub source scanner for common skill and agent formats: `SKILL.md`,
+- [x] Add GitHub source scanner for common skill and agent formats: `SKILL.md`,
   `.codex/skills/*/SKILL.md`, `.claude/agents/*.md`, `agents/*.md`, `AGENTS.md`,
   `README.md` skill sections, and repo-specific manifest files when present.
 - [x] Create `skill_candidates` for imported but untrusted material. Candidates should

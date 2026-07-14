@@ -37,6 +37,7 @@ export default function SkillsMarketplacePage() {
   const [assignmentScope, setAssignmentScope] = useState<SkillAssignmentRow["scope"]>("global");
   const [assignmentProjectTypeId, setAssignmentProjectTypeId] = useState("");
   const [assignmentProjectId, setAssignmentProjectId] = useState("");
+  const [scanningSourceId, setScanningSourceId] = useState("");
 
   const reload = useCallback(() => {
     setError(undefined);
@@ -111,6 +112,22 @@ export default function SkillsMarketplacePage() {
       setTab("candidates");
     } catch (e) {
       setError((e as Error).message);
+    }
+  }
+
+  async function scanSource(source: SkillSourceRow) {
+    setError(undefined);
+    setNotice(undefined);
+    setScanningSourceId(source.id);
+    try {
+      const result = await api.scanSkillSource(source.id);
+      setNotice(`Scan found ${result.scanned} candidate file${result.scanned === 1 ? "" : "s"}; ${result.created} new, ${result.skipped} already known.`);
+      reload();
+      setTab("candidates");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setScanningSourceId("");
     }
   }
 
@@ -322,6 +339,7 @@ export default function SkillsMarketplacePage() {
                 <th>Status</th>
                 <th>License</th>
                 <th>Last scan</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -333,6 +351,14 @@ export default function SkillsMarketplacePage() {
                   <td><StatusBadge status={source.status} /></td>
                   <td>{source.license ?? "unknown"}</td>
                   <td className="faint">{source.last_scan_at ? timeAgo(source.last_scan_at) : "never"}</td>
+                  <td>
+                    <button
+                      onClick={() => scanSource(source)}
+                      disabled={scanningSourceId === source.id || source.source_type !== "github_repo" || source.status !== "active" || source.trust_decision === "blocked"}
+                    >
+                      {scanningSourceId === source.id ? "Scanning..." : "Scan"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

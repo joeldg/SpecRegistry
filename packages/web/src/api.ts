@@ -264,6 +264,75 @@ export interface ReportsOverview {
     efficacy_improved: number;
   }>;
 }
+export interface TokenUsageReport {
+  generated_at: string;
+  window_days: number;
+  project_id: string | null;
+  tokenizer: string;
+  projects: Array<{
+    project_id: string;
+    repo: string;
+    project_type_name: string;
+    context_events: number;
+    projected_tokens: number;
+    delivered_sections: number;
+    real_prompt_tokens: number;
+    real_completion_tokens: number;
+    real_total_tokens: number;
+    total_cost_usd: number;
+    last_reported_at: string | null;
+  }>;
+  by_spec: Array<{
+    spec_id: string;
+    filename: string;
+    spec_version: string | null;
+    context_events: number;
+    delivered_sections: number;
+    chars: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  by_section: Array<{
+    spec_id: string;
+    filename: string;
+    spec_version: string | null;
+    section_title: string;
+    section_anchor: string;
+    context_events: number;
+    deliveries: number;
+    chars: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  by_event_type: Array<{
+    event_type: string;
+    context_events: number;
+    delivered_sections: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  sessions: Array<{
+    agent_session_id: string;
+    task: string;
+    repo: string | null;
+    context_events: number;
+    delivered_sections: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  real_usage: Array<{
+    provider: string | null;
+    model: string | null;
+    route: string | null;
+    reports: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cached_tokens: number;
+    total_cost_usd: number;
+    last_reported_at: string | null;
+  }>;
+}
 export interface DependencyMap {
   specs: Array<{ id: string; filename: string; project_type_name: string; project_name?: string | null }>;
   edges: Array<{ from_spec_id: string; from_filename: string; to_spec_id: string | null; to_filename: string; relation: string }>;
@@ -835,6 +904,8 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
   reports: () => request<ReportsOverview>("/api/v1/reports/overview"),
+  tokenUsageReport: (projectId?: string, days = 30) =>
+    request<TokenUsageReport>(`/api/v1/reports/token-usage?days=${days}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`),
   manifestDiagnostics: (body: { manifest?: unknown; project_type?: string; repo?: string; project_id?: string }) =>
     request<ManifestDiagnostics>("/api/v1/cli/manifest-diagnostics", { method: "POST", body: JSON.stringify(body) }),
   dependencyMap: () => request<DependencyMap>("/api/v1/specs/dependency-map"),

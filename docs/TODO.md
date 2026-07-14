@@ -146,6 +146,71 @@
   (no cross-repo enumeration of task text/plans/models); the global cross-repo view moved to the
   admin-gated `GET /api/v1/agent-sessions`.
 
+## Token Usage Observability
+
+The AI-SDD observability model requires tracing specification context to token usage at the
+project, spec, and section level. SpecRegistry should distinguish **projected context tokens**
+that the registry delivered or would deliver from **real LLM usage tokens** reported by agents,
+MCP tools, or provider responses. Projected tokens explain context cost and prompt saturation;
+real tokens explain actual model spend and efficiency.
+
+- [ ] Add context-token event storage for every governed context retrieval. Suggested tables:
+  `context_events` for the retrieval/session envelope and `context_event_sections` for one
+  row per delivered spec section.
+- [ ] Record context delivery from all registry-controlled paths: MCP `begin_task`,
+  `get_specs`, `search_specs`, `resolve_guidance`, agent-facing `/ai/specs`, `/ai/search`,
+  compiled context downloads, agent pack generation, and CLI `specreg compile` when it
+  talks to the server.
+- [ ] For each delivered section, persist project identity, project type, repo/consumer,
+  agent session id when available, event type, spec id, spec version, filename, section
+  title, section anchor, character count, estimated token count, tokenizer/estimator name,
+  task/query detail, actor, and timestamp.
+- [ ] Start with a deterministic approximate tokenizer (`ceil(chars / 4)`) and store the
+  estimator version on every row. Add model-aware tokenizers later without rewriting old
+  history.
+- [ ] Add real LLM usage reporting endpoint/table for agents and server-side LLM calls:
+  provider, model, prompt tokens, completion tokens, total tokens, cached/input/output
+  tokens when available, cost estimate, latency, request route, agent session id, and
+  related context event ids.
+- [ ] Instrument existing server-side LLM operations to report real usage when providers
+  expose it, including spec assist, draft generation, audits, contradiction checks,
+  classifiers, recommendations, and test prompts.
+- [ ] Extend MCP/client guidance so agents can report real model usage when their host
+  exposes token accounting. Treat this as best-effort telemetry; projected context tokens
+  remain the baseline when real usage is unavailable.
+- [ ] Add aggregation APIs for token reports:
+  - project summary over a date range
+  - tokens by spec
+  - tokens by spec section
+  - tokens by retrieval mode (`begin_task`, `get_specs`, `search`, `agent_pack`, `compile`)
+  - tokens by agent session/task
+  - projected vs real token comparison
+  - token trend over time
+- [ ] Add a Reports tab for token usage. The top-level view should list projects with
+  projected context tokens, real prompt/completion tokens, estimated spend, most expensive
+  specs, most expensive sections, and recent trend.
+- [ ] Add project drilldown in the Reports token tab. Selecting a project should show:
+  spec-level totals, section-level totals, retrieval source, agent sessions/tasks, real-vs-
+  projected tokens, feedback/compliance/code-trace links, and last-used timestamps.
+- [ ] Add section drilldown showing the section text preview, version, delivered token
+  history, searches that retrieved it, agents/sessions that loaded it, citations/evidence,
+  feedback clusters, code-trace links, and whether it appears to earn its prompt cost.
+- [ ] Add token ROI signals that combine delivered tokens, real prompt tokens, search hits,
+  citations, code-trace links, compliance contribution, efficacy lift, and feedback/error
+  rates. Do not equate "large" with "bad"; flag high-token low-signal sections for review.
+- [ ] Add prompt saturation warnings for projects or tasks whose always-loaded specs exceed
+  configurable context budgets. Recommend splitting large specs, changing token budget
+  class, moving material to search-first reference detail, or promoting only critical
+  sections to default context.
+- [ ] Add dashboard filters for date range, project type, concrete project, repo, agent
+  session, model/provider, event type, spec, section, and token estimator.
+- [ ] Add export support for token usage reports as JSON/CSV so teams can analyze cost and
+  ROI outside the UI.
+- [ ] Add retention controls for token telemetry. Keep section identifiers and counts long
+  term, but allow pruning detailed task/query/provider rows in privacy-sensitive deployments.
+- [ ] Update AI-SDD docs and generated agent guidance to explain projected vs real tokens,
+  how token usage is reported, and how reviewers should interpret token ROI.
+
 ## Validation & Dogfooding
 
 The system is feature-rich but lightly battle-tested; every real signal so far has come from
@@ -216,6 +281,107 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
   inside a container just hides the Update now button. Consider a lighter "new image
   available" signal for Docker (e.g. compare the running image digest/tag against the
   latest published one) instead of leaving Docker operators with no drift signal at all.
+
+## Governed Skills Marketplace
+
+Skills should become governed, versioned procedure artifacts managed with the same discipline
+as specs. A skill answers "how should an agent perform this workflow?", while a spec answers
+"what is true or required for this system/domain?" Skills may reference specs, and specs may
+recommend skills, but imported marketplace content must not become trusted guidance until it
+passes provenance, review, versioning, assignment, and distribution gates.
+
+- [ ] Split the current editable `agent_skills` row model into stable skill identity plus
+  immutable `agent_skill_versions`, mirroring spec versioning. Preserve stable slugs,
+  current version, status, built-in/custom origin, published content hash, changelog, and
+  created/updated/published metadata.
+- [ ] Add skill review/change-request workflow for creating, updating, disabling, deleting,
+  and promoting skills. Built-in and marketplace skills should be reviewable through the
+  same queue as specs, with audit log entries and reviewer attribution.
+- [ ] Add scoped skill assignment: global, project type, and concrete project. Generated
+  agent packs should include only active skills assigned to the target scope hierarchy,
+  with project-scoped skills overriding or supplementing broader skills without mutating
+  reusable project types.
+- [ ] Expand risk classification beyond `safe` / `restricted`: suggested levels are
+  `safe`, `bounded`, `tooling`, `networked`, `privileged`, and `blocked`. Store the
+  rationale and make risk visible in the UI, generated `SKILL.md` metadata, manifests,
+  and agent pack summaries.
+- [ ] Add first-class skill marketplace UI outside the LLM settings page. Suggested tabs:
+  Installed, Marketplace, Candidates, Sources, Reviews, and Assignments.
+- [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
+  version history, changelog, assignments, related specs, source/provenance, downstream
+  consumers, and review status.
+- [ ] Add external skill source registry for GitHub repos, local uploads, built-in packs,
+  and manually authored sources. Store URL, provider, license, default branch, last fetched
+  commit, last scan time, status, trust decision, and source notes.
+- [ ] Support curated starter sources such as:
+  - `https://github.com/search?q=agent+skills&type=repositories`
+  - `https://github.com/msitarzewski/agency-agents`
+  - `anthropics/skills`
+  - `addyosmani/agent-skills`
+  - `vercel-labs/skills`
+  - `google/skills`
+  - `agentskills/agentskills`
+  - curated `awesome-agent-skills` style lists
+- [ ] Add GitHub source scanner for common skill and agent formats: `SKILL.md`,
+  `.codex/skills/*/SKILL.md`, `.claude/agents/*.md`, `agents/*.md`, `AGENTS.md`,
+  `README.md` skill sections, and repo-specific manifest files when present.
+- [ ] Create `skill_candidates` for imported but untrusted material. Candidates should
+  retain source repo/path/commit, detected format, raw content hash, license, category,
+  proposed name/slug, detected commands/network/secrets risk, and classifier notes.
+- [ ] Classify candidates into `agent_skill`, `spec_seed`, `project_type_template`,
+  `reference_only`, `unsafe`, or `unknown`. Do not allow candidates to publish directly
+  into active agent packs.
+- [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion
+  should preserve useful workflow logic, remove irrelevant persona/fluff, normalize to
+  SpecRegistry skill format, add safety boundaries, add related-spec references, and
+  produce a reviewer-facing diff/summary.
+- [ ] Add LLM-assisted conversion from candidate material into spec drafts when the source
+  is better treated as reusable requirements than as agent procedure. This avoids turning
+  agent role repositories into project types by accident.
+- [ ] Add provenance metadata to governed skills: source URL, source commit SHA, source path,
+  imported_at, transformed_by, transformation prompt/version, reviewer, local version, and
+  whether local content intentionally diverged from upstream.
+- [ ] Add upstream drift detection for imported sources. When a tracked repo/path changes,
+  show "upstream update available" and create a reviewed update candidate rather than
+  silently mutating the active skill.
+- [ ] Add security and quality gates for third-party skills: prompt-injection scan,
+  command intent scan, network/API intent scan, secrets scan, license check, size/token
+  budget check, duplicate/near-duplicate detection, and risk-level recommendation.
+- [ ] Add explicit "skill does not grant permission" language to every rendered marketplace
+  skill. Skills may tell an agent how to perform a workflow, but host approval policies,
+  governed specs, RBAC, and tool permissions still decide what may actually be done.
+- [ ] Add skill-spec relationships. Skills can declare related specs/sections; specs can
+  recommend skills such as `run-compliance-loop`, `evaluate-quality-model`,
+  `incident-response-triage`, `api-contract-review`, or `observability-gap-analysis`.
+- [ ] Include locked skill versions in generated agent packs and `.spec/skills/manifest.json`.
+  Manifest entries should include slug, version, scope, risk level, hash, source, and
+  related specs.
+- [ ] Extend `specreg check` to verify local skill currency alongside spec currency:
+  up-to-date skills, outdated skills, missing skills, unknown local skills, and hash
+  mismatches.
+- [ ] Add CLI commands for marketplace workflows:
+  `specreg skills list`, `specreg skills check`, `specreg skills sync`,
+  `specreg skills search`, `specreg skills sources list`, and
+  `specreg skills sources add <url>`.
+- [ ] Add MCP tools for agent-visible skill discovery without broad context loading:
+  list assigned skills, fetch one skill by slug/version, search approved skills, and report
+  ambiguous/stale/missing skill guidance.
+- [ ] Add recommendation engine for suggested skills based on project type, project profile,
+  languages/frameworks, published specs, compliance failures, code-trace drift, feedback
+  clusters, and open review topics.
+- [ ] Track skill usage telemetry: which skills were packed, loaded, searched, fetched,
+  referenced in agent sessions, associated with successful compliance, or correlated with
+  feedback/errors. Feed low-value or high-risk signals back into review.
+- [ ] Add marketplace search/filter facets: category, project type, language/framework,
+  risk level, source, license, status, installed/assigned state, version freshness, and
+  related spec.
+- [ ] Add duplicate and conflict detection across skills. Warn when two active skills give
+  competing instructions for the same workflow, tool, command, safety boundary, or spec.
+- [ ] Add export/import of approved skill packs so organizations can curate internal packs
+  and move them between SpecRegistry instances without re-scraping GitHub.
+- [ ] Add documentation explaining the distinction between specs, project types,
+  project-scoped specs, skills, candidates, and external sources so users do not convert
+  one-off project knowledge or third-party prompt packs into reusable project types.
 
 ## Search and Discovery
 

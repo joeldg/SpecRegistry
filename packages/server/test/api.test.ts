@@ -205,6 +205,71 @@ describe("project types & specs", () => {
     expect(projects.find((row: any) => row.id === project.id)).toMatchObject({ spec_count: 1, outdated_count: 0 });
   });
 
+  it("records projected and real token usage by project, spec, and section", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/token-device", project_type_id: edge.id },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const begin = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/begin",
+      payload: {
+        project_type: "Acme Edge Device",
+        repo: "github.com/acme/token-device",
+        agent_identifier: "token-test-agent",
+        task: "Inspect governed RF behavior.",
+        specs_loaded: ["DESIGN.md"],
+      },
+    });
+    expect(begin.statusCode).toBe(201);
+    const session = begin.json();
+
+    const read = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/specs/${encodeURIComponent("Acme Edge Device")}?repo=${encodeURIComponent("github.com/acme/token-device")}`,
+    });
+    expect(read.statusCode).toBe(200);
+
+    const search = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/search?project_type=${encodeURIComponent("Acme Edge Device")}&repo=${encodeURIComponent("github.com/acme/token-device")}&q=${encodeURIComponent("transport")}`,
+    });
+    expect(search.statusCode).toBe(200);
+
+    const real = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/token-usage",
+      payload: {
+        session_id: session.session_id,
+        provider: "test-provider",
+        model: "test-model",
+        route: "agent",
+        prompt_tokens: 123,
+        completion_tokens: 45,
+        total_tokens: 168,
+      },
+    });
+    expect(real.statusCode).toBe(201);
+
+    const report = await getJson(`/api/v1/reports/token-usage?project_id=${encodeURIComponent(project.id)}`);
+    expect(report.projects[0]).toMatchObject({
+      project_id: project.id,
+      repo: "github.com/acme/token-device",
+      real_total_tokens: 168,
+    });
+    expect(report.projects[0].projected_tokens).toBeGreaterThan(0);
+    expect(report.by_spec.length).toBeGreaterThan(0);
+    expect(report.by_section.length).toBeGreaterThan(0);
+    expect(report.by_event_type.map((row: any) => row.event_type)).toEqual(expect.arrayContaining(["begin_task", "get_specs", "search"]));
+    expect(report.real_usage[0]).toMatchObject({ provider: "test-provider", model: "test-model", total_tokens: 168 });
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

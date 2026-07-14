@@ -48,6 +48,7 @@ import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
 import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
 import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
 import { projectSpecCurrency } from "../lib/projectCurrency.js";
+import { tokenUsageReport } from "../lib/tokenUsage.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -1448,6 +1449,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       code_trace_reports: codeTraceReports,
       global_specs: globalSpecs,
     };
+  });
+
+  app.get("/reports/token-usage", async (req) => {
+    const { project_id, days } = req.query as { project_id?: string; days?: string };
+    return tokenUsageReport(app.db, {
+      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
+      days: days ? Number(days) : undefined,
+    });
   });
 
   // Self-update: git pull --ff-only + rebuild for a deployment running from a live

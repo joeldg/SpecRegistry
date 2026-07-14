@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SpecSummary } from "@specregistry/shared";
-import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiagnostics, type ProjectTypeWithCount, type ReportsOverview } from "../api";
+import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiagnostics, type ProjectTypeWithCount, type ReportsOverview, type TokenUsageReport } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 type ChartDatum = { label: string; value: number; tone?: "accent" | "green" | "amber" | "red" };
@@ -14,6 +14,13 @@ const toneColor: Record<NonNullable<ChartDatum["tone"]>, string> = {
 
 function total(values: Array<{ n: number }>) {
   return values.reduce((sum, row) => sum + Number(row.n ?? 0), 0);
+}
+
+function fmtTokens(value: number | null | undefined) {
+  const n = Number(value ?? 0);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(Math.round(n));
 }
 
 function BarChart({ data }: { data: ChartDatum[] }) {
@@ -83,6 +90,9 @@ export default function ReportsPage() {
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
   const [dependencies, setDependencies] = useState<DependencyMap>();
   const [tokenRoi, setTokenRoi] = useState<Array<{ filename: string; approx_tokens: number; roi_score: number; open_feedback: number }>>([]);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageReport>();
+  const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
+  const [tokenProjectId, setTokenProjectId] = useState("");
   const [efficacyTrend, setEfficacyTrend] = useState<Array<EfficacyRun & { filename: string }>>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -99,14 +109,15 @@ export default function ReportsPage() {
 
   function reload() {
     setError(undefined);
-    Promise.all([api.reports(), api.specs(), api.projectTypes(), api.dependencyMap(), api.tokenRoi(), api.efficacyTrends()])
-      .then(([nextReport, nextSpecs, nextTypes, nextDependencies, nextTokenRoi, nextEfficacyTrend]) => {
+    Promise.all([api.reports(), api.specs(), api.projectTypes(), api.dependencyMap(), api.tokenRoi(), api.efficacyTrends(), api.tokenUsageReport()])
+      .then(([nextReport, nextSpecs, nextTypes, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage]) => {
         setReport(nextReport);
         setSpecs(nextSpecs);
         setTypes(nextTypes.filter((t) => t.scope === "project_type"));
         setDependencies(nextDependencies);
         setTokenRoi(nextTokenRoi.specs.slice(0, 8));
         setEfficacyTrend(nextEfficacyTrend.runs.slice(-8));
+        setTokenUsage(nextTokenUsage);
         setSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
         setProjectType((current) => current || nextTypes.find((t) => t.scope === "project_type")?.name || "");
       })
@@ -114,6 +125,16 @@ export default function ReportsPage() {
   }
 
   useEffect(reload, []);
+
+  useEffect(() => {
+    if (!tokenProjectId) {
+      setProjectTokenUsage(undefined);
+      return;
+    }
+    api.tokenUsageReport(tokenProjectId)
+      .then(setProjectTokenUsage)
+      .catch((e) => setError(e.message));
+  }, [tokenProjectId]);
 
   const scopeData = useMemo(() => {
     const byScope = new Map<string, number>();
@@ -346,6 +367,163 @@ export default function ReportsPage() {
                   tone: row.drift_severity === "high" ? "red" : row.drift_severity === "medium" ? "amber" : "green",
                 }))}
               />
+            )}
+          </div>
+
+          <div className="section report-panel">
+            <h2>Token Usage</h2>
+            <p className="settings-help">
+              Projected tokens are estimated from governed spec sections delivered by the registry. Real tokens come from best-effort LLM usage reports.
+            </p>
+            <div className="cards" style={{ marginBottom: 12 }}>
+              <div className="card">
+                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.projected_tokens ?? 0), 0))}</div>
+                <div className="label">Projected context tokens</div>
+              </div>
+              <div className="card">
+                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.real_total_tokens ?? 0), 0))}</div>
+                <div className="label">Real LLM tokens</div>
+              </div>
+              <div className="card">
+                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.delivered_sections ?? 0), 0))}</div>
+                <div className="label">Delivered sections</div>
+              </div>
+              <div className="card">
+                <div className="metric">{tokenUsage?.tokenizer ?? "chars/4:v1"}</div>
+                <div className="label">Estimator</div>
+              </div>
+            </div>
+            {!tokenUsage || tokenUsage.projects.length === 0 ? (
+              <div className="empty">No token usage has been recorded yet. Agent spec reads and searches will populate this report.</div>
+            ) : (
+              <>
+                <table className="grid">
+                  <thead>
+                    <tr>
+                      <th>Project</th>
+                      <th>Project type</th>
+                      <th>Projected</th>
+                      <th>Real</th>
+                      <th>Sections</th>
+                      <th>Events</th>
+                      <th>Last seen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tokenUsage.projects.slice(0, 12).map((row) => (
+                      <tr key={row.project_id} className={tokenProjectId === row.project_id ? "selected-row" : ""}>
+                        <td>
+                          <button className="link-button mono" onClick={() => setTokenProjectId(row.project_id)}>
+                            {row.repo}
+                          </button>
+                        </td>
+                        <td>{row.project_type_name}</td>
+                        <td className="mono">{fmtTokens(row.projected_tokens)}</td>
+                        <td className="mono">{fmtTokens(row.real_total_tokens)}</td>
+                        <td className="mono">{fmtTokens(row.delivered_sections)}</td>
+                        <td className="mono">{row.context_events}</td>
+                        <td className="faint">{row.last_reported_at ? timeAgo(row.last_reported_at) : "never"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {projectTokenUsage && (
+                  <div style={{ marginTop: 16 }}>
+                    <h3>{projectTokenUsage.projects[0]?.repo ?? "Project"} Token Drilldown</h3>
+                    <div className="report-grid">
+                      <div>
+                        <h3>By Spec</h3>
+                        <table className="grid">
+                          <thead>
+                            <tr>
+                              <th>Spec</th>
+                              <th>Projected</th>
+                              <th>Sections</th>
+                              <th>Events</th>
+                              <th>Last used</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {projectTokenUsage.by_spec.slice(0, 10).map((row) => (
+                              <tr key={row.spec_id}>
+                                <td className="mono">{row.filename}</td>
+                                <td className="mono">{fmtTokens(row.projected_tokens)}</td>
+                                <td className="mono">{fmtTokens(row.delivered_sections)}</td>
+                                <td className="mono">{row.context_events}</td>
+                                <td className="faint">{row.last_delivered_at ? timeAgo(row.last_delivered_at) : "never"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div>
+                        <h3>By Retrieval</h3>
+                        <BarChart
+                          data={projectTokenUsage.by_event_type.slice(0, 8).map((row) => ({
+                            label: row.event_type,
+                            value: Number(row.projected_tokens ?? 0),
+                            tone: "accent",
+                          }))}
+                        />
+                      </div>
+                    </div>
+                    <h3>Most Expensive Sections</h3>
+                    <table className="grid">
+                      <thead>
+                        <tr>
+                          <th>Spec</th>
+                          <th>Section</th>
+                          <th>Projected</th>
+                          <th>Deliveries</th>
+                          <th>Last used</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projectTokenUsage.by_section.slice(0, 15).map((row) => (
+                          <tr key={`${row.spec_id}-${row.section_anchor}`}>
+                            <td className="mono">{row.filename}</td>
+                            <td>{row.section_title}</td>
+                            <td className="mono">{fmtTokens(row.projected_tokens)}</td>
+                            <td className="mono">{row.deliveries}</td>
+                            <td className="faint">{row.last_delivered_at ? timeAgo(row.last_delivered_at) : "never"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {projectTokenUsage.real_usage.length > 0 && (
+                      <>
+                        <h3>Real LLM Usage</h3>
+                        <table className="grid">
+                          <thead>
+                            <tr>
+                              <th>Provider</th>
+                              <th>Model</th>
+                              <th>Route</th>
+                              <th>Prompt</th>
+                              <th>Completion</th>
+                              <th>Total</th>
+                              <th>Reports</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {projectTokenUsage.real_usage.map((row) => (
+                              <tr key={`${row.provider}-${row.model}-${row.route}`}>
+                                <td>{row.provider ?? "unknown"}</td>
+                                <td className="mono">{row.model ?? "unknown"}</td>
+                                <td>{row.route ?? "unspecified"}</td>
+                                <td className="mono">{fmtTokens(row.prompt_tokens)}</td>
+                                <td className="mono">{fmtTokens(row.completion_tokens)}</td>
+                                <td className="mono">{fmtTokens(row.total_tokens)}</td>
+                                <td className="mono">{row.reports}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 

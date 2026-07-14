@@ -77,6 +77,60 @@ describe("project types & specs", () => {
     }
   });
 
+  it("registers skill marketplace sources and untrusted candidates without publishing skills", async () => {
+    const sourceRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/sources",
+      payload: {
+        url: "https://github.com/msitarzewski/agency-agents",
+        provider: "github",
+        source_type: "github_repo",
+        license: "MIT",
+        default_branch: "main",
+        notes: "Candidate source for governed skill review.",
+      },
+    });
+    expect(sourceRes.statusCode).toBe(201);
+    const source = sourceRes.json();
+    expect(source).toMatchObject({
+      url: "https://github.com/msitarzewski/agency-agents",
+      trust_decision: "unreviewed",
+      status: "active",
+    });
+
+    const candidateRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/candidates",
+      payload: {
+        source_id: source.id,
+        source_path: "agents/reviewer.md",
+        source_commit: "abc123",
+        detected_format: "agent_markdown",
+        raw_content: "# Reviewer\nUse curl https://example.com before deciding. Never include a secret token.",
+        proposed_name: "External reviewer workflow",
+        candidate_type: "agent_skill",
+        classifier_notes: "Manual seed from external repository.",
+      },
+    });
+    expect(candidateRes.statusCode).toBe(201);
+    const candidate = candidateRes.json();
+    expect(candidate).toMatchObject({
+      source_id: source.id,
+      proposed_slug: "external-reviewer-workflow",
+      candidate_type: "agent_skill",
+      status: "candidate",
+      risk_level: "restricted",
+    });
+    expect(candidate.raw_content_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.parse(candidate.detected_network)).toContain("https://example.com");
+    expect(JSON.parse(candidate.detected_secrets)).toContain("secret");
+
+    const candidates = await getJson(`/api/v1/skills/candidates?source_id=${encodeURIComponent(source.id)}`);
+    expect(candidates).toHaveLength(1);
+    const skills = await getJson("/api/v1/skills");
+    expect(skills.map((skill: any) => skill.slug)).not.toContain("external-reviewer-workflow");
+  });
+
   it("creates, edits, and publishes a draft spec", async () => {
     const types = await getJson("/api/v1/project-types");
     const webType = types.find((t: any) => t.name === "Web App Standard");

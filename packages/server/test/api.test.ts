@@ -281,6 +281,15 @@ describe("project types & specs", () => {
     expect(exportRes.body).toContain("record_type,project,project_type");
     expect(exportRes.body).toContain("section");
     expect(exportRes.body).toContain("trend");
+
+    const jsonExportRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/reports/token-usage/export.json?project_id=${encodeURIComponent(project.id)}`,
+    });
+    expect(jsonExportRes.statusCode).toBe(200);
+    expect(jsonExportRes.headers["content-type"]).toContain("application/json");
+    expect(jsonExportRes.headers["content-disposition"]).toContain("specreg-token-usage");
+    expect(jsonExportRes.json().projects[0]).toMatchObject({ project_id: project.id, real_total_tokens: 168 });
   });
 
   it("rejects duplicate filenames within a project type", async () => {

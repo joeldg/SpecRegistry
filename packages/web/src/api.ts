@@ -714,6 +714,45 @@ export interface AgentSkillRow {
   created_at: string;
   updated_at: string;
 }
+export interface SkillSourceRow {
+  id: string;
+  url: string;
+  provider: string;
+  source_type: "github_repo" | "github_search" | "local_upload" | "builtin_pack" | "manual";
+  license: string | null;
+  default_branch: string | null;
+  last_fetched_commit: string | null;
+  last_scan_at: string | null;
+  status: "active" | "paused" | "archived";
+  trust_decision: "trusted" | "unreviewed" | "blocked";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface SkillCandidateRow {
+  id: string;
+  source_id: string | null;
+  source_url: string | null;
+  source_path: string | null;
+  source_commit: string | null;
+  detected_format: string;
+  raw_content_hash: string;
+  raw_content: string;
+  license: string | null;
+  category: string | null;
+  candidate_type: "agent_skill" | "spec_seed" | "project_type_template" | "reference_only" | "unsafe" | "unknown";
+  proposed_name: string;
+  proposed_slug: string;
+  risk_level: "safe" | "restricted";
+  risk_summary: string;
+  detected_commands: string;
+  detected_network: string;
+  detected_secrets: string;
+  classifier_notes: string;
+  status: "candidate" | "converted" | "rejected" | "archived";
+  created_at: string;
+  updated_at: string;
+}
 export interface ComplianceAttestationRow {
   id: string;
   project_type_id: string | null;
@@ -1043,6 +1082,34 @@ export const api = {
   updateAgentSkill: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "description" | "instructions" | "risk_level" | "status">>) =>
     request<AgentSkillRow>(`/api/v1/skills/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteAgentSkill: (id: string) => requestVoid(`/api/v1/skills/${id}`, { method: "DELETE" }),
+  skillSources: () => request<SkillSourceRow[]>("/api/v1/skills/sources"),
+  createSkillSource: (body: Partial<SkillSourceRow> & { url: string }) =>
+    request<SkillSourceRow>("/api/v1/skills/sources", { method: "POST", body: JSON.stringify(body) }),
+  updateSkillSource: (id: string, body: Partial<SkillSourceRow>) =>
+    request<SkillSourceRow>(`/api/v1/skills/sources/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  skillCandidates: (filters: { source_id?: string; status?: string } = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+    const query = params.toString();
+    return request<SkillCandidateRow[]>(`/api/v1/skills/candidates${query ? `?${query}` : ""}`);
+  },
+  createSkillCandidate: (body: {
+    source_id?: string;
+    source_url?: string;
+    source_path?: string;
+    source_commit?: string;
+    detected_format?: string;
+    raw_content: string;
+    license?: string;
+    category?: string;
+    candidate_type?: SkillCandidateRow["candidate_type"];
+    proposed_name: string;
+    proposed_slug?: string;
+    risk_level?: AgentSkillRow["risk_level"];
+    risk_summary?: string;
+    classifier_notes?: string;
+    status?: SkillCandidateRow["status"];
+  }) => request<SkillCandidateRow>("/api/v1/skills/candidates", { method: "POST", body: JSON.stringify(body) }),
   approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
   createApprovalPolicy: (body: {
     project_type_id?: string | null;

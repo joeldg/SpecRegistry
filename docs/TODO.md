@@ -318,7 +318,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.
-- [ ] Add external skill source registry for GitHub repos, local uploads, built-in packs,
+- [x] Add external skill source registry for GitHub repos, local uploads, built-in packs,
   and manually authored sources. Store URL, provider, license, default branch, last fetched
   commit, last scan time, status, trust decision, and source notes.
 - [ ] Support curated starter sources such as:
@@ -333,7 +333,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add GitHub source scanner for common skill and agent formats: `SKILL.md`,
   `.codex/skills/*/SKILL.md`, `.claude/agents/*.md`, `agents/*.md`, `AGENTS.md`,
   `README.md` skill sections, and repo-specific manifest files when present.
-- [ ] Create `skill_candidates` for imported but untrusted material. Candidates should
+- [x] Create `skill_candidates` for imported but untrusted material. Candidates should
   retain source repo/path/commit, detected format, raw content hash, license, category,
   proposed name/slug, detected commands/network/secrets risk, and classifier notes.
 - [ ] Classify candidates into `agent_skill`, `spec_seed`, `project_type_template`,

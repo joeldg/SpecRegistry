@@ -295,6 +295,50 @@ CREATE TABLE IF NOT EXISTS agent_skills (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS skill_sources (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL UNIQUE,
+  provider TEXT NOT NULL DEFAULT 'github',
+  source_type TEXT NOT NULL DEFAULT 'github_repo' CHECK (source_type IN ('github_repo', 'github_search', 'local_upload', 'builtin_pack', 'manual')),
+  license TEXT,
+  default_branch TEXT,
+  last_fetched_commit TEXT,
+  last_scan_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
+  trust_decision TEXT NOT NULL DEFAULT 'unreviewed' CHECK (trust_decision IN ('trusted', 'unreviewed', 'blocked')),
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_skill_sources_status ON skill_sources(status, trust_decision);
+
+CREATE TABLE IF NOT EXISTS skill_candidates (
+  id TEXT PRIMARY KEY,
+  source_id TEXT REFERENCES skill_sources(id) ON DELETE SET NULL,
+  source_url TEXT,
+  source_path TEXT,
+  source_commit TEXT,
+  detected_format TEXT NOT NULL DEFAULT 'unknown',
+  raw_content_hash TEXT NOT NULL,
+  raw_content TEXT NOT NULL,
+  license TEXT,
+  category TEXT,
+  candidate_type TEXT NOT NULL DEFAULT 'unknown' CHECK (candidate_type IN ('agent_skill', 'spec_seed', 'project_type_template', 'reference_only', 'unsafe', 'unknown')),
+  proposed_name TEXT NOT NULL,
+  proposed_slug TEXT NOT NULL,
+  risk_level TEXT NOT NULL DEFAULT 'safe' CHECK (risk_level IN ('safe', 'restricted')),
+  risk_summary TEXT NOT NULL DEFAULT '',
+  detected_commands TEXT NOT NULL DEFAULT '[]',
+  detected_network TEXT NOT NULL DEFAULT '[]',
+  detected_secrets TEXT NOT NULL DEFAULT '[]',
+  classifier_notes TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'converted', 'rejected', 'archived')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_skill_candidates_source ON skill_candidates(source_id, status);
+CREATE INDEX IF NOT EXISTS idx_skill_candidates_type ON skill_candidates(candidate_type, status);
+
 CREATE TABLE IF NOT EXISTS harness_proposals (
   id TEXT PRIMARY KEY,
   pattern_key TEXT NOT NULL,
@@ -1073,6 +1117,55 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       CREATE INDEX IF NOT EXISTS idx_llm_usage_project ON llm_usage_reports(consumer_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_llm_usage_type ON llm_usage_reports(project_type_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_llm_usage_session ON llm_usage_reports(agent_session_id, created_at);
+    `,
+  },
+  {
+    // Marketplace foundation: external sources and untrusted imported candidates.
+    version: 35,
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_sources (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL UNIQUE,
+        provider TEXT NOT NULL DEFAULT 'github',
+        source_type TEXT NOT NULL DEFAULT 'github_repo' CHECK (source_type IN ('github_repo', 'github_search', 'local_upload', 'builtin_pack', 'manual')),
+        license TEXT,
+        default_branch TEXT,
+        last_fetched_commit TEXT,
+        last_scan_at TEXT,
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
+        trust_decision TEXT NOT NULL DEFAULT 'unreviewed' CHECK (trust_decision IN ('trusted', 'unreviewed', 'blocked')),
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_sources_status ON skill_sources(status, trust_decision);
+
+      CREATE TABLE IF NOT EXISTS skill_candidates (
+        id TEXT PRIMARY KEY,
+        source_id TEXT REFERENCES skill_sources(id) ON DELETE SET NULL,
+        source_url TEXT,
+        source_path TEXT,
+        source_commit TEXT,
+        detected_format TEXT NOT NULL DEFAULT 'unknown',
+        raw_content_hash TEXT NOT NULL,
+        raw_content TEXT NOT NULL,
+        license TEXT,
+        category TEXT,
+        candidate_type TEXT NOT NULL DEFAULT 'unknown' CHECK (candidate_type IN ('agent_skill', 'spec_seed', 'project_type_template', 'reference_only', 'unsafe', 'unknown')),
+        proposed_name TEXT NOT NULL,
+        proposed_slug TEXT NOT NULL,
+        risk_level TEXT NOT NULL DEFAULT 'safe' CHECK (risk_level IN ('safe', 'restricted')),
+        risk_summary TEXT NOT NULL DEFAULT '',
+        detected_commands TEXT NOT NULL DEFAULT '[]',
+        detected_network TEXT NOT NULL DEFAULT '[]',
+        detected_secrets TEXT NOT NULL DEFAULT '[]',
+        classifier_notes TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'converted', 'rejected', 'archived')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_candidates_source ON skill_candidates(source_id, status);
+      CREATE INDEX IF NOT EXISTS idx_skill_candidates_type ON skill_candidates(candidate_type, status);
     `,
   },
 ];

@@ -15,6 +15,7 @@ type CandidateStatus = "candidate" | "converted" | "rejected" | "archived";
 type GateStatus = "pass" | "review" | "block" | "pending";
 type SkillReviewAction = "update" | "enable" | "disable" | "delete";
 type SkillAssignmentScope = "global" | "project_type" | "project";
+type SkillSpecRelation = "related" | "governs" | "recommends" | "supports";
 
 interface SkillSourceRecord {
   id: string;
@@ -432,6 +433,10 @@ function assignmentScopeValue(value: unknown): SkillAssignmentScope {
   return enumValue<SkillAssignmentScope>(value, ["global", "project_type", "project"], "scope", "global");
 }
 
+function skillSpecRelationValue(value: unknown): SkillSpecRelation {
+  return enumValue<SkillSpecRelation>(value, ["related", "governs", "recommends", "supports"], "relation", "related");
+}
+
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
   app.get("/skills", async (req) => {
     const { include_disabled } = req.query as { include_disabled?: string };
@@ -496,6 +501,86 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, `Unknown skill assignment: ${id}`);
     app.db.prepare("DELETE FROM skill_assignments WHERE id = ?").run(id);
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_assignment.deleted", target_type: "agent_skill", target_id: existing.skill_id, summary: `Skill assignment removed (${existing.scope})` });
+    reply.code(204).send();
+  });
+
+  app.get("/skills/spec-links", async (req) => {
+    const { skill_id } = req.query as { skill_id?: string };
+    const where = skill_id ? "WHERE ssl.skill_id = ?" : "";
+    const params = skill_id ? [skill_id] : [];
+    return app.db
+      .prepare(
+        `SELECT ssl.*, ask.slug AS skill_slug, ask.name AS skill_name,
+                s.filename, s.current_version, pt.name AS project_type_name
+         FROM skill_spec_links ssl
+         JOIN agent_skills ask ON ask.id = ssl.skill_id
+         JOIN specs s ON s.id = ssl.spec_id
+         JOIN project_types pt ON pt.id = s.project_type_id
+         ${where}
+         ORDER BY ask.name, s.filename, ssl.section_anchor`
+      )
+      .all(...params);
+  });
+
+  app.post("/skills/spec-links", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const skillId = requireString(body, "skill_id");
+    const specId = requireString(body, "spec_id");
+    const skill = app.db.prepare("SELECT id, slug FROM agent_skills WHERE id = ?").get(skillId) as { id: string; slug: string } | undefined;
+    if (!skill) throw new HttpError(404, `Unknown agent skill: ${skillId}`);
+    const spec = app.db.prepare("SELECT id, filename FROM specs WHERE id = ?").get(specId) as { id: string; filename: string } | undefined;
+    if (!spec) throw new HttpError(404, `Unknown spec: ${specId}`);
+    const sectionAnchor = optionalBounded(body.section_anchor, "section_anchor", 160);
+    const relation = skillSpecRelationValue(body.relation);
+    const existing = app.db
+      .prepare(
+        `SELECT id FROM skill_spec_links
+         WHERE skill_id = ? AND spec_id = ?
+           AND COALESCE(section_anchor, '') = COALESCE(?, '')
+           AND relation = ?`
+      )
+      .get(skillId, specId, sectionAnchor, relation) as { id: string } | undefined;
+    if (existing) throw new HttpError(409, "Skill spec link already exists");
+    const id = uuid();
+    app.db.prepare(
+      `INSERT INTO skill_spec_links (id, skill_id, spec_id, section_anchor, relation, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, skillId, specId, sectionAnchor, relation, actorFrom(req, "settings"), now());
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "skill_spec_link.created",
+      target_type: "agent_skill",
+      target_id: skillId,
+      summary: `Skill linked to spec: ${skill.slug} -> ${spec.filename}`,
+      detail: { spec_id: specId, section_anchor: sectionAnchor, relation },
+    });
+    reply.code(201);
+    return app.db
+      .prepare(
+        `SELECT ssl.*, ask.slug AS skill_slug, ask.name AS skill_name,
+                s.filename, s.current_version, pt.name AS project_type_name
+         FROM skill_spec_links ssl
+         JOIN agent_skills ask ON ask.id = ssl.skill_id
+         JOIN specs s ON s.id = ssl.spec_id
+         JOIN project_types pt ON pt.id = s.project_type_id
+         WHERE ssl.id = ?`
+      )
+      .get(id);
+  });
+
+  app.delete("/skills/spec-links/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = app.db.prepare("SELECT * FROM skill_spec_links WHERE id = ?").get(id) as { skill_id: string; spec_id: string; relation: string } | undefined;
+    if (!existing) throw new HttpError(404, `Unknown skill spec link: ${id}`);
+    app.db.prepare("DELETE FROM skill_spec_links WHERE id = ?").run(id);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "skill_spec_link.deleted",
+      target_type: "agent_skill",
+      target_id: existing.skill_id,
+      summary: `Skill spec link removed (${existing.relation})`,
+      detail: { spec_id: existing.spec_id },
+    });
     reply.code(204).send();
   });
 

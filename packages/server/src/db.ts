@@ -340,6 +340,19 @@ CREATE TABLE IF NOT EXISTS skill_assignments (
 );
 CREATE INDEX IF NOT EXISTS idx_skill_assignments_scope ON skill_assignments(scope, project_type_id, project_id);
 
+CREATE TABLE IF NOT EXISTS skill_spec_links (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+  spec_id TEXT NOT NULL REFERENCES specs(id) ON DELETE CASCADE,
+  section_anchor TEXT,
+  relation TEXT NOT NULL DEFAULT 'related' CHECK (relation IN ('related', 'governs', 'recommends', 'supports')),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(skill_id, spec_id, section_anchor, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_skill_spec_links_skill ON skill_spec_links(skill_id);
+CREATE INDEX IF NOT EXISTS idx_skill_spec_links_spec ON skill_spec_links(spec_id);
+
 CREATE TABLE IF NOT EXISTS skill_sources (
   id TEXT PRIMARY KEY,
   url TEXT NOT NULL UNIQUE,
@@ -1284,6 +1297,24 @@ Project types are reusable baselines; projects are concrete repositories. The pr
         UNIQUE(skill_id, scope, project_type_id, project_id)
       );
       CREATE INDEX IF NOT EXISTS idx_skill_assignments_scope ON skill_assignments(scope, project_type_id, project_id);
+    `,
+  },
+  {
+    // Links between governed skills and the specifications/sections they use or implement.
+    version: 40,
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_spec_links (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+        spec_id TEXT NOT NULL REFERENCES specs(id) ON DELETE CASCADE,
+        section_anchor TEXT,
+        relation TEXT NOT NULL DEFAULT 'related' CHECK (relation IN ('related', 'governs', 'recommends', 'supports')),
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(skill_id, spec_id, section_anchor, relation)
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_spec_links_skill ON skill_spec_links(skill_id);
+      CREATE INDEX IF NOT EXISTS idx_skill_spec_links_spec ON skill_spec_links(spec_id);
     `,
   },
 ];

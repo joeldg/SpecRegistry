@@ -2,6 +2,17 @@ import { createHash } from "node:crypto";
 import type { Db } from "../db.js";
 
 export type SkillAssignmentScope = "global" | "project_type" | "project";
+export type SkillSpecRelation = "related" | "governs" | "recommends" | "supports";
+
+export interface SkillSpecLinkRecord {
+  id: string;
+  skill_id: string;
+  spec_id: string;
+  filename: string;
+  project_type_name: string;
+  section_anchor: string | null;
+  relation: SkillSpecRelation;
+}
 
 export interface AgentSkillRecord {
   id: string;
@@ -25,6 +36,7 @@ export interface AgentSkillRecord {
 
 export interface AssignedAgentSkillRecord extends AgentSkillRecord {
   assignment_scopes: SkillAssignmentScope[];
+  related_specs: SkillSpecLinkRecord[];
 }
 
 export interface AgentSkillManifestEntry {
@@ -46,6 +58,13 @@ export interface AgentSkillManifestEntry {
     transformed_by: string | null;
     upstream_content_hash: string | null;
   };
+  related_specs: Array<{
+    spec_id: string;
+    filename: string;
+    project_type: string;
+    section_anchor: string | null;
+    relation: SkillSpecRelation;
+  }>;
   updated_at: string;
 }
 
@@ -103,6 +122,13 @@ export function skillManifestEntry(skill: AssignedAgentSkillRecord): AgentSkillM
       transformed_by: skill.transformed_by ?? null,
       upstream_content_hash: skill.upstream_content_hash ?? null,
     },
+    related_specs: skill.related_specs.map((link) => ({
+      spec_id: link.spec_id,
+      filename: link.filename,
+      project_type: link.project_type_name,
+      section_anchor: link.section_anchor,
+      relation: link.relation,
+    })),
     updated_at: skill.updated_at,
   };
 }
@@ -132,7 +158,22 @@ export function assignedSkills(
       continue;
     }
     const { assignment_scope: assignmentScope, ...skill } = row;
-    merged.set(skill.id, { ...skill, assignment_scopes: [assignmentScope] });
+    merged.set(skill.id, { ...skill, assignment_scopes: [assignmentScope], related_specs: [] });
   }
-  return [...merged.values()];
+  const skills = [...merged.values()];
+  if (skills.length === 0) return skills;
+  const placeholders = skills.map(() => "?").join(", ");
+  const links = db.prepare(
+    `SELECT ssl.*, s.filename, pt.name AS project_type_name
+     FROM skill_spec_links ssl
+     JOIN specs s ON s.id = ssl.spec_id
+     JOIN project_types pt ON pt.id = s.project_type_id
+     WHERE ssl.skill_id IN (${placeholders})
+     ORDER BY s.filename, ssl.section_anchor`
+  ).all(...skills.map((skill) => skill.id)) as SkillSpecLinkRecord[];
+  for (const link of links) {
+    const skill = merged.get(link.skill_id);
+    if (skill) skill.related_specs.push(link);
+  }
+  return skills;
 }

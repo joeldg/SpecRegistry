@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, getAuthor, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow } from "../api";
+import { api, getAuthor, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow, type SkillSpecLinkRow } from "../api";
+import type { SpecSummary } from "@specregistry/shared";
 import { StatusBadge, timeAgo } from "../components";
 
 type SkillTab = "installed" | "sources" | "candidates" | "reviews" | "assignments";
@@ -34,6 +35,8 @@ export default function SkillsMarketplacePage() {
   const [candidates, setCandidates] = useState<SkillCandidateRow[]>([]);
   const [reviews, setReviews] = useState<SkillReviewRow[]>([]);
   const [assignments, setAssignments] = useState<SkillAssignmentRow[]>([]);
+  const [skillSpecLinks, setSkillSpecLinks] = useState<SkillSpecLinkRow[]>([]);
+  const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [projectTypes, setProjectTypes] = useState<ProjectTypeWithCount[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [error, setError] = useState<string>();
@@ -66,16 +69,21 @@ export default function SkillsMarketplacePage() {
   const [selectedSkillId, setSelectedSkillId] = useState("");
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [linkSpecId, setLinkSpecId] = useState("");
+  const [linkRelation, setLinkRelation] = useState<SkillSpecLinkRow["relation"]>("related");
+  const [linkSectionAnchor, setLinkSectionAnchor] = useState("");
 
   const reload = useCallback(() => {
     setError(undefined);
-    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates(), api.skillReviews(), api.skillAssignments(), api.projectTypes(), api.projects()])
-      .then(([nextSkills, nextSources, nextCandidates, nextReviews, nextAssignments, nextProjectTypes, nextProjects]) => {
+    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates(), api.skillReviews(), api.skillAssignments(), api.skillSpecLinks(), api.specs(), api.projectTypes(), api.projects()])
+      .then(([nextSkills, nextSources, nextCandidates, nextReviews, nextAssignments, nextLinks, nextSpecs, nextProjectTypes, nextProjects]) => {
         setSkills(nextSkills);
         setSources(nextSources);
         setCandidates(nextCandidates);
         setReviews(nextReviews);
         setAssignments(nextAssignments);
+        setSkillSpecLinks(nextLinks);
+        setSpecs(nextSpecs);
         setProjectTypes(nextProjectTypes);
         setProjects(nextProjects);
         const active = nextSkills.find((skill) => skill.status === "active");
@@ -83,6 +91,7 @@ export default function SkillsMarketplacePage() {
         const reusableTypes = nextProjectTypes.filter((projectType) => projectType.scope === "project_type");
         if (!assignmentProjectTypeId && reusableTypes[0]) setAssignmentProjectTypeId(reusableTypes[0].id);
         if (!assignmentProjectId && nextProjects[0]) setAssignmentProjectId(nextProjects[0].id);
+        if (!linkSpecId && nextSpecs[0]) setLinkSpecId(nextSpecs[0].id);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -258,6 +267,37 @@ export default function SkillsMarketplacePage() {
     }
   }
 
+  async function createSpecLink(skill: AgentSkillRow) {
+    if (!linkSpecId) return;
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.createSkillSpecLink({
+        skill_id: skill.id,
+        spec_id: linkSpecId,
+        relation: linkRelation,
+        section_anchor: linkSectionAnchor.trim() || undefined,
+      });
+      setNotice("Skill spec link saved.");
+      setLinkSectionAnchor("");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function deleteSpecLink(id: string) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.deleteSkillSpecLink(id);
+      setNotice("Skill spec link removed.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   const reusableProjectTypes = projectTypes.filter((projectType) => projectType.scope === "project_type");
   const activeSkills = skills.filter((skill) => skill.status === "active");
   const filteredSkills = skills.filter((skill) => {
@@ -289,6 +329,7 @@ export default function SkillsMarketplacePage() {
   const selectedSkill = skills.find((skill) => skill.id === selectedSkillId);
   const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId);
   const selectedSource = sources.find((source) => source.id === selectedSourceId);
+  const selectedSkillLinks = selectedSkill ? skillSpecLinks.filter((link) => link.skill_id === selectedSkill.id) : [];
 
   return (
     <>
@@ -398,6 +439,49 @@ export default function SkillsMarketplacePage() {
                 <span className="badge">{selectedSkill.built_in ? "built in" : "custom"}</span>
               </div>
               <div className="mono faint">{selectedSkill.source_url ?? "No external source"}{selectedSkill.source_path ? ` · ${selectedSkill.source_path}` : ""}</div>
+              <div style={{ marginTop: 14 }}>
+                <h4 style={{ marginBottom: 8 }}>Related Specs</h4>
+                <div className="form-row" style={{ marginBottom: 10 }}>
+                  <select value={linkSpecId} onChange={(e) => setLinkSpecId(e.target.value)} style={{ minWidth: 280 }}>
+                    {specs.map((spec) => (
+                      <option key={spec.id} value={spec.id}>{spec.project_type_name}: {spec.filename}</option>
+                    ))}
+                  </select>
+                  <select value={linkRelation} onChange={(e) => setLinkRelation(e.target.value as SkillSpecLinkRow["relation"])}>
+                    <option value="related">Related</option>
+                    <option value="governs">Governs</option>
+                    <option value="recommends">Recommends</option>
+                    <option value="supports">Supports</option>
+                  </select>
+                  <input type="text" placeholder="section anchor" value={linkSectionAnchor} onChange={(e) => setLinkSectionAnchor(e.target.value)} />
+                  <button onClick={() => createSpecLink(selectedSkill)} disabled={!linkSpecId}>Link spec</button>
+                </div>
+                <table className="grid" style={{ marginBottom: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>Spec</th>
+                      <th>Relation</th>
+                      <th>Section</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedSkillLinks.map((link) => (
+                      <tr key={link.id}>
+                        <td><strong>{link.filename}</strong><div className="faint">{link.project_type_name} · v{link.current_version}</div></td>
+                        <td>{link.relation}</td>
+                        <td className="mono">{link.section_anchor ?? "whole spec"}</td>
+                        <td><button onClick={() => deleteSpecLink(link.id)}>Remove</button></td>
+                      </tr>
+                    ))}
+                    {selectedSkillLinks.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="faint">No related specs linked yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
               <pre style={{ whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" }}>{selectedSkill.instructions}</pre>
             </div>
           )}

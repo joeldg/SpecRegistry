@@ -44,7 +44,7 @@ const SPECREGISTRY_OPERATING_RULES = `## SpecRegistry Operating Rules
 
 These rules govern how you use this compiled file with SpecRegistry:
 
-1. Prefer MCP when available. Use the \`specregistry\` MCP server from \`.mcp.json\` to call \`get_specs\`, \`search_specs\`, \`report_spec_feedback\`, and \`get_audit_prompt\`.
+1. Prefer MCP when available. Use the \`specregistry\` MCP server from \`.mcp.json\` to call \`get_specs\`, \`search_specs\`, \`report_spec_feedback\`, \`get_audit_prompt\`, and \`report_token_usage\` when token counts are available.
 2. Load live specs before non-trivial code changes. This compiled file is a bootstrap, but MCP is the live retrieval and feedback channel.
 3. Preserve project scope. Ensure MCP is using the configured project type and repo/project identity so global, project-type, and project-scoped specs are all visible.
 4. Search before assuming. Use \`search_specs\` in hybrid mode for task terms, APIs, filenames, security concerns, failure modes, and acceptance criteria before deciding guidance is missing.

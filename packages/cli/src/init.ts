@@ -425,10 +425,11 @@ Required MCP flow:
    with the language(s) and/or topic. It returns the governed specs that apply and the
    styleguides you can pull, or an explicit gap.
 5. Report ambiguity, contradiction, or outdated guidance with \`report_spec_feedback\`; report missing language/domain coverage with the same tool using \`error_type: "missing_guidance"\`.
-6. Call \`finish_task\` with the \`session_id\` returned by \`begin_task\` before claiming completion.
-7. Use \`specreg check\` to verify this repo is still using current approved spec versions.
-8. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because the registry or MCP server is unavailable, halt and notify the user with the exact output. Do not claim completion until objective compliance can be verified.
-9. Before committing implementation changes, include the compact compliance evidence trailer from \`specreg comply\` (or equivalent \`finish_task\` evidence) in the git commit message body.
+6. If your agent host exposes token counts, call \`report_token_usage\` with the \`session_id\`; this is optional telemetry and does not replace compliance.
+7. Call \`finish_task\` with the \`session_id\` returned by \`begin_task\` before claiming completion.
+8. Use \`specreg check\` to verify this repo is still using current approved spec versions.
+9. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because the registry or MCP server is unavailable, halt and notify the user with the exact output. Do not claim completion until objective compliance can be verified.
+10. Before committing implementation changes, include the compact compliance evidence trailer from \`specreg comply\` (or equivalent \`finish_task\` evidence) in the git commit message body.
 
 ## Missing Guidance
 
@@ -450,6 +451,7 @@ and only these endpoints:
 - \`POST ${server}/api/v1/ai/resolve-guidance\` — resolve styleguides/specs for a language or topic.
 - \`POST ${server}/api/v1/ai/agent-sessions/begin\` — register preflight and get a session id.
 - \`POST ${server}/api/v1/ai/agent-sessions/finish\` — record completion evidence and run the completion gate.
+- \`POST ${server}/api/v1/ai/token-usage\` — optional real token usage telemetry when available.
 - \`POST ${server}/api/v1/ai/feedback\` — report a spec problem, or (\`error_type: "missing_guidance"\`) a coverage gap with no spec_id.
 
 Use the \`specreg\` CLI for everything else (\`check\`, \`comply\`, \`sync\`, \`compile\`, \`verify\`,

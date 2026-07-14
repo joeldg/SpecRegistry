@@ -580,6 +580,7 @@ The MCP server exposes these tools:
 - `search_specs` — retrieve matching spec sections, including project-scoped matches, without loading everything.
 - `resolve_guidance` — check whether a language or domain is governed before inventing a local standard.
 - `check_compliance` — record and evaluate the objective compliance loop directly, useful for CI or ad hoc checks.
+- `report_token_usage` — optional telemetry for real model token usage when the agent host exposes counts.
 - `get_audit_prompt` — fetch a reverse-conformance audit prompt for a governed spec.
 - `report_spec_feedback` — file ambiguity, contradiction, or outdated-guidance feedback, or
   (`error_type: "missing_guidance"`) a pure coverage gap with no `spec_id` to attach to.
@@ -593,13 +594,15 @@ Direct agent endpoints are also available:
 curl http://localhost:4000/api/v1/ai/specs/Web%20App%20Standard
 curl "http://localhost:4000/api/v1/ai/specs/Web%20App%20Standard?repo=github.com/acme/web-app"
 curl "http://localhost:4000/api/v1/ai/search?q=authentication&project_type=Web%20App%20Standard&repo=github.com/acme/web-app"
+curl -X POST http://localhost:4000/api/v1/ai/token-usage -H "content-type: application/json" -d '{"session_id":"SESSION_ID","provider":"openai","model":"gpt-4.1","prompt_tokens":1200,"completion_tokens":300}'
 curl http://localhost:4000/api/v1/ai/mcp-guide/Web%20App%20Standard
 curl -o agent-pack.zip http://localhost:4000/api/v1/specs/Web%20App%20Standard/agent-pack
 ```
 
 Agents should read specs before implementation, search when they need narrower guidance,
-cite returned section permalinks when reporting findings, and report feedback instead of
-guessing when a spec is ambiguous, contradictory, or stale.
+cite returned section permalinks when reporting findings, optionally report host-visible
+model token usage for token ROI, and report feedback instead of guessing when a spec is
+ambiguous, contradictory, or stale.
 
 ### API Usage
 

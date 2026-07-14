@@ -272,6 +272,62 @@ export async function runMcpServer(opts: McpServerOptions): Promise<void> {
   );
 
   server.tool(
+    "list_assigned_skills",
+    "List active governed skills assigned to the current project type/repo scope. Use this to discover approved procedures without loading every SKILL.md into context.",
+    {
+      project_type: z.string().optional().describe("Project type name. Defaults to SPECREG_PROJECT_TYPE."),
+      repo: z.string().optional().describe("Repo/project identity for project-scoped skills. Defaults to SPECREG_REPO when set."),
+      project_id: z.string().optional().describe("Explicit SpecRegistry project id."),
+    },
+    async ({ project_type, repo, project_id }) => {
+      const type = project_type ?? defaultType;
+      if (!type) throw new Error("No project_type given and SPECREG_PROJECT_TYPE is not set");
+      const params = new URLSearchParams();
+      if (project_id) params.set("project_id", project_id);
+      else if (repo ?? defaultRepo) params.set("repo", repo ?? defaultRepo!);
+      return text(await api(opts.server, opts.token, `/api/v1/ai/skills/${encodeURIComponent(type)}${params.size ? `?${params}` : ""}`));
+    }
+  );
+
+  server.tool(
+    "search_approved_skills",
+    "Search active governed skills assigned to the current project type/repo scope by workflow, related spec, or source metadata. Fetch a returned skill with get_skill before following it.",
+    {
+      query: z.string().describe("Search terms, e.g. 'compliance loop', 'quality model', or a spec filename."),
+      project_type: z.string().optional().describe("Project type name. Defaults to SPECREG_PROJECT_TYPE."),
+      repo: z.string().optional().describe("Repo/project identity for project-scoped skills. Defaults to SPECREG_REPO when set."),
+      project_id: z.string().optional().describe("Explicit SpecRegistry project id."),
+    },
+    async ({ query, project_type, repo, project_id }) => {
+      const type = project_type ?? defaultType;
+      if (!type) throw new Error("No project_type given and SPECREG_PROJECT_TYPE is not set");
+      const params = new URLSearchParams({ q: query });
+      if (project_id) params.set("project_id", project_id);
+      else if (repo ?? defaultRepo) params.set("repo", repo ?? defaultRepo!);
+      return text(await api(opts.server, opts.token, `/api/v1/ai/skills/${encodeURIComponent(type)}?${params}`));
+    }
+  );
+
+  server.tool(
+    "get_skill",
+    "Fetch one active governed skill assigned to the current project type/repo scope as markdown, including safety boundary and related specs. Use the exact slug returned by list_assigned_skills or search_approved_skills.",
+    {
+      slug: z.string().describe("Skill slug, e.g. run-compliance-loop."),
+      project_type: z.string().optional().describe("Project type name. Defaults to SPECREG_PROJECT_TYPE."),
+      repo: z.string().optional().describe("Repo/project identity for project-scoped skills. Defaults to SPECREG_REPO when set."),
+      project_id: z.string().optional().describe("Explicit SpecRegistry project id."),
+    },
+    async ({ slug, project_type, repo, project_id }) => {
+      const type = project_type ?? defaultType;
+      if (!type) throw new Error("No project_type given and SPECREG_PROJECT_TYPE is not set");
+      const params = new URLSearchParams();
+      if (project_id) params.set("project_id", project_id);
+      else if (repo ?? defaultRepo) params.set("repo", repo ?? defaultRepo!);
+      return text(await api(opts.server, opts.token, `/api/v1/ai/skills/${encodeURIComponent(type)}/${encodeURIComponent(slug)}${params.size ? `?${params}` : ""}`));
+    }
+  );
+
+  server.tool(
     "resolve_guidance",
     "Call this BEFORE writing code in a language, or working in a domain/topic (networking, auth, database, deployment, etc.), that the already-loaded specs do not clearly cover. Returns the governed specs that apply, styleguides available to pull, and coverage gaps.",
     {

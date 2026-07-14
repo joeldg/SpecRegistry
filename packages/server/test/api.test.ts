@@ -214,6 +214,38 @@ describe("project types & specs", () => {
 
     const skills = await getJson("/api/v1/skills");
     expect(skills.find((skill: any) => skill.slug === "external-reviewer-workflow")).toMatchObject({ status: "active" });
+
+    const basePack = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
+    expect(basePack.statusCode).toBe(200);
+    const baseZip = new AdmZip(basePack.rawPayload);
+    expect(baseZip.getEntry(".spec/skills/external-reviewer-workflow/SKILL.md")).toBeNull();
+
+    const globalAssignments = await getJson("/api/v1/skills/assignments");
+    expect(globalAssignments.some((assignment: any) => assignment.scope === "global" && assignment.skill_slug === "run-compliance-loop")).toBe(true);
+
+    const projectTypes = await getJson("/api/v1/project-types");
+    const edgeType = projectTypes.find((projectType: any) => projectType.name === "Acme Edge Device");
+    const assignmentRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/assignments",
+      payload: { skill_id: converted.json().id, scope: "project_type", project_type_id: edgeType.id },
+    });
+    expect(assignmentRes.statusCode).toBe(201);
+    expect(assignmentRes.json()).toMatchObject({ skill_id: converted.json().id, scope: "project_type", project_type_id: edgeType.id });
+
+    const duplicateAssignment = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/assignments",
+      payload: { skill_id: converted.json().id, scope: "project_type", project_type_id: edgeType.id },
+    });
+    expect(duplicateAssignment.statusCode).toBe(409);
+
+    const scopedPack = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
+    expect(scopedPack.statusCode).toBe(200);
+    const scopedZip = new AdmZip(scopedPack.rawPayload);
+    expect(scopedZip.getEntry(".spec/skills/external-reviewer-workflow/SKILL.md")).toBeTruthy();
+    const manifest = JSON.parse(scopedZip.readAsText(".spec/skills/manifest.json"));
+    expect(manifest.skills.map((skill: any) => skill.slug)).toContain("external-reviewer-workflow");
   });
 
   it("creates, edits, and publishes a draft spec", async () => {

@@ -787,6 +787,21 @@ export interface SkillReviewRow {
   created_at: string;
   updated_at: string;
 }
+export interface SkillAssignmentRow {
+  id: string;
+  skill_id: string;
+  scope: "global" | "project_type" | "project";
+  project_type_id: string | null;
+  project_id: string | null;
+  created_by: string;
+  created_at: string;
+  skill_slug: string;
+  skill_name: string;
+  risk_level: AgentSkillRow["risk_level"];
+  skill_status: AgentSkillRow["status"];
+  project_type_name: string | null;
+  project_repo: string | null;
+}
 export interface ComplianceAttestationRow {
   id: string;
   project_type_id: string | null;
@@ -1116,6 +1131,10 @@ export const api = {
   updateAgentSkill: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "description" | "instructions" | "risk_level" | "status">>) =>
     request<AgentSkillRow>(`/api/v1/skills/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteAgentSkill: (id: string) => requestVoid(`/api/v1/skills/${id}`, { method: "DELETE" }),
+  skillAssignments: () => request<SkillAssignmentRow[]>("/api/v1/skills/assignments"),
+  createSkillAssignment: (body: { skill_id: string; scope: SkillAssignmentRow["scope"]; project_type_id?: string; project_id?: string }) =>
+    request<SkillAssignmentRow>("/api/v1/skills/assignments", { method: "POST", body: JSON.stringify(body) }),
+  deleteSkillAssignment: (id: string) => requestVoid(`/api/v1/skills/assignments/${id}`, { method: "DELETE" }),
   skillSources: () => request<SkillSourceRow[]>("/api/v1/skills/sources"),
   createSkillSource: (body: Partial<SkillSourceRow> & { url: string }) =>
     request<SkillSourceRow>("/api/v1/skills/sources", { method: "POST", body: JSON.stringify(body) }),

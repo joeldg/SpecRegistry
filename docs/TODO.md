@@ -306,7 +306,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
   with audit log entries, reviewer attribution, and separation of duties.
 - [ ] Extend skill reviews to cover reviewed creation/deletion semantics and unify skill
   reviews with the broader spec review queue where appropriate.
-- [ ] Add scoped skill assignment: global, project type, and concrete project. Generated
+- [x] Add scoped skill assignment: global, project type, and concrete project. Generated
   agent packs should include only active skills assigned to the target scope hierarchy,
   with project-scoped skills overriding or supplementing broader skills without mutating
   reusable project types.
@@ -317,8 +317,9 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Add first-class skill marketplace UI outside the LLM settings page for Installed,
   Candidates, and Sources.
 - [x] Extend the skill marketplace UI with a Reviews tab for skill change requests.
-- [ ] Extend the skill marketplace UI with Marketplace discovery and Assignments tabs as
-  those backends land.
+- [x] Extend the skill marketplace UI with an Assignments tab for global, project type,
+  and concrete project skill distribution.
+- [ ] Extend the skill marketplace UI with Marketplace discovery as that backend lands.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.

@@ -13,6 +13,7 @@ type CandidateType = "agent_skill" | "spec_seed" | "project_type_template" | "re
 type CandidateStatus = "candidate" | "converted" | "rejected" | "archived";
 type GateStatus = "pass" | "review" | "block" | "pending";
 type SkillReviewAction = "update" | "enable" | "disable" | "delete";
+type SkillAssignmentScope = "global" | "project_type" | "project";
 
 function slugValue(value: unknown): string {
   const slug = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -217,6 +218,10 @@ function proposedStatusForAction(action: SkillReviewAction, fallback: SkillStatu
   return fallback;
 }
 
+function assignmentScopeValue(value: unknown): SkillAssignmentScope {
+  return enumValue<SkillAssignmentScope>(value, ["global", "project_type", "project"], "scope", "global");
+}
+
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
   app.get("/skills", async (req) => {
     const { include_disabled } = req.query as { include_disabled?: string };
@@ -226,6 +231,62 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     return app.db
       .prepare(`SELECT * FROM agent_skills ${include_disabled === "true" ? "" : "WHERE status = 'active'"} ORDER BY built_in DESC, name`)
       .all();
+  });
+
+  app.get("/skills/assignments", async () => {
+    return app.db
+      .prepare(
+        `SELECT sa.*, ask.slug AS skill_slug, ask.name AS skill_name, ask.risk_level, ask.status AS skill_status,
+                pt.name AS project_type_name, rc.repo AS project_repo
+         FROM skill_assignments sa
+         JOIN agent_skills ask ON ask.id = sa.skill_id
+         LEFT JOIN project_types pt ON pt.id = sa.project_type_id
+         LEFT JOIN repo_consumers rc ON rc.id = sa.project_id
+         ORDER BY sa.scope, ask.name`
+      )
+      .all();
+  });
+
+  app.post("/skills/assignments", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const skillId = requireString(body, "skill_id");
+    const skill = app.db.prepare("SELECT id, slug, status FROM agent_skills WHERE id = ?").get(skillId) as { id: string; slug: string; status: SkillStatus } | undefined;
+    if (!skill) throw new HttpError(404, `Unknown agent skill: ${skillId}`);
+    const scope = assignmentScopeValue(body.scope);
+    const projectTypeId = scope === "project_type" ? bounded(requireString(body, "project_type_id"), "project_type_id", 120) : null;
+    const projectId = scope === "project" ? bounded(requireString(body, "project_id"), "project_id", 120) : null;
+    if (projectTypeId && !app.db.prepare("SELECT id FROM project_types WHERE id = ?").get(projectTypeId)) {
+      throw new HttpError(404, `Unknown project type: ${projectTypeId}`);
+    }
+    if (projectId && !app.db.prepare("SELECT id FROM repo_consumers WHERE id = ?").get(projectId)) {
+      throw new HttpError(404, `Unknown project: ${projectId}`);
+    }
+    const existing = app.db
+      .prepare(
+        `SELECT id FROM skill_assignments
+         WHERE skill_id = ? AND scope = ?
+           AND COALESCE(project_type_id, '') = COALESCE(?, '')
+           AND COALESCE(project_id, '') = COALESCE(?, '')`
+      )
+      .get(skillId, scope, projectTypeId, projectId) as { id: string } | undefined;
+    if (existing) throw new HttpError(409, "Skill assignment already exists");
+    const id = uuid();
+    app.db.prepare(
+      `INSERT INTO skill_assignments (id, skill_id, scope, project_type_id, project_id, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, skillId, scope, projectTypeId, projectId, actorFrom(req, "settings"), now());
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_assignment.created", target_type: "agent_skill", target_id: skillId, summary: `Skill assigned: ${skill.slug} (${scope})`, detail: { scope, project_type_id: projectTypeId, project_id: projectId } });
+    reply.code(201);
+    return app.db.prepare("SELECT * FROM skill_assignments WHERE id = ?").get(id);
+  });
+
+  app.delete("/skills/assignments/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = app.db.prepare("SELECT * FROM skill_assignments WHERE id = ?").get(id) as { skill_id: string; scope: string } | undefined;
+    if (!existing) throw new HttpError(404, `Unknown skill assignment: ${id}`);
+    app.db.prepare("DELETE FROM skill_assignments WHERE id = ?").run(id);
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_assignment.deleted", target_type: "agent_skill", target_id: existing.skill_id, summary: `Skill assignment removed (${existing.scope})` });
+    reply.code(204).send();
   });
 
   app.post("/skills", async (req, reply) => {

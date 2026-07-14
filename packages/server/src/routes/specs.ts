@@ -26,7 +26,7 @@ import { reindexSpecSearch } from "../lib/search.js";
 import { sha256, signManifest } from "../lib/sign.js";
 import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
-import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
+import { assignedSkills, renderSkillMarkdown } from "../lib/skills.js";
 import { assistNewSpecDraft, assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
 import { recordContextEvent, sectionsFromSpecs } from "../lib/tokenUsage.js";
 
@@ -364,9 +364,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     const serverUrl = publicUrl(app.db, req);
     zip.addFile(".mcp.json", Buffer.from(JSON.stringify(mcpConfig(serverUrl, pt, project?.repo), null, 2) + "\n", "utf8"));
     zip.addFile("SPECREGISTRY_MCP_SKILL.md", Buffer.from(mcpSkillMarkdown(serverUrl, pt, project?.repo), "utf8"));
-    const skills = app.db
-      .prepare("SELECT * FROM agent_skills WHERE status = 'active' AND built_in = 1 AND risk_level = 'safe' ORDER BY name")
-      .all() as AgentSkillRecord[];
+    const skills = assignedSkills(app.db, pt.id, project?.id);
     for (const skill of skills) {
       zip.addFile(`.spec/skills/${skill.slug}/SKILL.md`, Buffer.from(renderSkillMarkdown(skill), "utf8"));
     }

@@ -328,6 +328,18 @@ CREATE TABLE IF NOT EXISTS skill_change_requests (
 CREATE INDEX IF NOT EXISTS idx_skill_change_requests_status ON skill_change_requests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_skill_change_requests_skill ON skill_change_requests(skill_id, created_at);
 
+CREATE TABLE IF NOT EXISTS skill_assignments (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL CHECK (scope IN ('global', 'project_type', 'project')),
+  project_type_id TEXT REFERENCES project_types(id),
+  project_id TEXT REFERENCES repo_consumers(id),
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(skill_id, scope, project_type_id, project_id)
+);
+CREATE INDEX IF NOT EXISTS idx_skill_assignments_scope ON skill_assignments(scope, project_type_id, project_id);
+
 CREATE TABLE IF NOT EXISTS skill_sources (
   id TEXT PRIMARY KEY,
   url TEXT NOT NULL UNIQUE,
@@ -1257,6 +1269,23 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       CREATE INDEX IF NOT EXISTS idx_skill_change_requests_skill ON skill_change_requests(skill_id, created_at);
     `,
   },
+  {
+    // Scoped skill assignments for agent packs and project/project-type selection.
+    version: 39,
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_assignments (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL CHECK (scope IN ('global', 'project_type', 'project')),
+        project_type_id TEXT REFERENCES project_types(id),
+        project_id TEXT REFERENCES repo_consumers(id),
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(skill_id, scope, project_type_id, project_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_assignments_scope ON skill_assignments(scope, project_type_id, project_id);
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [
@@ -1404,6 +1433,21 @@ function seedDefaultSkillSources(db: Db): void {
   }
 }
 
+function seedDefaultSkillAssignments(db: Db): void {
+  const skills = db
+    .prepare("SELECT id FROM agent_skills WHERE built_in = 1 AND risk_level = 'safe'")
+    .all() as Array<{ id: string }>;
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO skill_assignments
+      (id, skill_id, scope, project_type_id, project_id, created_by, created_at)
+     VALUES (?, ?, 'global', NULL, NULL, 'seed', ?)`
+  );
+  const ts = now();
+  for (const skill of skills) {
+    insert.run(`global-${skill.id}`, skill.id, ts);
+  }
+}
+
 export function createDb(path: string): Db {
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
@@ -1444,6 +1488,7 @@ export function createDb(path: string): Db {
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
   seedDefaultAgentSkills(db);
   seedDefaultSkillSources(db);
+  seedDefaultSkillAssignments(db);
   return db;
 }
 

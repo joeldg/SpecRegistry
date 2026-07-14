@@ -154,44 +154,48 @@ that the registry delivered or would deliver from **real LLM usage tokens** repo
 MCP tools, or provider responses. Projected tokens explain context cost and prompt saturation;
 real tokens explain actual model spend and efficiency.
 
-- [ ] Add context-token event storage for every governed context retrieval. Suggested tables:
+- [x] Add context-token event storage for every governed context retrieval. Suggested tables:
   `context_events` for the retrieval/session envelope and `context_event_sections` for one
   row per delivered spec section.
-- [ ] Record context delivery from all registry-controlled paths: MCP `begin_task`,
+- [x] Record context delivery from all registry-controlled paths: MCP `begin_task`,
   `get_specs`, `search_specs`, `resolve_guidance`, agent-facing `/ai/specs`, `/ai/search`,
   compiled context downloads, agent pack generation, and CLI `specreg compile` when it
   talks to the server.
-- [ ] For each delivered section, persist project identity, project type, repo/consumer,
+- [x] For each delivered section, persist project identity, project type, repo/consumer,
   agent session id when available, event type, spec id, spec version, filename, section
   title, section anchor, character count, estimated token count, tokenizer/estimator name,
   task/query detail, actor, and timestamp.
-- [ ] Start with a deterministic approximate tokenizer (`ceil(chars / 4)`) and store the
+- [x] Start with a deterministic approximate tokenizer (`ceil(chars / 4)`) and store the
   estimator version on every row. Add model-aware tokenizers later without rewriting old
   history.
-- [ ] Add real LLM usage reporting endpoint/table for agents and server-side LLM calls:
+- [x] Add real LLM usage reporting endpoint/table for agents and server-side LLM calls:
   provider, model, prompt tokens, completion tokens, total tokens, cached/input/output
   tokens when available, cost estimate, latency, request route, agent session id, and
   related context event ids.
-- [ ] Instrument existing server-side LLM operations to report real usage when providers
+- [x] Instrument existing server-side LLM operations to report real usage when providers
   expose it, including spec assist, draft generation, audits, contradiction checks,
   classifiers, recommendations, and test prompts.
 - [x] Extend MCP/client guidance so agents can report real model usage when their host
   exposes token accounting. Treat this as best-effort telemetry; projected context tokens
   remain the baseline when real usage is unavailable.
-- [ ] Add aggregation APIs for token reports:
+- [x] Add aggregation APIs for token reports:
   - project summary over a date range
   - tokens by spec
   - tokens by spec section
   - tokens by retrieval mode (`begin_task`, `get_specs`, `search`, `agent_pack`, `compile`)
   - tokens by agent session/task
   - projected vs real token comparison
-  - token trend over time
-- [ ] Add a Reports tab for token usage. The top-level view should list projects with
+- [ ] Add token trend over time to the token report API and chart it in the UI.
+- [x] Add a Reports token usage panel. The top-level view should list projects with
   projected context tokens, real prompt/completion tokens, estimated spend, most expensive
-  specs, most expensive sections, and recent trend.
-- [ ] Add project drilldown in the Reports token tab. Selecting a project should show:
-  spec-level totals, section-level totals, retrieval source, agent sessions/tasks, real-vs-
-  projected tokens, feedback/compliance/code-trace links, and last-used timestamps.
+  specs, and most expensive sections.
+- [ ] Promote token usage into a first-class Reports tab once the Reports page has tabbed
+  navigation.
+- [x] Add project drilldown in the Reports token panel. Selecting a project should show:
+  spec-level totals, section-level totals, retrieval source, agent sessions/tasks, and
+  real-vs-projected tokens.
+- [ ] Extend project drilldown with feedback/compliance/code-trace links and last-used
+  timestamps where they are not already surfaced by the aggregate tables.
 - [ ] Add section drilldown showing the section text preview, version, delivered token
   history, searches that retrieved it, agents/sessions that loaded it, citations/evidence,
   feedback clusters, code-trace links, and whether it appears to earn its prompt cost.
@@ -204,12 +208,14 @@ real tokens explain actual model spend and efficiency.
   sections to default context.
 - [ ] Add dashboard filters for date range, project type, concrete project, repo, agent
   session, model/provider, event type, spec, section, and token estimator.
-- [ ] Add export support for token usage reports as JSON/CSV so teams can analyze cost and
-  ROI outside the UI.
+- [x] Add CSV export support for token usage reports so teams can analyze cost and ROI
+  outside the UI.
+- [ ] Add JSON export support for token usage reports.
 - [ ] Add retention controls for token telemetry. Keep section identifiers and counts long
   term, but allow pruning detailed task/query/provider rows in privacy-sensitive deployments.
-- [ ] Update AI-SDD docs and generated agent guidance to explain projected vs real tokens,
-  how token usage is reported, and how reviewers should interpret token ROI.
+- [x] Update generated agent guidance to explain optional real token usage reporting.
+- [ ] Update AI-SDD docs to explain projected vs real tokens, how token usage is reported,
+  and how reviewers should interpret token ROI.
 
 ## Validation & Dogfooding
 

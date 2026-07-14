@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
 import { createDb } from "../src/db.js";
@@ -14,6 +14,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   await app.close();
 });
 
@@ -89,6 +91,69 @@ describe("project types & specs", () => {
       trust_decision: "unreviewed",
       status: "active",
     });
+
+    const githubSourceRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/sources",
+      payload: {
+        url: "https://github.com/acme/skillbox",
+        source_type: "github_repo",
+        license: "MIT",
+      },
+    });
+    expect(githubSourceRes.statusCode).toBe(201);
+    const githubSource = githubSourceRes.json();
+    const githubFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/acme/skillbox")) {
+        return new Response(JSON.stringify({ default_branch: "main" }), { status: 200 });
+      }
+      if (url.includes("/repos/acme/skillbox/git/trees/main")) {
+        return new Response(JSON.stringify({
+          tree: [
+            { path: ".codex/skills/audit/SKILL.md", type: "blob", sha: "skill-sha", size: 128 },
+            { path: "README.md", type: "blob", sha: "readme-sha", size: 64 },
+            { path: "src/index.ts", type: "blob", sha: "code-sha", size: 64 },
+          ],
+          truncated: false,
+        }), { status: 200 });
+      }
+      if (url.includes("/repos/acme/skillbox/contents/.codex/skills/audit/SKILL.md")) {
+        return new Response(JSON.stringify({
+          sha: "skill-content-sha",
+          encoding: "base64",
+          content: Buffer.from("# Audit Skill\nWhen to use: audit a change.\nAgent should review specs before claims.").toString("base64"),
+        }), { status: 200 });
+      }
+      if (url.includes("/repos/acme/skillbox/contents/README.md")) {
+        return new Response(JSON.stringify({
+          sha: "readme-content-sha",
+          encoding: "base64",
+          content: Buffer.from("# Skillbox\nA normal repository readme.").toString("base64"),
+        }), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", githubFetch);
+    const scanRes = await app.inject({ method: "POST", url: `/api/v1/skills/sources/${githubSource.id}/scan` });
+    expect(scanRes.statusCode).toBe(200);
+    expect(scanRes.json()).toMatchObject({ source_id: githubSource.id, scanned: 1, created: 1, skipped: 0 });
+    expect(scanRes.json().candidates[0]).toMatchObject({
+      source_path: ".codex/skills/audit/SKILL.md",
+      proposed_name: "Audit",
+      candidate_type: "agent_skill",
+      created: true,
+    });
+    const scannedCandidates = await getJson(`/api/v1/skills/candidates?source_id=${encodeURIComponent(githubSource.id)}`);
+    expect(scannedCandidates[0]).toMatchObject({
+      source_commit: "skill-content-sha",
+      detected_format: "codex_skill_markdown",
+      license: "MIT",
+      status: "candidate",
+    });
+    const scanAgain = await app.inject({ method: "POST", url: `/api/v1/skills/sources/${githubSource.id}/scan` });
+    expect(scanAgain.statusCode).toBe(200);
+    expect(scanAgain.json()).toMatchObject({ scanned: 1, created: 0, skipped: 1 });
 
     const candidateRes = await app.inject({
       method: "POST",

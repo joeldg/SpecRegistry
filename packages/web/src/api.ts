@@ -802,6 +802,20 @@ export interface SkillAssignmentRow {
   project_type_name: string | null;
   project_repo: string | null;
 }
+export interface SkillSourceScanResult {
+  source_id: string;
+  scanned: number;
+  created: number;
+  skipped: number;
+  candidates: Array<{
+    id: string;
+    source_path: string;
+    proposed_name: string;
+    candidate_type: SkillCandidateRow["candidate_type"];
+    gate_status: SkillCandidateRow["gate_status"];
+    created: boolean;
+  }>;
+}
 export interface ComplianceAttestationRow {
   id: string;
   project_type_id: string | null;
@@ -1140,6 +1154,8 @@ export const api = {
     request<SkillSourceRow>("/api/v1/skills/sources", { method: "POST", body: JSON.stringify(body) }),
   updateSkillSource: (id: string, body: Partial<SkillSourceRow>) =>
     request<SkillSourceRow>(`/api/v1/skills/sources/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  scanSkillSource: (id: string) =>
+    request<SkillSourceScanResult>(`/api/v1/skills/sources/${id}/scan`, { method: "POST", body: JSON.stringify({}) }),
   skillCandidates: (filters: { source_id?: string; status?: string } = {}) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);

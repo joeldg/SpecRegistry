@@ -382,6 +382,12 @@ export default function ReportsPage() {
               >
                 Export CSV
               </a>
+              <a
+                className="button-link"
+                href={`/api/v1/reports/token-usage/export.json?days=30${tokenProjectId ? `&project_id=${encodeURIComponent(tokenProjectId)}` : ""}`}
+              >
+                Export JSON
+              </a>
               {tokenProjectId && (
                 <button onClick={() => setTokenProjectId("")}>
                   Clear project filter

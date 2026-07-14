@@ -1471,6 +1471,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return tokenUsageCsv(report);
   });
 
+  app.get("/reports/token-usage/export.json", async (req, reply) => {
+    const { project_id, days } = req.query as { project_id?: string; days?: string };
+    const report = tokenUsageReport(app.db, {
+      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
+      days: days ? Number(days) : undefined,
+    });
+    reply
+      .header("content-type", "application/json; charset=utf-8")
+      .header("content-disposition", `attachment; filename="specreg-token-usage-${new Date().toISOString().slice(0, 10)}.json"`);
+    return JSON.stringify(report, null, 2) + "\n";
+  });
+
   // Self-update: git pull --ff-only + rebuild for a deployment running from a live
   // checkout. Refuses on a dirty tree or a non-fast-forward pull rather than guessing
   // at a merge, and does not restart the process — Node cannot safely hot-swap its own

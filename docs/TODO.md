@@ -185,7 +185,7 @@ real tokens explain actual model spend and efficiency.
   - tokens by retrieval mode (`begin_task`, `get_specs`, `search`, `agent_pack`, `compile`)
   - tokens by agent session/task
   - projected vs real token comparison
-- [ ] Add token trend over time to the token report API and chart it in the UI.
+- [x] Add token trend over time to the token report API and chart it in the UI.
 - [x] Add a Reports token usage panel. The top-level view should list projects with
   projected context tokens, real prompt/completion tokens, estimated spend, most expensive
   specs, and most expensive sections.
@@ -210,7 +210,7 @@ real tokens explain actual model spend and efficiency.
   session, model/provider, event type, spec, section, and token estimator.
 - [x] Add CSV export support for token usage reports so teams can analyze cost and ROI
   outside the UI.
-- [ ] Add JSON export support for token usage reports.
+- [x] Add JSON export support for token usage reports.
 - [ ] Add retention controls for token telemetry. Keep section identifiers and counts long
   term, but allow pruning detailed task/query/provider rows in privacy-sensitive deployments.
 - [x] Update generated agent guidance to explain optional real token usage reporting.

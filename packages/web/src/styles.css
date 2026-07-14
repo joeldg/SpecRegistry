@@ -424,7 +424,7 @@ table.grid tr.selected-row td {
 .dim { color: var(--text-dim); }
 .faint { color: var(--text-faint); }
 
-button, .btn {
+button, .btn, .button-link {
   background: var(--bg-hover);
   color: var(--text);
   border: 1px solid var(--border-strong);
@@ -436,7 +436,7 @@ button, .btn {
   font-family: inherit;
 }
 
-button:hover { border-color: var(--text-faint); }
+button:hover, .button-link:hover { border-color: var(--text-faint); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover { background: var(--accent-hover); }
 button.danger { color: var(--red); }

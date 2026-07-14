@@ -256,3 +256,67 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
     real_usage: realUsage,
   };
 }
+
+function csvCell(value: unknown): string {
+  const text = value == null ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+export function tokenUsageCsv(report: ReturnType<typeof tokenUsageReport>): string {
+  const rows: unknown[][] = [
+    [
+      "record_type",
+      "project",
+      "project_type",
+      "spec",
+      "section",
+      "event_type",
+      "provider",
+      "model",
+      "route",
+      "projected_tokens",
+      "real_prompt_tokens",
+      "real_completion_tokens",
+      "real_total_tokens",
+      "delivered_sections",
+      "events_or_reports",
+      "last_seen",
+    ],
+  ];
+  for (const row of report.projects as Array<Record<string, unknown>>) {
+    rows.push([
+      "project",
+      row.repo,
+      row.project_type_name,
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      row.projected_tokens,
+      row.real_prompt_tokens,
+      row.real_completion_tokens,
+      row.real_total_tokens,
+      row.delivered_sections,
+      row.context_events,
+      row.last_reported_at,
+    ]);
+  }
+  for (const row of report.by_spec as Array<Record<string, unknown>>) {
+    rows.push(["spec", "", "", row.filename, "", "", "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.by_section as Array<Record<string, unknown>>) {
+    rows.push(["section", "", "", row.filename, row.section_title, "", "", "", "", row.projected_tokens, "", "", "", row.deliveries, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.by_event_type as Array<Record<string, unknown>>) {
+    rows.push(["retrieval", "", "", "", "", row.event_type, "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.sessions as Array<Record<string, unknown>>) {
+    rows.push(["session", row.repo, "", "", row.task, "", "", "", "", row.projected_tokens, "", "", "", row.delivered_sections, row.context_events, row.last_delivered_at]);
+  }
+  for (const row of report.real_usage as Array<Record<string, unknown>>) {
+    rows.push(["real_usage", "", "", "", "", "", row.provider, row.model, row.route, "", row.prompt_tokens, row.completion_tokens, row.total_tokens, "", row.reports, row.last_reported_at]);
+  }
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
+}

@@ -375,6 +375,19 @@ export default function ReportsPage() {
             <p className="settings-help">
               Projected tokens are estimated from governed spec sections delivered by the registry. Real tokens come from best-effort LLM usage reports.
             </p>
+            <div className="form-row" style={{ marginBottom: 12 }}>
+              <a
+                className="button-link"
+                href={`/api/v1/reports/token-usage/export?days=30${tokenProjectId ? `&project_id=${encodeURIComponent(tokenProjectId)}` : ""}`}
+              >
+                Export CSV
+              </a>
+              {tokenProjectId && (
+                <button onClick={() => setTokenProjectId("")}>
+                  Clear project filter
+                </button>
+              )}
+            </div>
             <div className="cards" style={{ marginBottom: 12 }}>
               <div className="card">
                 <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.projected_tokens ?? 0), 0))}</div>

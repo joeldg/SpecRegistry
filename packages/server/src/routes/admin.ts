@@ -48,7 +48,7 @@ import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
 import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
 import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
 import { projectSpecCurrency } from "../lib/projectCurrency.js";
-import { tokenUsageReport } from "../lib/tokenUsage.js";
+import { tokenUsageCsv, tokenUsageReport } from "../lib/tokenUsage.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -1457,6 +1457,18 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
       days: days ? Number(days) : undefined,
     });
+  });
+
+  app.get("/reports/token-usage/export", async (req, reply) => {
+    const { project_id, days } = req.query as { project_id?: string; days?: string };
+    const report = tokenUsageReport(app.db, {
+      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
+      days: days ? Number(days) : undefined,
+    });
+    reply
+      .header("content-type", "text/csv; charset=utf-8")
+      .header("content-disposition", `attachment; filename="specreg-token-usage-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return tokenUsageCsv(report);
   });
 
   // Self-update: git pull --ff-only + rebuild for a deployment running from a live

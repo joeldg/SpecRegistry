@@ -786,6 +786,10 @@ describe("agent MCP guide", () => {
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("specreg mcp");
     expect(zip.readAsText("SPECREGISTRY_MCP_SKILL.md")).toContain("SPECREG_TOKEN");
     expect(zip.readAsText(".spec/skills/load-governed-specs/SKILL.md")).toContain("Safety Boundary");
+    const manifest = JSON.parse(zip.readAsText(".spec/skills/manifest.json"));
+    const loadSkill = manifest.skills.find((skill: any) => skill.slug === "load-governed-specs");
+    expect(loadSkill).toMatchObject({ assignment_scopes: ["global"], built_in: true, source: { url: null } });
+    expect(loadSkill.content_hash).toMatch(/^[a-f0-9]{64}$/);
     const mcp = JSON.parse(zip.readAsText(".mcp.json"));
     expect(mcp.mcpServers.specregistry.command).toBe("specreg");
     expect(mcp.mcpServers.specregistry.args).toEqual(["mcp"]);

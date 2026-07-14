@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SpecSummary } from "@specregistry/shared";
-import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiagnostics, type ProjectTypeWithCount, type ReportsOverview, type TokenUsageReport } from "../api";
+import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiagnostics, type ProjectTypeWithCount, type ReportsOverview, type TokenUsageFilters, type TokenUsageReport } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
 type ChartDatum = { label: string; value: number; tone?: "accent" | "green" | "amber" | "red" };
@@ -93,6 +93,13 @@ export default function ReportsPage() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageReport>();
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
   const [tokenProjectId, setTokenProjectId] = useState("");
+  const [tokenDays, setTokenDays] = useState(30);
+  const [tokenEventType, setTokenEventType] = useState("");
+  const [tokenProvider, setTokenProvider] = useState("");
+  const [tokenModel, setTokenModel] = useState("");
+  const [tokenSpecId, setTokenSpecId] = useState("");
+  const [tokenSection, setTokenSection] = useState("");
+  const [tokenSessionId, setTokenSessionId] = useState("");
   const [efficacyTrend, setEfficacyTrend] = useState<Array<EfficacyRun & { filename: string }>>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -109,7 +116,7 @@ export default function ReportsPage() {
 
   function reload() {
     setError(undefined);
-    Promise.all([api.reports(), api.specs(), api.projectTypes(), api.dependencyMap(), api.tokenRoi(), api.efficacyTrends(), api.tokenUsageReport()])
+    Promise.all([api.reports(), api.specs(), api.projectTypes(), api.dependencyMap(), api.tokenRoi(), api.efficacyTrends(), api.tokenUsageReport({ days: tokenDays })])
       .then(([nextReport, nextSpecs, nextTypes, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage]) => {
         setReport(nextReport);
         setSpecs(nextSpecs);
@@ -126,15 +133,53 @@ export default function ReportsPage() {
 
   useEffect(reload, []);
 
+  const tokenFilters = useMemo<TokenUsageFilters>(
+    () => ({
+      days: tokenDays,
+      project_id: tokenProjectId || undefined,
+      event_type: tokenEventType || undefined,
+      provider: tokenProvider || undefined,
+      model: tokenModel || undefined,
+      spec_id: tokenSpecId || undefined,
+      section: tokenSection || undefined,
+      agent_session_id: tokenSessionId || undefined,
+    }),
+    [tokenDays, tokenEventType, tokenModel, tokenProjectId, tokenProvider, tokenSection, tokenSessionId, tokenSpecId]
+  );
+
+  const tokenQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("days", String(tokenFilters.days ?? 30));
+    for (const [key, value] of Object.entries(tokenFilters)) {
+      if (key === "days" || value == null || value === "") continue;
+      params.set(key, String(value));
+    }
+    return params.toString();
+  }, [tokenFilters]);
+
+  useEffect(() => {
+    api.tokenUsageReport(tokenFilters)
+      .then(setTokenUsage)
+      .catch((e) => setError(e.message));
+  }, [tokenFilters]);
+
   useEffect(() => {
     if (!tokenProjectId) {
       setProjectTokenUsage(undefined);
       return;
     }
-    api.tokenUsageReport(tokenProjectId)
+    api.tokenUsageReport(tokenFilters)
       .then(setProjectTokenUsage)
       .catch((e) => setError(e.message));
-  }, [tokenProjectId]);
+  }, [tokenFilters, tokenProjectId]);
+
+  const tokenReportForFilters = projectTokenUsage ?? tokenUsage;
+  const tokenEventTypes = useMemo(() => [...new Set((tokenUsage?.by_event_type ?? []).map((row) => row.event_type).filter(Boolean))].sort(), [tokenUsage]);
+  const tokenProviders = useMemo(() => [...new Set((tokenReportForFilters?.real_usage ?? []).map((row) => row.provider).filter(Boolean) as string[])].sort(), [tokenReportForFilters]);
+  const tokenModels = useMemo(() => [...new Set((tokenReportForFilters?.real_usage ?? []).map((row) => row.model).filter(Boolean) as string[])].sort(), [tokenReportForFilters]);
+  const tokenSpecs = useMemo(() => tokenReportForFilters?.by_spec ?? [], [tokenReportForFilters]);
+  const tokenSections = useMemo(() => tokenReportForFilters?.by_section ?? [], [tokenReportForFilters]);
+  const tokenSessions = useMemo(() => tokenReportForFilters?.sessions ?? [], [tokenReportForFilters]);
 
   const scopeData = useMemo(() => {
     const byScope = new Map<string, number>();
@@ -378,13 +423,13 @@ export default function ReportsPage() {
             <div className="form-row" style={{ marginBottom: 12 }}>
               <a
                 className="button-link"
-                href={`/api/v1/reports/token-usage/export?days=30${tokenProjectId ? `&project_id=${encodeURIComponent(tokenProjectId)}` : ""}`}
+                href={`/api/v1/reports/token-usage/export?${tokenQuery}`}
               >
                 Export CSV
               </a>
               <a
                 className="button-link"
-                href={`/api/v1/reports/token-usage/export.json?days=30${tokenProjectId ? `&project_id=${encodeURIComponent(tokenProjectId)}` : ""}`}
+                href={`/api/v1/reports/token-usage/export.json?${tokenQuery}`}
               >
                 Export JSON
               </a>
@@ -393,6 +438,90 @@ export default function ReportsPage() {
                   Clear project filter
                 </button>
               )}
+            </div>
+            <div className="form-grid" style={{ marginBottom: 12 }}>
+              <label>
+                Range
+                <select value={tokenDays} onChange={(e) => setTokenDays(Number(e.target.value))}>
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                  <option value={365}>1 year</option>
+                </select>
+              </label>
+              <label>
+                Event
+                <select value={tokenEventType} onChange={(e) => setTokenEventType(e.target.value)}>
+                  <option value="">All events</option>
+                  {tokenEventTypes.map((eventType) => (
+                    <option key={eventType} value={eventType}>{eventType}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Provider
+                <select value={tokenProvider} onChange={(e) => setTokenProvider(e.target.value)}>
+                  <option value="">All providers</option>
+                  {tokenProviders.map((provider) => (
+                    <option key={provider} value={provider}>{provider}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Model
+                <select value={tokenModel} onChange={(e) => setTokenModel(e.target.value)}>
+                  <option value="">All models</option>
+                  {tokenModels.map((model) => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Spec
+                <select value={tokenSpecId} onChange={(e) => setTokenSpecId(e.target.value)}>
+                  <option value="">All specs</option>
+                  {tokenSpecs.map((spec) => (
+                    <option key={spec.spec_id} value={spec.spec_id}>{spec.filename}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Section
+                <select value={tokenSection} onChange={(e) => setTokenSection(e.target.value)}>
+                  <option value="">All sections</option>
+                  {tokenSections.slice(0, 100).map((section) => (
+                    <option key={`${section.spec_id}-${section.section_anchor}`} value={section.section_anchor}>
+                      {section.section_title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Session
+                <select value={tokenSessionId} onChange={(e) => setTokenSessionId(e.target.value)}>
+                  <option value="">All sessions</option>
+                  {tokenSessions.map((session) => (
+                    <option key={session.agent_session_id} value={session.agent_session_id}>{session.task}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Filters
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTokenDays(30);
+                    setTokenEventType("");
+                    setTokenProvider("");
+                    setTokenModel("");
+                    setTokenSpecId("");
+                    setTokenSection("");
+                    setTokenSessionId("");
+                  }}
+                >
+                  Reset filters
+                </button>
+              </label>
             </div>
             <div className="cards" style={{ marginBottom: 12 }}>
               <div className="card">

@@ -62,6 +62,20 @@ function isLlmProvider(value: unknown): value is LlmProvider {
   return typeof value === "string" && LLM_PROVIDER_VALUES.includes(value as LlmProvider);
 }
 
+function compactTokenQuery(query: Record<string, string | undefined>) {
+  const text = (value: string | undefined) => (value && value.trim() ? value.trim() : undefined);
+  return {
+    project_id: text(query.project_id),
+    days: query.days ? Number(query.days) : undefined,
+    event_type: text(query.event_type),
+    agent_session_id: text(query.agent_session_id),
+    provider: text(query.provider),
+    model: text(query.model),
+    spec_id: text(query.spec_id),
+    section: text(query.section),
+  };
+}
+
 function harnessImprovementInsights(app: FastifyInstance) {
   const flags = getHarnessImprovementFeatureFlags(app.db);
   if (!flags.enabled || !flags.failure_pattern_mining) {
@@ -1452,19 +1466,11 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/reports/token-usage", async (req) => {
-    const { project_id, days } = req.query as { project_id?: string; days?: string };
-    return tokenUsageReport(app.db, {
-      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
-      days: days ? Number(days) : undefined,
-    });
+    return tokenUsageReport(app.db, compactTokenQuery(req.query as Record<string, string | undefined>));
   });
 
   app.get("/reports/token-usage/export", async (req, reply) => {
-    const { project_id, days } = req.query as { project_id?: string; days?: string };
-    const report = tokenUsageReport(app.db, {
-      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
-      days: days ? Number(days) : undefined,
-    });
+    const report = tokenUsageReport(app.db, compactTokenQuery(req.query as Record<string, string | undefined>));
     reply
       .header("content-type", "text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="specreg-token-usage-${new Date().toISOString().slice(0, 10)}.csv"`);
@@ -1472,11 +1478,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/reports/token-usage/export.json", async (req, reply) => {
-    const { project_id, days } = req.query as { project_id?: string; days?: string };
-    const report = tokenUsageReport(app.db, {
-      project_id: project_id && project_id.trim() ? project_id.trim() : undefined,
-      days: days ? Number(days) : undefined,
-    });
+    const report = tokenUsageReport(app.db, compactTokenQuery(req.query as Record<string, string | undefined>));
     reply
       .header("content-type", "application/json; charset=utf-8")
       .header("content-disposition", `attachment; filename="specreg-token-usage-${new Date().toISOString().slice(0, 10)}.json"`);

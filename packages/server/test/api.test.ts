@@ -272,6 +272,17 @@ describe("project types & specs", () => {
     expect(report.trend[0].projected_tokens).toBeGreaterThan(0);
     expect(report.trend[0].real_total_tokens).toBe(168);
 
+    const searchOnlyReport = await getJson(
+      `/api/v1/reports/token-usage?project_id=${encodeURIComponent(project.id)}&event_type=search`
+    );
+    expect(searchOnlyReport.by_event_type).toHaveLength(1);
+    expect(searchOnlyReport.by_event_type[0].event_type).toBe("search");
+
+    const providerReport = await getJson(
+      `/api/v1/reports/token-usage?project_id=${encodeURIComponent(project.id)}&provider=test-provider&model=test-model`
+    );
+    expect(providerReport.real_usage[0]).toMatchObject({ provider: "test-provider", model: "test-model", total_tokens: 168 });
+
     const exportRes = await app.inject({
       method: "GET",
       url: `/api/v1/reports/token-usage/export?project_id=${encodeURIComponent(project.id)}`,

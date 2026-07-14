@@ -206,8 +206,10 @@ real tokens explain actual model spend and efficiency.
   configurable context budgets. Recommend splitting large specs, changing token budget
   class, moving material to search-first reference detail, or promoting only critical
   sections to default context.
-- [ ] Add dashboard filters for date range, project type, concrete project, repo, agent
-  session, model/provider, event type, spec, section, and token estimator.
+- [x] Add dashboard filters for date range, concrete project, agent session,
+  model/provider, event type, spec, and section.
+- [ ] Extend token usage filters to project type, repo, and token estimator once those
+  dimensions are first-class report controls.
 - [x] Add CSV export support for token usage reports so teams can analyze cost and ROI
   outside the UI.
 - [x] Add JSON export support for token usage reports.

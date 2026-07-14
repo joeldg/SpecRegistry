@@ -268,6 +268,15 @@ describe("project types & specs", () => {
     expect(report.by_section.length).toBeGreaterThan(0);
     expect(report.by_event_type.map((row: any) => row.event_type)).toEqual(expect.arrayContaining(["begin_task", "get_specs", "search"]));
     expect(report.real_usage[0]).toMatchObject({ provider: "test-provider", model: "test-model", total_tokens: 168 });
+
+    const exportRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/reports/token-usage/export?project_id=${encodeURIComponent(project.id)}`,
+    });
+    expect(exportRes.statusCode).toBe(200);
+    expect(exportRes.headers["content-type"]).toContain("text/csv");
+    expect(exportRes.body).toContain("record_type,project,project_type");
+    expect(exportRes.body).toContain("section");
   });
 
   it("rejects duplicate filenames within a project type", async () => {

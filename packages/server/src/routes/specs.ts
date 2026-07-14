@@ -28,6 +28,7 @@ import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
 import { assistNewSpecDraft, assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
+import { recordContextEvent, sectionsFromSpecs } from "../lib/tokenUsage.js";
 
 const SUMMARY_SELECT = `
   SELECT s.id, s.project_type_id, s.project_id, s.filename, s.current_version, s.status,
@@ -86,7 +87,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     }
     if (project_type_id) {
       return app.db
-        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND s.project_type_id = ? ORDER BY s.filename`)
+        .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND s.project_type_id = ? AND s.project_id IS NULL ORDER BY s.filename`)
         .all(project_type_id);
     }
     return app.db
@@ -187,6 +188,16 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     zip.addFile(".specregistry.json", Buffer.from(JSON.stringify(manifest, null, 2)));
 
     recordUsage(app.db, "download", pt.id);
+    recordContextEvent(app.db, {
+      project_type_id: pt.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? repo ?? null,
+      event_type: "download",
+      source: "spec_download",
+      detail: channel ?? "stable",
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSpecs(specs),
+    });
     reply
       .header("content-type", "application/zip")
       .header("content-disposition", `attachment; filename="${pt.name.replace(/[^\w.-]+/g, "_")}-specs.zip"`);
@@ -325,6 +336,17 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "target must be one of: claude, agents, cursor");
     }
     recordUsage(app.db, "download", pt.id, `compile:${compileTarget}`);
+    const specs = bundleSpecs(app.db, pt.id, channel ?? "stable", project?.id);
+    recordContextEvent(app.db, {
+      project_type_id: pt.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? repo ?? null,
+      event_type: "compile",
+      source: "spec_compile",
+      detail: compileTarget,
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSpecs(specs),
+    });
     return compileBundle(app.db, pt, compileTarget, channel ?? "stable", project?.id);
   });
 
@@ -353,6 +375,16 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
       Buffer.from(JSON.stringify({ source: "specregistry", skills: skills.map(({ id, slug, name, description, risk_level }) => ({ id, slug, name, description, risk_level })) }, null, 2) + "\n", "utf8")
     );
     recordUsage(app.db, "download", pt.id, "agent-pack");
+    recordContextEvent(app.db, {
+      project_type_id: pt.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? repo ?? null,
+      event_type: "agent_pack",
+      source: "agent_pack",
+      detail: channel ?? "stable",
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSpecs(bundleSpecs(app.db, pt.id, channel ?? "stable", project?.id)),
+    });
     reply
       .header("content-type", "application/zip")
       .header("content-disposition", `attachment; filename="${pt.name.replace(/[^\w.-]+/g, "_")}-agent-pack.zip"`);

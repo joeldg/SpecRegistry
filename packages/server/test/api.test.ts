@@ -29,6 +29,8 @@ describe("project types & specs", () => {
     expect(types.length).toBe(11);
     expect(types[0].scope).toBe("global");
     expect(types.map((t: any) => t.name)).toContain("Acme Edge Device");
+    expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_count");
+    expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_type_smell");
     expect(types.map((t: any) => t.name)).toEqual(
       expect.arrayContaining([
         "MCP Server / Agent Integration",
@@ -109,6 +111,163 @@ describe("project types & specs", () => {
     expect(published.statusCode).toBe(200);
     expect(published.json().current_version).toBe("1.0.0");
     expect(published.json().status).toBe("published");
+  });
+
+  it("creates concrete projects and project-scoped specs without polluting the baseline", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const webType = types.find((t: any) => t.name === "Web App Standard");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: {
+        repo: "github.com/acme/nvidia_router",
+        project_type_id: webType.id,
+        branch: "main",
+      },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const projectSpec = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: webType.id,
+        project_id: project.id,
+        filename: "ROUTING.md",
+        content: "# NVIDIA Router Routing\n\n## Scope\n\nOnly this repo.\n",
+        updated_by: "joel",
+      },
+    });
+    expect(projectSpec.statusCode).toBe(201);
+    expect(projectSpec.json().project_id).toBe(project.id);
+
+    const projectSpecs = await getJson(`/api/v1/specs?project_id=${project.id}`);
+    expect(projectSpecs.find((s: any) => s.filename === "ROUTING.md")).toMatchObject({
+      effective_scope: "project",
+      project_name: "github.com/acme/nvidia_router",
+    });
+
+    const baselineSpecs = await getJson(`/api/v1/specs?project_type_id=${webType.id}`);
+    expect(baselineSpecs.some((s: any) => s.filename === "ROUTING.md")).toBe(false);
+
+    const projects = await getJson("/api/v1/projects");
+    expect(projects.find((p: any) => p.id === project.id)).toMatchObject({
+      repo: "github.com/acme/nvidia_router",
+      project_type_name: "Web App Standard",
+      project_spec_count: 1,
+    });
+  });
+
+  it("counts project spec currency against effective project overrides", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/override-device", project_type_id: edge.id },
+    });
+    const project = createdProject.json();
+
+    const createdSpec = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: edge.id,
+        project_id: project.id,
+        filename: "DESIGN.md",
+        content: "# Device Override Design\n\n## Scope\n\nOnly this repo.\n",
+        updated_by: "joel",
+      },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/specs/${createdSpec.json().id}/publish`,
+      payload: { published_by: "joel" },
+    });
+    app.db.prepare("UPDATE specs SET current_version = '1.1.0' WHERE id = ?").run(createdSpec.json().id);
+
+    const report = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/manifest-report",
+      payload: {
+        repo: "github.com/acme/override-device",
+        project_id: project.id,
+        project_type: "Acme Edge Device",
+        specs: [{ filename: "DESIGN.md", version: "1.1.0", project_type: "github.com/acme/override-device" }],
+      },
+    });
+    expect(report.statusCode).toBe(200);
+
+    const consumers = await getJson("/api/v1/cli/consumers");
+    expect(consumers.find((row: any) => row.id === project.id)).toMatchObject({ spec_count: 1, outdated_count: 0 });
+    const projects = await getJson("/api/v1/projects");
+    expect(projects.find((row: any) => row.id === project.id)).toMatchObject({ spec_count: 1, outdated_count: 0 });
+  });
+
+  it("records projected and real token usage by project, spec, and section", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/token-device", project_type_id: edge.id },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const begin = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/begin",
+      payload: {
+        project_type: "Acme Edge Device",
+        repo: "github.com/acme/token-device",
+        agent_identifier: "token-test-agent",
+        task: "Inspect governed RF behavior.",
+        specs_loaded: ["DESIGN.md"],
+      },
+    });
+    expect(begin.statusCode).toBe(201);
+    const session = begin.json();
+
+    const read = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/specs/${encodeURIComponent("Acme Edge Device")}?repo=${encodeURIComponent("github.com/acme/token-device")}`,
+    });
+    expect(read.statusCode).toBe(200);
+
+    const search = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/search?project_type=${encodeURIComponent("Acme Edge Device")}&repo=${encodeURIComponent("github.com/acme/token-device")}&q=${encodeURIComponent("transport")}`,
+    });
+    expect(search.statusCode).toBe(200);
+
+    const real = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/token-usage",
+      payload: {
+        session_id: session.session_id,
+        provider: "test-provider",
+        model: "test-model",
+        route: "agent",
+        prompt_tokens: 123,
+        completion_tokens: 45,
+        total_tokens: 168,
+      },
+    });
+    expect(real.statusCode).toBe(201);
+
+    const report = await getJson(`/api/v1/reports/token-usage?project_id=${encodeURIComponent(project.id)}`);
+    expect(report.projects[0]).toMatchObject({
+      project_id: project.id,
+      repo: "github.com/acme/token-device",
+      real_total_tokens: 168,
+    });
+    expect(report.projects[0].projected_tokens).toBeGreaterThan(0);
+    expect(report.by_spec.length).toBeGreaterThan(0);
+    expect(report.by_section.length).toBeGreaterThan(0);
+    expect(report.by_event_type.map((row: any) => row.event_type)).toEqual(expect.arrayContaining(["begin_task", "get_specs", "search"]));
+    expect(report.real_usage[0]).toMatchObject({ provider: "test-provider", model: "test-model", total_tokens: 168 });
   });
 
   it("rejects duplicate filenames within a project type", async () => {

@@ -210,6 +210,25 @@ table.grid tr.click:hover td {
   cursor: pointer;
 }
 
+table.grid tr.selected-row td {
+  background: var(--bg-hover);
+}
+
+.link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
 .section {
   margin-bottom: 28px;
 }

@@ -12,6 +12,7 @@ import { now, uuid } from "../db.js";
 import { diagnoseManifest } from "../lib/manifestDiagnostics.js";
 import { publicUrl } from "../lib/publicUrl.js";
 import { ensureConsumer, numberValue, persistCodeTrace, stringValue, type CodeTracePayload } from "../lib/codeTrace.js";
+import { projectSpecCurrency } from "../lib/projectCurrency.js";
 
 function latestMtimeMs(target: string): number {
   if (!fs.existsSync(target)) return 0;
@@ -196,21 +197,16 @@ export async function stubPromptRoutes(app: FastifyInstance): Promise<void> {
   app.get("/cli/consumers", async () => {
     const rows = app.db
       .prepare(
-        `SELECT rc.*, pt.name AS project_type_name,
-                COUNT(rcs.filename) AS spec_count,
-                SUM(CASE WHEN s.current_version IS NOT NULL AND s.current_version != rcs.version THEN 1 ELSE 0 END) AS outdated_count
+        `SELECT rc.*, pt.name AS project_type_name
          FROM repo_consumers rc
          JOIN project_types pt ON pt.id = rc.project_type_id
-         LEFT JOIN repo_consumer_specs rcs ON rcs.consumer_id = rc.id
-         LEFT JOIN specs s ON s.filename = rcs.filename
-          AND s.status = 'published'
-          AND s.deleted_at IS NULL
-          AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
-         GROUP BY rc.id
          ORDER BY rc.last_seen_at DESC`
       )
       .all() as Array<Record<string, unknown>>;
-    return rows;
+    return rows.map((row) => ({
+      ...row,
+      ...projectSpecCurrency(app.db, String(row.id), String(row.project_type_id)),
+    }));
   });
 
   // Drift detection for `specreg sync` / `specreg check --ci`.

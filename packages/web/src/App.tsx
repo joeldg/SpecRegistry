@@ -11,6 +11,8 @@ import ReviewDetailPage from "./pages/ReviewDetailPage";
 import FeedbackPage from "./pages/FeedbackPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProjectTypesPage from "./pages/ProjectTypesPage";
+import ProjectsPage from "./pages/ProjectsPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
 import SearchPage from "./pages/SearchPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -57,7 +59,10 @@ export default function App() {
           Search
         </NavLink>
         <NavLink to="/project-types" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Project Types
+          Baselines
+        </NavLink>
+        <NavLink to="/projects" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
+          Projects
         </NavLink>
         <NavLink to="/templates" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
           Templates
@@ -112,6 +117,8 @@ export default function App() {
           <Route path="/generate" element={<GenerationWorkbenchPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/project-types" element={<ProjectTypesPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<LoginPage />} />

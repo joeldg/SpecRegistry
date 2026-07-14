@@ -33,7 +33,8 @@ The system ensures that both human developers and AI agents operate against unif
 
 * **Organization Hierarchy:**
     * **Global Level:** Specs that apply across the entire organization (e.g., Global Security, General Coding Standards).
-    * **Project Type Level:** Domain-specific groupings (e.g., Acme Hardware Specs, Acme Firmware Specs, Web App Standard). Fully configurable via UI to support any industry pivot.
+    * **Project Type / Baseline Level:** Reusable domain baselines for families of similar repositories (e.g., Acme Hardware Specs, Acme Firmware Specs, Web App Standard). Fully configurable via UI to support any industry pivot.
+    * **Project Level:** Concrete repositories/products inherit a baseline and can carry project-scoped specs for local behavior, deployments, APIs, and constraints that should not affect every consumer of the baseline.
 * **Specification Lifecycle Management:**
     * Markdown editor with side-by-side preview.
     * LLM-assisted spec drafting can generate an example SpecRegistry-style specification or rewrite the current draft from author guidance while keeping tone, sections, and governance boundaries aligned with related published specs.
@@ -51,7 +52,7 @@ A command-line interface deployed to developer environments to synchronize local
     1. Interactive setup defaults to a comprehensive new-project profile covering product
        shape, languages, frameworks, platforms, data, interfaces, runtime, infrastructure,
        identity, messaging, observability, testing, delivery, security, and constraints.
-    2. The user selects an existing/premade project type or creates a reusable project type.
+    2. The user selects an existing/premade reusable baseline or creates a reusable project type.
        Passing `--type` skips the walkthrough for automation and established projects.
     3. Pulls the latest approved Markdown specs for that type from the server.
     4. Writes the governed bundle and manifest, MCP discovery files, a root `AGENTS.md`
@@ -88,6 +89,10 @@ A command-line interface deployed to developer environments to synchronize local
   "updated_at": "timestamp"
 }
 ```
+
+Project types are reusable baselines. Concrete repositories/products are tracked as projects
+(`repo_consumers`) attached to a project type; project-scoped specs use `project_id` to
+apply only to that concrete project.
 
 ### 3.2. Specification File
 
@@ -138,6 +143,7 @@ A command-line interface deployed to developer environments to synchronize local
 ### 4.1. Specifications & Management
 
 * `GET /api/v1/specs` - Retrieve all global and project-type specs.
+* `GET /api/v1/projects` / `POST /api/v1/projects` - List or create concrete projects that inherit a reusable project type baseline.
 * `GET /api/v1/specs/:project_type/download` - Fetch zipped spec folder for CLI initialization.
 * `POST /api/v1/specs/assist-draft` - Generate a starter draft for a not-yet-created spec using author guidance and related published specs.
 * `POST /api/v1/specs/:id/assist` - Generate an example spec or rewrite the current spec using author guidance and the configured server LLM.

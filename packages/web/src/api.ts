@@ -11,7 +11,12 @@ import type {
   Webhook,
 } from "@specregistry/shared";
 
-export type ProjectTypeWithCount = ProjectType & { spec_count: number };
+export type ProjectTypeWithCount = ProjectType & {
+  spec_count: number;
+  project_spec_count?: number;
+  project_count?: number;
+  project_type_smell?: number;
+};
 export interface EfficacyRun {
   id: string;
   spec_id: string;
@@ -162,6 +167,11 @@ export interface RepoConsumerRow {
   spec_count: number;
   outdated_count: number;
 }
+export interface ProjectRow extends RepoConsumerRow {
+  project_spec_count: number;
+  open_feedback_count: number;
+  code_trace_reported_at: string | null;
+}
 export interface AnalyticsSummary {
   window_days: number;
   events: Record<string, number>;
@@ -252,6 +262,75 @@ export interface ReportsOverview {
     pending_reviews: number;
     efficacy_runs: number;
     efficacy_improved: number;
+  }>;
+}
+export interface TokenUsageReport {
+  generated_at: string;
+  window_days: number;
+  project_id: string | null;
+  tokenizer: string;
+  projects: Array<{
+    project_id: string;
+    repo: string;
+    project_type_name: string;
+    context_events: number;
+    projected_tokens: number;
+    delivered_sections: number;
+    real_prompt_tokens: number;
+    real_completion_tokens: number;
+    real_total_tokens: number;
+    total_cost_usd: number;
+    last_reported_at: string | null;
+  }>;
+  by_spec: Array<{
+    spec_id: string;
+    filename: string;
+    spec_version: string | null;
+    context_events: number;
+    delivered_sections: number;
+    chars: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  by_section: Array<{
+    spec_id: string;
+    filename: string;
+    spec_version: string | null;
+    section_title: string;
+    section_anchor: string;
+    context_events: number;
+    deliveries: number;
+    chars: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  by_event_type: Array<{
+    event_type: string;
+    context_events: number;
+    delivered_sections: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  sessions: Array<{
+    agent_session_id: string;
+    task: string;
+    repo: string | null;
+    context_events: number;
+    delivered_sections: number;
+    projected_tokens: number;
+    last_delivered_at: string | null;
+  }>;
+  real_usage: Array<{
+    provider: string | null;
+    model: string | null;
+    route: string | null;
+    reports: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cached_tokens: number;
+    total_cost_usd: number;
+    last_reported_at: string | null;
   }>;
 }
 export interface DependencyMap {
@@ -717,15 +796,24 @@ export const api = {
   projectTypes: () => request<ProjectTypeWithCount[]>("/api/v1/project-types"),
   createProjectType: (body: { name: string; industry?: string; description?: string }) =>
     request<ProjectType>("/api/v1/project-types", { method: "POST", body: JSON.stringify(body) }),
+  projects: () => request<ProjectRow[]>("/api/v1/projects"),
+  project: (id: string) => request<ProjectRow>(`/api/v1/projects/${encodeURIComponent(id)}`),
+  createProject: (body: { repo: string; project_type_id: string; branch?: string; specs_path?: string; manifest_path?: string }) =>
+    request<ProjectRow>("/api/v1/projects", { method: "POST", body: JSON.stringify(body) }),
 
-  specs: () => request<SpecSummary[]>("/api/v1/specs"),
+  specs: (params?: { project_type_id?: string; project_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.project_type_id) qs.set("project_type_id", params.project_type_id);
+    if (params?.project_id) qs.set("project_id", params.project_id);
+    return request<SpecSummary[]>(`/api/v1/specs${qs.size ? `?${qs.toString()}` : ""}`);
+  },
   spec: (id: string) => request<SpecDetail>(`/api/v1/specs/${id}`),
   specImpact: (id: string, delta = "minor") => request<SpecImpactResponse>(`/api/v1/specs/${id}/impact?delta=${encodeURIComponent(delta)}`),
   specAssist: (id: string, body: { mode: "example" | "rewrite"; guidance: string; current_content?: string }) =>
     request<SpecAssistResponse>(`/api/v1/specs/${id}/assist`, { method: "POST", body: JSON.stringify(body) }),
-  newSpecAssist: (body: { project_type_id: string; filename: string; guidance: string; current_content?: string }) =>
+  newSpecAssist: (body: { project_type_id: string; project_id?: string; filename: string; guidance: string; current_content?: string }) =>
     request<NewSpecAssistResponse>("/api/v1/specs/assist-draft", { method: "POST", body: JSON.stringify(body) }),
-  createSpec: (body: { project_type_id: string; filename: string; content: string; updated_by: string }) =>
+  createSpec: (body: { project_type_id: string; project_id?: string; filename: string; content: string; updated_by: string }) =>
     request<Spec>("/api/v1/specs", { method: "POST", body: JSON.stringify(body) }),
   deleteSpec: (id: string) =>
     requestVoid(`/api/v1/specs/${encodeURIComponent(id)}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) }),
@@ -816,6 +904,8 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
   reports: () => request<ReportsOverview>("/api/v1/reports/overview"),
+  tokenUsageReport: (projectId?: string, days = 30) =>
+    request<TokenUsageReport>(`/api/v1/reports/token-usage?days=${days}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`),
   manifestDiagnostics: (body: { manifest?: unknown; project_type?: string; repo?: string; project_id?: string }) =>
     request<ManifestDiagnostics>("/api/v1/cli/manifest-diagnostics", { method: "POST", body: JSON.stringify(body) }),
   dependencyMap: () => request<DependencyMap>("/api/v1/specs/dependency-map"),

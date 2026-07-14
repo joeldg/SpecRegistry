@@ -2297,8 +2297,11 @@ export default function SettingsPage() {
                   <td>{c.project_type_name}</td>
                   <td className="mono">{c.spec_count}</td>
                   <td>
-                    {c.outdated_count > 0 ? <StatusBadge status="pending" /> : <StatusBadge status="approved" />}
-                    <span className="mono" style={{ marginLeft: 6 }}>{c.outdated_count}</span>
+                    {c.outdated_count > 0 ? (
+                      <span className="badge pending">{c.outdated_count} outdated</span>
+                    ) : (
+                      <span className="badge approved">current</span>
+                    )}
                   </td>
                   <td className="mono">{c.manifest_path}</td>
                   <td className="mono">{c.branch ?? "—"}</td>

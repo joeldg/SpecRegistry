@@ -364,6 +364,66 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_agent_sessions_repo_time ON agent_sessions(repo, started_at);
+
+CREATE TABLE IF NOT EXISTS context_events (
+  id TEXT PRIMARY KEY,
+  project_type_id TEXT REFERENCES project_types(id),
+  consumer_id TEXT REFERENCES repo_consumers(id),
+  repo TEXT,
+  agent_session_id TEXT REFERENCES agent_sessions(id),
+  event_type TEXT NOT NULL,
+  source TEXT,
+  detail TEXT,
+  actor TEXT,
+  estimated_tokens INTEGER NOT NULL DEFAULT 0,
+  section_count INTEGER NOT NULL DEFAULT 0,
+  tokenizer TEXT NOT NULL DEFAULT 'chars/4:v1',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_context_events_project ON context_events(consumer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_context_events_type ON context_events(project_type_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_context_events_session ON context_events(agent_session_id, created_at);
+
+CREATE TABLE IF NOT EXISTS context_event_sections (
+  id TEXT PRIMARY KEY,
+  context_event_id TEXT NOT NULL REFERENCES context_events(id) ON DELETE CASCADE,
+  spec_id TEXT NOT NULL REFERENCES specs(id),
+  spec_version TEXT,
+  filename TEXT NOT NULL,
+  section_title TEXT NOT NULL,
+  section_anchor TEXT NOT NULL,
+  chars INTEGER NOT NULL DEFAULT 0,
+  estimated_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_context_event_sections_event ON context_event_sections(context_event_id);
+CREATE INDEX IF NOT EXISTS idx_context_event_sections_spec ON context_event_sections(spec_id, section_anchor);
+
+CREATE TABLE IF NOT EXISTS llm_usage_reports (
+  id TEXT PRIMARY KEY,
+  project_type_id TEXT REFERENCES project_types(id),
+  consumer_id TEXT REFERENCES repo_consumers(id),
+  repo TEXT,
+  agent_session_id TEXT REFERENCES agent_sessions(id),
+  provider TEXT,
+  model TEXT,
+  route TEXT,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  cached_tokens INTEGER NOT NULL DEFAULT 0,
+  input_cost_usd REAL,
+  output_cost_usd REAL,
+  total_cost_usd REAL,
+  latency_ms INTEGER,
+  related_context_event_ids TEXT NOT NULL DEFAULT '[]',
+  detail TEXT,
+  actor TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_project ON llm_usage_reports(consumer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_type ON llm_usage_reports(project_type_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_llm_usage_session ON llm_usage_reports(agent_session_id, created_at);
 `;
 
 /** Versioned migrations for databases created before the current schema. Each runs once. */
@@ -867,6 +927,152 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         FROM agent_feedback_v32_old;
       DROP TABLE agent_feedback_v32_old;
       PRAGMA foreign_keys = ON;
+    `,
+  },
+  {
+    // Clarify the shipped baseline/project separation in existing registries.
+    // This touches only seed-authored built-in specs and preserves admin-authored
+    // project type/project content.
+    version: 33,
+    sql: `
+      UPDATE specs
+      SET content = replace(
+            content,
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.',
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+9. Project types must represent reusable baselines for a family of similar repositories, not one-off product instances.
+10. Product-specific behavior, local deployment choices, repo-only API contracts, and implementation constraints must be captured as project-scoped specs attached to the concrete repository.
+11. When a project-type spec starts to describe only one repository, reviewers should split the reusable baseline guidance from the project-specific guidance before publication.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'SPEC_GOVERNANCE.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%8. Webhooks, sync jobs%'
+        AND content NOT LIKE '%Project types must represent reusable baselines%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            content,
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.',
+            '8. Webhooks, sync jobs, and downstream PRs must carry enough summary context for consumers to verify the change.
+9. Project types must represent reusable baselines for a family of similar repositories, not one-off product instances.
+10. Product-specific behavior, local deployment choices, repo-only API contracts, and implementation constraints must be captured as project-scoped specs attached to the concrete repository.
+11. When a project-type spec starts to describe only one repository, reviewers should split the reusable baseline guidance from the project-specific guidance before publication.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'SPEC_GOVERNANCE.md' AND updated_by = 'seed')
+        AND content LIKE '%8. Webhooks, sync jobs%'
+        AND content NOT LIKE '%Project types must represent reusable baselines%';
+
+      UPDATE specs
+      SET content = replace(
+            replace(
+              replace(
+                content,
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.',
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.'
+              ),
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.',
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
+8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.'
+            ),
+            '- Agent summaries respect published project-scoped profile constraints.',
+            '- Agent summaries respect published project-scoped profile constraints.
+- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.'
+          ),
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE filename = 'PROJECT_PROFILE.md'
+        AND updated_by = 'seed'
+        AND content LIKE '%A repository''s profile captures%'
+        AND content NOT LIKE '%projects are concrete repositories%';
+
+      UPDATE spec_versions
+      SET content = replace(
+            replace(
+              replace(
+                content,
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.',
+                'A repository''s profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
+Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.'
+              ),
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.',
+              '6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
+7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
+8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.'
+            ),
+            '- Agent summaries respect published project-scoped profile constraints.',
+            '- Agent summaries respect published project-scoped profile constraints.
+- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.'
+          )
+      WHERE spec_id IN (SELECT id FROM specs WHERE filename = 'PROJECT_PROFILE.md' AND updated_by = 'seed')
+        AND content LIKE '%A repository''s profile captures%'
+        AND content NOT LIKE '%projects are concrete repositories%';
+    `,
+  },
+  {
+    // Track projected context tokens by spec section and real LLM usage reports.
+    version: 34,
+    sql: `
+      CREATE TABLE IF NOT EXISTS context_events (
+        id TEXT PRIMARY KEY,
+        project_type_id TEXT REFERENCES project_types(id),
+        consumer_id TEXT REFERENCES repo_consumers(id),
+        repo TEXT,
+        agent_session_id TEXT REFERENCES agent_sessions(id),
+        event_type TEXT NOT NULL,
+        source TEXT,
+        detail TEXT,
+        actor TEXT,
+        estimated_tokens INTEGER NOT NULL DEFAULT 0,
+        section_count INTEGER NOT NULL DEFAULT 0,
+        tokenizer TEXT NOT NULL DEFAULT 'chars/4:v1',
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_context_events_project ON context_events(consumer_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_context_events_type ON context_events(project_type_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_context_events_session ON context_events(agent_session_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS context_event_sections (
+        id TEXT PRIMARY KEY,
+        context_event_id TEXT NOT NULL REFERENCES context_events(id) ON DELETE CASCADE,
+        spec_id TEXT NOT NULL REFERENCES specs(id),
+        spec_version TEXT,
+        filename TEXT NOT NULL,
+        section_title TEXT NOT NULL,
+        section_anchor TEXT NOT NULL,
+        chars INTEGER NOT NULL DEFAULT 0,
+        estimated_tokens INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_context_event_sections_event ON context_event_sections(context_event_id);
+      CREATE INDEX IF NOT EXISTS idx_context_event_sections_spec ON context_event_sections(spec_id, section_anchor);
+
+      CREATE TABLE IF NOT EXISTS llm_usage_reports (
+        id TEXT PRIMARY KEY,
+        project_type_id TEXT REFERENCES project_types(id),
+        consumer_id TEXT REFERENCES repo_consumers(id),
+        repo TEXT,
+        agent_session_id TEXT REFERENCES agent_sessions(id),
+        provider TEXT,
+        model TEXT,
+        route TEXT,
+        prompt_tokens INTEGER NOT NULL DEFAULT 0,
+        completion_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        cached_tokens INTEGER NOT NULL DEFAULT 0,
+        input_cost_usd REAL,
+        output_cost_usd REAL,
+        total_cost_usd REAL,
+        latency_ms INTEGER,
+        related_context_event_ids TEXT NOT NULL DEFAULT '[]',
+        detail TEXT,
+        actor TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_project ON llm_usage_reports(consumer_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_type ON llm_usage_reports(project_type_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_llm_usage_session ON llm_usage_reports(agent_session_id, created_at);
     `,
   },
 ];

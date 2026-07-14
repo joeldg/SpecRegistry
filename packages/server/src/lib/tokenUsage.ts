@@ -1,0 +1,258 @@
+import type { Db } from "../db.js";
+import { now, uuid } from "../db.js";
+import { sectionAnchor, splitSections } from "./sections.js";
+import type { SearchResult } from "./search.js";
+
+export const TOKEN_ESTIMATOR = "chars/4:v1";
+
+type ContextSection = {
+  spec_id: string;
+  spec_version?: string | null;
+  filename: string;
+  section_title: string;
+  section_anchor: string;
+  content: string;
+};
+
+type ContextEventInput = {
+  project_type_id?: string | null;
+  consumer_id?: string | null;
+  repo?: string | null;
+  agent_session_id?: string | null;
+  event_type: string;
+  source?: string | null;
+  detail?: string | null;
+  actor?: string | null;
+  sections: ContextSection[];
+};
+
+export function estimateTokens(value: string): number {
+  return Math.max(1, Math.ceil(value.length / 4));
+}
+
+export function sectionsFromSpecs(
+  specs: Array<{ id: string; filename: string; current_version?: string | null; content: string }>
+): ContextSection[] {
+  return specs.flatMap((spec) =>
+    splitSections(spec.content).map((section) => ({
+      spec_id: spec.id,
+      spec_version: spec.current_version ?? null,
+      filename: spec.filename,
+      section_title: section.section,
+      section_anchor: section.anchor,
+      content: section.text,
+    }))
+  );
+}
+
+export function sectionsFromSearchResults(db: Db, results: SearchResult[]): ContextSection[] {
+  if (results.length === 0) return [];
+  const readChunk = db.prepare("SELECT content FROM spec_chunks WHERE spec_id = ? AND section = ? LIMIT 1");
+  return results.map((result) => {
+    const chunk = readChunk.get(result.spec_id, result.section) as { content: string } | undefined;
+    const content = chunk?.content ?? result.excerpt ?? result.section;
+    return {
+      spec_id: result.spec_id,
+      spec_version: result.current_version ?? null,
+      filename: result.filename,
+      section_title: result.section,
+      section_anchor: result.section_anchor || sectionAnchor(result.section),
+      content,
+    };
+  });
+}
+
+export function recordContextEvent(db: Db, input: ContextEventInput): string | null {
+  if (input.sections.length === 0) return null;
+  const eventId = uuid();
+  const ts = now();
+  const sectionRows = input.sections.map((section) => ({
+    ...section,
+    chars: section.content.length,
+    estimated_tokens: estimateTokens(section.content),
+  }));
+  const totalTokens = sectionRows.reduce((sum, section) => sum + section.estimated_tokens, 0);
+  const insertEvent = db.prepare(
+    `INSERT INTO context_events
+      (id, project_type_id, consumer_id, repo, agent_session_id, event_type, source, detail, actor,
+       estimated_tokens, section_count, tokenizer, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const insertSection = db.prepare(
+    `INSERT INTO context_event_sections
+      (id, context_event_id, spec_id, spec_version, filename, section_title, section_anchor,
+       chars, estimated_tokens, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  db.transaction(() => {
+    insertEvent.run(
+      eventId,
+      input.project_type_id ?? null,
+      input.consumer_id ?? null,
+      input.repo ?? null,
+      input.agent_session_id ?? null,
+      input.event_type,
+      input.source ?? null,
+      input.detail ?? null,
+      input.actor ?? null,
+      totalTokens,
+      sectionRows.length,
+      TOKEN_ESTIMATOR,
+      ts
+    );
+    for (const section of sectionRows) {
+      insertSection.run(
+        uuid(),
+        eventId,
+        section.spec_id,
+        section.spec_version ?? null,
+        section.filename,
+        section.section_title,
+        section.section_anchor,
+        section.chars,
+        section.estimated_tokens,
+        ts
+      );
+    }
+  })();
+  return eventId;
+}
+
+function dateFilter(days: number): string {
+  const since = new Date(Date.now() - Math.max(1, days) * 24 * 60 * 60 * 1000);
+  return since.toISOString();
+}
+
+export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: number }) {
+  const days = Math.max(1, Math.min(3650, Number(opts.days ?? 30) || 30));
+  const since = dateFilter(days);
+  const params: unknown[] = [since];
+  const projectFilter = opts.project_id ? "AND ce.consumer_id = ?" : "";
+  if (opts.project_id) params.push(opts.project_id);
+
+  const projectRows = db
+    .prepare(
+      `SELECT rc.id AS project_id, rc.repo, pt.name AS project_type_name,
+              COUNT(DISTINCT ce.id) AS context_events,
+              COALESCE(SUM(ce.estimated_tokens), 0) AS projected_tokens,
+              COALESCE(SUM(ce.section_count), 0) AS delivered_sections,
+              COALESCE(llm.prompt_tokens, 0) AS real_prompt_tokens,
+              COALESCE(llm.completion_tokens, 0) AS real_completion_tokens,
+              COALESCE(llm.total_tokens, 0) AS real_total_tokens,
+              COALESCE(llm.total_cost_usd, 0) AS total_cost_usd,
+              MAX(COALESCE(ce.created_at, llm.last_reported_at)) AS last_reported_at
+       FROM repo_consumers rc
+       JOIN project_types pt ON pt.id = rc.project_type_id
+       LEFT JOIN context_events ce ON ce.consumer_id = rc.id AND ce.created_at >= ?
+       LEFT JOIN (
+         SELECT consumer_id,
+                SUM(prompt_tokens) AS prompt_tokens,
+                SUM(completion_tokens) AS completion_tokens,
+                SUM(total_tokens) AS total_tokens,
+                SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd,
+                MAX(created_at) AS last_reported_at
+         FROM llm_usage_reports
+         WHERE created_at >= ?
+         GROUP BY consumer_id
+       ) llm ON llm.consumer_id = rc.id
+       ${opts.project_id ? "WHERE rc.id = ?" : ""}
+       GROUP BY rc.id
+       ORDER BY projected_tokens DESC, real_total_tokens DESC, rc.last_seen_at DESC`
+    )
+    .all(since, since, ...(opts.project_id ? [opts.project_id] : []));
+
+  const bySpec = db
+    .prepare(
+      `SELECT ces.spec_id, ces.filename, MAX(ces.spec_version) AS spec_version,
+              COUNT(DISTINCT ce.id) AS context_events,
+              COUNT(*) AS delivered_sections,
+              SUM(ces.chars) AS chars,
+              SUM(ces.estimated_tokens) AS projected_tokens,
+              MAX(ce.created_at) AS last_delivered_at
+       FROM context_event_sections ces
+       JOIN context_events ce ON ce.id = ces.context_event_id
+       WHERE ce.created_at >= ? ${projectFilter}
+       GROUP BY ces.spec_id, ces.filename
+       ORDER BY projected_tokens DESC, delivered_sections DESC
+       LIMIT 100`
+    )
+    .all(...params);
+
+  const bySection = db
+    .prepare(
+      `SELECT ces.spec_id, ces.filename, MAX(ces.spec_version) AS spec_version,
+              ces.section_title, ces.section_anchor,
+              COUNT(DISTINCT ce.id) AS context_events,
+              COUNT(*) AS deliveries,
+              SUM(ces.chars) AS chars,
+              SUM(ces.estimated_tokens) AS projected_tokens,
+              MAX(ce.created_at) AS last_delivered_at
+       FROM context_event_sections ces
+       JOIN context_events ce ON ce.id = ces.context_event_id
+       WHERE ce.created_at >= ? ${projectFilter}
+       GROUP BY ces.spec_id, ces.filename, ces.section_anchor
+       ORDER BY projected_tokens DESC, deliveries DESC
+       LIMIT 200`
+    )
+    .all(...params);
+
+  const byEventType = db
+    .prepare(
+      `SELECT ce.event_type, COUNT(*) AS context_events,
+              SUM(ce.section_count) AS delivered_sections,
+              SUM(ce.estimated_tokens) AS projected_tokens,
+              MAX(ce.created_at) AS last_delivered_at
+       FROM context_events ce
+       WHERE ce.created_at >= ? ${projectFilter}
+       GROUP BY ce.event_type
+       ORDER BY projected_tokens DESC`
+    )
+    .all(...params);
+
+  const sessions = db
+    .prepare(
+      `SELECT ce.agent_session_id, COALESCE(ags.task, ce.detail, 'unreported task') AS task,
+              COALESCE(ags.repo, ce.repo) AS repo,
+              COUNT(*) AS context_events,
+              SUM(ce.section_count) AS delivered_sections,
+              SUM(ce.estimated_tokens) AS projected_tokens,
+              MAX(ce.created_at) AS last_delivered_at
+       FROM context_events ce
+       LEFT JOIN agent_sessions ags ON ags.id = ce.agent_session_id
+       WHERE ce.created_at >= ? ${projectFilter} AND ce.agent_session_id IS NOT NULL
+       GROUP BY ce.agent_session_id
+       ORDER BY projected_tokens DESC
+       LIMIT 100`
+    )
+    .all(...params);
+
+  const realUsage = db
+    .prepare(
+      `SELECT provider, model, route,
+              COUNT(*) AS reports,
+              SUM(prompt_tokens) AS prompt_tokens,
+              SUM(completion_tokens) AS completion_tokens,
+              SUM(total_tokens) AS total_tokens,
+              SUM(cached_tokens) AS cached_tokens,
+              SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd,
+              MAX(created_at) AS last_reported_at
+       FROM llm_usage_reports
+       WHERE created_at >= ? ${opts.project_id ? "AND consumer_id = ?" : ""}
+       GROUP BY provider, model, route
+       ORDER BY total_tokens DESC`
+    )
+    .all(...params);
+
+  return {
+    generated_at: now(),
+    window_days: days,
+    project_id: opts.project_id ?? null,
+    tokenizer: TOKEN_ESTIMATOR,
+    projects: projectRows,
+    by_spec: bySpec,
+    by_section: bySection,
+    by_event_type: byEventType,
+    sessions,
+    real_usage: realUsage,
+  };
+}

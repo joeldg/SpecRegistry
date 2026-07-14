@@ -14,6 +14,7 @@ import { evaluateCompliance } from "../lib/compliance.js";
 import { ensureConsumer, persistCodeTrace } from "../lib/codeTrace.js";
 import { splitSections } from "../lib/sections.js";
 import { bundleSpecs } from "../lib/compile.js";
+import { recordContextEvent, sectionsFromSearchResults, sectionsFromSpecs } from "../lib/tokenUsage.js";
 
 function feedbackClusterKey(
   row: Pick<AgentFeedback, "spec_id" | "error_type" | "description" | "project_type_id">
@@ -109,6 +110,16 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const project = project_id ? findProjectConsumer(app.db, project_id, pt.id) : repo ? findProjectConsumer(app.db, repo, pt.id) : undefined;
     recordUsage(app.db, "agent_read", pt.id);
     const specs = bundleSpecs(app.db, pt.id, "stable", project?.id) as Array<Spec & { project_type_name?: string; project_type_scope: string }>;
+    recordContextEvent(app.db, {
+      project_type_id: pt.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? repo ?? null,
+      event_type: "get_specs",
+      source: "agent_api",
+      detail: projectType,
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSpecs(specs),
+    });
     return {
       project_type: pt.name,
       project: project?.repo ?? null,
@@ -272,6 +283,17 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         ts
       );
     recordUsage(app.db, "agent_read", pt.id, "agent-session-begin");
+    recordContextEvent(app.db, {
+      project_type_id: pt.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? session.repo,
+      agent_session_id: session.id,
+      event_type: "begin_task",
+      source: "agent_api",
+      detail: session.task,
+      actor: req.user?.username ?? session.agent_identifier,
+      sections: sectionsFromSpecs(specs),
+    });
     reply.code(201);
     return {
       session_id: session.id,
@@ -370,6 +392,71 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.post("/ai/token-usage", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const sessionId = optionalString(body, "session_id");
+    const session = sessionId
+      ? (app.db.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(sessionId) as
+          | { id: string; project_type_id: string | null; consumer_id: string | null; repo: string | null }
+          | undefined)
+      : undefined;
+    if (sessionId && !session) throw new HttpError(404, `Unknown agent session: ${sessionId}`);
+    const pt = session?.project_type_id
+      ? requireProjectType(app.db, session.project_type_id)
+      : body.project_type
+        ? requireProjectType(app.db, requireString(body, "project_type"))
+        : undefined;
+    const project =
+      session?.consumer_id && pt
+        ? findProjectConsumer(app.db, session.consumer_id, pt.id)
+        : pt && typeof body.project_id === "string"
+          ? findProjectConsumer(app.db, body.project_id, pt.id)
+          : pt && typeof body.repo === "string"
+            ? findProjectConsumer(app.db, body.repo, pt.id)
+            : undefined;
+    const promptTokens = Math.max(0, Math.floor(Number(body.prompt_tokens ?? 0) || 0));
+    const completionTokens = Math.max(0, Math.floor(Number(body.completion_tokens ?? 0) || 0));
+    const totalTokens = Math.max(promptTokens + completionTokens, Math.floor(Number(body.total_tokens ?? 0) || 0));
+    const cachedTokens = Math.max(0, Math.floor(Number(body.cached_tokens ?? 0) || 0));
+    if (totalTokens === 0) throw new HttpError(400, "token usage report requires prompt_tokens/completion_tokens or total_tokens");
+    const relatedContextEventIds = Array.isArray(body.related_context_event_ids)
+      ? (body.related_context_event_ids as unknown[]).filter((id): id is string => typeof id === "string" && id.trim() !== "").slice(0, 50)
+      : [];
+    const id = uuid();
+    app.db
+      .prepare(
+        `INSERT INTO llm_usage_reports
+          (id, project_type_id, consumer_id, repo, agent_session_id, provider, model, route,
+           prompt_tokens, completion_tokens, total_tokens, cached_tokens, input_cost_usd,
+           output_cost_usd, total_cost_usd, latency_ms, related_context_event_ids, detail, actor, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        pt?.id ?? null,
+        project?.id ?? session?.consumer_id ?? null,
+        project?.repo ?? session?.repo ?? optionalString(body, "repo") ?? null,
+        session?.id ?? null,
+        optionalString(body, "provider") ?? null,
+        optionalString(body, "model") ?? null,
+        optionalString(body, "route") ?? null,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        cachedTokens,
+        typeof body.input_cost_usd === "number" ? body.input_cost_usd : null,
+        typeof body.output_cost_usd === "number" ? body.output_cost_usd : null,
+        typeof body.total_cost_usd === "number" ? body.total_cost_usd : null,
+        typeof body.latency_ms === "number" ? Math.max(0, Math.floor(body.latency_ms)) : null,
+        JSON.stringify(relatedContextEventIds),
+        optionalString(body, "detail") ?? null,
+        req.user?.username ?? optionalString(body, "agent_identifier") ?? null,
+        now()
+      );
+    reply.code(201);
+    return { id, ok: true };
+  });
+
   const listAgentSessions = (opts: { repo?: string; status?: string; limit?: number }) => {
     const clauses: string[] = [];
     const params: unknown[] = [];
@@ -462,7 +549,18 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
           : undefined
       : undefined;
     recordUsage(app.db, "search", pt?.id, q);
-    return { query: q, mode: searchMode, project: project?.repo ?? null, results: await searchSpecsByMode(app.db, q, searchMode, pt?.id, 20, project?.id) };
+    const results = await searchSpecsByMode(app.db, q, searchMode, pt?.id, 20, project?.id);
+    recordContextEvent(app.db, {
+      project_type_id: pt?.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? repo ?? null,
+      event_type: "search",
+      source: "agent_api",
+      detail: q,
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSearchResults(app.db, results),
+    });
+    return { query: q, mode: searchMode, project: project?.repo ?? null, results };
   });
 
   // On-demand guidance resolution. Given the language(s) an agent is about to write in
@@ -501,6 +599,16 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         ).flat()
       : [];
     const resolvedSpecs = dedupeSearchResults([...specs, ...aliasSpecs]).slice(0, 8);
+    recordContextEvent(app.db, {
+      project_type_id: pt?.id,
+      consumer_id: project?.id,
+      repo: project?.repo ?? (typeof body.repo === "string" ? body.repo : null),
+      event_type: "resolve_guidance",
+      source: "agent_api",
+      detail: [...languages, topic].filter(Boolean).join("|"),
+      actor: req.user?.username ?? null,
+      sections: sectionsFromSearchResults(app.db, resolvedSpecs),
+    });
 
     // Styleguides available to pull, one entry per requested language.
     const perLanguage = languages.map((language) => {

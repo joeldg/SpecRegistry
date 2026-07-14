@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { SpecSummary, SpecTemplate } from "@specregistry/shared";
-import { api, getAuthor, type ProjectTypeWithCount } from "../api";
+import { api, getAuthor, type ProjectRow, type ProjectTypeWithCount } from "../api";
 import { Markdown, StatusBadge, timeAgo } from "../components";
 
 type DeletedSpec = SpecSummary & { deleted_at: string };
@@ -9,10 +9,12 @@ type DeletedSpec = SpecSummary & { deleted_at: string };
 export default function SpecsPage() {
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [templates, setTemplates] = useState<SpecTemplate[]>([]);
   const [error, setError] = useState<string>();
   const [creating, setCreating] = useState(false);
   const [newTypeId, setNewTypeId] = useState("");
+  const [newProjectId, setNewProjectId] = useState("");
   const [newFilename, setNewFilename] = useState("");
   const [assistGuidance, setAssistGuidance] = useState("");
   const [assistContent, setAssistContent] = useState("");
@@ -22,20 +24,30 @@ export default function SpecsPage() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletedSpecs, setDeletedSpecs] = useState<DeletedSpec[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   function reload() {
-    Promise.all([api.specs(), api.projectTypes(), api.templates()])
-      .then(([s, t, tpl]) => {
+    const projectId = searchParams.get("project_id") ?? "";
+    Promise.all([api.specs(projectId ? { project_id: projectId } : undefined), api.projectTypes(), api.projects(), api.templates()])
+      .then(([s, t, p, tpl]) => {
         setSpecs(s);
         setTypes(t);
+        setProjects(p);
         setTemplates(tpl);
-        if (!newTypeId && t.length) setNewTypeId(t[0].id);
+        if (projectId) {
+          setNewProjectId(projectId);
+          const project = p.find((item) => item.id === projectId);
+          if (project) setNewTypeId(project.project_type_id);
+        } else if (!newTypeId && t.length) {
+          const firstBaseline = t.find((item) => item.scope === "project_type") ?? t[0];
+          setNewTypeId(firstBaseline.id);
+        }
       })
       .catch((e) => setError(e.message));
   }
 
-  useEffect(reload, []);
+  useEffect(reload, [searchParams]);
 
   function loadDeleted() {
     api.deletedSpecs().then(setDeletedSpecs).catch((e) => setError(e.message));
@@ -60,6 +72,7 @@ export default function SpecsPage() {
     try {
       const spec = await api.createSpec({
         project_type_id: newTypeId,
+        project_id: newProjectId || undefined,
         filename,
         content: assistContent.trim() || template?.content_template || `# ${filename.replace(/\.md$/i, "")}\n\n_Draft._\n`,
         updated_by: getAuthor(),
@@ -77,6 +90,7 @@ export default function SpecsPage() {
     try {
       const result = await api.newSpecAssist({
         project_type_id: newTypeId,
+        project_id: newProjectId || undefined,
         filename: newFilename.trim(),
         guidance: assistGuidance.trim(),
         current_content: assistContent || undefined,
@@ -108,6 +122,22 @@ export default function SpecsPage() {
               {types.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.scope === "global" ? `${t.name} (global)` : t.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={newProjectId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setNewProjectId(next);
+                const project = projects.find((item) => item.id === next);
+                if (project) setNewTypeId(project.project_type_id);
+              }}
+            >
+              <option value="">Baseline scope</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.repo}
                 </option>
               ))}
             </select>
@@ -163,7 +193,9 @@ export default function SpecsPage() {
               </div>
             </>
           )}
-          <span className="faint">New specs start as 0.1.0 drafts; publishing makes them 1.0.0.</span>
+          <span className="faint">
+            New specs start as 0.1.0 drafts. Baseline specs apply to every project of that type; project specs apply only to the selected project.
+          </span>
         </div>
       )}
 
@@ -182,6 +214,7 @@ export default function SpecsPage() {
             <thead>
               <tr>
                 <th>File</th>
+                <th>Project</th>
                 <th>Version</th>
                 <th>Status</th>
                 <th>Alerts</th>
@@ -193,6 +226,7 @@ export default function SpecsPage() {
               {group.map((s) => (
                 <tr key={s.id} className="click" onClick={() => navigate(`/specs/${s.id}`)}>
                   <td className="mono">{s.filename}</td>
+                  <td>{s.effective_scope === "project" ? <Link to={`/projects/${s.project_id}`}>{s.project_name}</Link> : <span className="faint">—</span>}</td>
                   <td className="mono">{s.current_version}</td>
                   <td>
                     <StatusBadge status={s.status} />

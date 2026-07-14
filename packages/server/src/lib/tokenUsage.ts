@@ -257,6 +257,65 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
   };
 }
 
+export function recordLlmUsageReport(
+  db: Db,
+  input: {
+    project_type_id?: string | null;
+    consumer_id?: string | null;
+    repo?: string | null;
+    agent_session_id?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    route?: string | null;
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+    cached_tokens?: number | null;
+    input_cost_usd?: number | null;
+    output_cost_usd?: number | null;
+    total_cost_usd?: number | null;
+    latency_ms?: number | null;
+    related_context_event_ids?: string[];
+    detail?: string | null;
+    actor?: string | null;
+  }
+): string | null {
+  const promptTokens = Math.max(0, Math.floor(Number(input.prompt_tokens ?? 0) || 0));
+  const completionTokens = Math.max(0, Math.floor(Number(input.completion_tokens ?? 0) || 0));
+  const totalTokens = Math.max(promptTokens + completionTokens, Math.floor(Number(input.total_tokens ?? 0) || 0));
+  if (totalTokens === 0) return null;
+  const id = uuid();
+  db.prepare(
+    `INSERT INTO llm_usage_reports
+      (id, project_type_id, consumer_id, repo, agent_session_id, provider, model, route,
+       prompt_tokens, completion_tokens, total_tokens, cached_tokens, input_cost_usd,
+       output_cost_usd, total_cost_usd, latency_ms, related_context_event_ids, detail, actor, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    input.project_type_id ?? null,
+    input.consumer_id ?? null,
+    input.repo ?? null,
+    input.agent_session_id ?? null,
+    input.provider ?? null,
+    input.model ?? null,
+    input.route ?? null,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    Math.max(0, Math.floor(Number(input.cached_tokens ?? 0) || 0)),
+    input.input_cost_usd ?? null,
+    input.output_cost_usd ?? null,
+    input.total_cost_usd ?? null,
+    input.latency_ms == null ? null : Math.max(0, Math.floor(Number(input.latency_ms) || 0)),
+    JSON.stringify(input.related_context_event_ids ?? []),
+    input.detail ?? null,
+    input.actor ?? null,
+    now()
+  );
+  return id;
+}
+
 function csvCell(value: unknown): string {
   const text = value == null ? "" : String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;

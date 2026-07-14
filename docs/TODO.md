@@ -313,8 +313,10 @@ passes provenance, review, versioning, assignment, and distribution gates.
   `safe`, `bounded`, `tooling`, `networked`, `privileged`, and `blocked`. Store the
   rationale and make risk visible in the UI, generated `SKILL.md` metadata, manifests,
   and agent pack summaries.
-- [ ] Add first-class skill marketplace UI outside the LLM settings page. Suggested tabs:
-  Installed, Marketplace, Candidates, Sources, Reviews, and Assignments.
+- [x] Add first-class skill marketplace UI outside the LLM settings page for Installed,
+  Candidates, and Sources.
+- [ ] Extend the skill marketplace UI with Marketplace discovery, Reviews, and Assignments
+  tabs as those backends land.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.

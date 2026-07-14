@@ -305,6 +305,38 @@ describe("project types & specs", () => {
     });
     expect(duplicateAssignment.statusCode).toBe(409);
 
+    const globalSecurity = (await getJson("/api/v1/specs")).find((spec: any) => spec.filename === "GLOBAL_SECURITY.md");
+    const linkRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/spec-links",
+      payload: {
+        skill_id: converted.json().id,
+        spec_id: globalSecurity.id,
+        relation: "supports",
+        section_anchor: "requirements",
+      },
+    });
+    expect(linkRes.statusCode).toBe(201);
+    expect(linkRes.json()).toMatchObject({
+      skill_id: converted.json().id,
+      spec_id: globalSecurity.id,
+      relation: "supports",
+      filename: "GLOBAL_SECURITY.md",
+    });
+    const duplicateLink = await app.inject({
+      method: "POST",
+      url: "/api/v1/skills/spec-links",
+      payload: {
+        skill_id: converted.json().id,
+        spec_id: globalSecurity.id,
+        relation: "supports",
+        section_anchor: "requirements",
+      },
+    });
+    expect(duplicateLink.statusCode).toBe(409);
+    const links = await getJson(`/api/v1/skills/spec-links?skill_id=${encodeURIComponent(converted.json().id)}`);
+    expect(links).toHaveLength(1);
+
     const scopedPack = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
     expect(scopedPack.statusCode).toBe(200);
     const scopedZip = new AdmZip(scopedPack.rawPayload);
@@ -315,6 +347,14 @@ describe("project types & specs", () => {
     expect(manifestSkill).toMatchObject({
       assignment_scopes: ["project_type"],
       built_in: false,
+      related_specs: [
+        {
+          filename: "GLOBAL_SECURITY.md",
+          project_type: "Global",
+          section_anchor: "requirements",
+          relation: "supports",
+        },
+      ],
       source: {
         candidate_id: candidate.id,
         url: "https://github.com/msitarzewski/agency-agents",

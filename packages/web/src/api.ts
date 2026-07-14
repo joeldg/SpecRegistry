@@ -802,6 +802,20 @@ export interface SkillAssignmentRow {
   project_type_name: string | null;
   project_repo: string | null;
 }
+export interface SkillSpecLinkRow {
+  id: string;
+  skill_id: string;
+  spec_id: string;
+  section_anchor: string | null;
+  relation: "related" | "governs" | "recommends" | "supports";
+  created_by: string;
+  created_at: string;
+  skill_slug: string;
+  skill_name: string;
+  filename: string;
+  current_version: string;
+  project_type_name: string;
+}
 export interface SkillSourceScanResult {
   source_id: string;
   scanned: number;
@@ -1149,6 +1163,11 @@ export const api = {
   createSkillAssignment: (body: { skill_id: string; scope: SkillAssignmentRow["scope"]; project_type_id?: string; project_id?: string }) =>
     request<SkillAssignmentRow>("/api/v1/skills/assignments", { method: "POST", body: JSON.stringify(body) }),
   deleteSkillAssignment: (id: string) => requestVoid(`/api/v1/skills/assignments/${id}`, { method: "DELETE" }),
+  skillSpecLinks: (skillId?: string) =>
+    request<SkillSpecLinkRow[]>(`/api/v1/skills/spec-links${skillId ? `?skill_id=${encodeURIComponent(skillId)}` : ""}`),
+  createSkillSpecLink: (body: { skill_id: string; spec_id: string; section_anchor?: string; relation?: SkillSpecLinkRow["relation"] }) =>
+    request<SkillSpecLinkRow>("/api/v1/skills/spec-links", { method: "POST", body: JSON.stringify(body) }),
+  deleteSkillSpecLink: (id: string) => requestVoid(`/api/v1/skills/spec-links/${id}`, { method: "DELETE" }),
   skillSources: () => request<SkillSourceRow[]>("/api/v1/skills/sources"),
   createSkillSource: (body: Partial<SkillSourceRow> & { url: string }) =>
     request<SkillSourceRow>("/api/v1/skills/sources", { method: "POST", body: JSON.stringify(body) }),

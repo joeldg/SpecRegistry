@@ -373,7 +373,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Add explicit "skill does not grant permission" language to every rendered marketplace
   skill. Skills may tell an agent how to perform a workflow, but host approval policies,
   governed specs, RBAC, and tool permissions still decide what may actually be done.
-- [ ] Add skill-spec relationships. Skills can declare related specs/sections; specs can
+- [x] Add skill-spec relationships. Skills can declare related specs/sections; specs can
   recommend skills such as `run-compliance-loop`, `evaluate-quality-model`,
   `incident-response-triage`, `api-contract-review`, or `observability-gap-analysis`.
 - [ ] Include locked skill versions in generated agent packs and `.spec/skills/manifest.json`.

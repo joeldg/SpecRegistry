@@ -159,6 +159,52 @@ describe("project types & specs", () => {
     });
   });
 
+  it("counts project spec currency against effective project overrides", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/override-device", project_type_id: edge.id },
+    });
+    const project = createdProject.json();
+
+    const createdSpec = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: edge.id,
+        project_id: project.id,
+        filename: "DESIGN.md",
+        content: "# Device Override Design\n\n## Scope\n\nOnly this repo.\n",
+        updated_by: "joel",
+      },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/specs/${createdSpec.json().id}/publish`,
+      payload: { published_by: "joel" },
+    });
+    app.db.prepare("UPDATE specs SET current_version = '1.1.0' WHERE id = ?").run(createdSpec.json().id);
+
+    const report = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/manifest-report",
+      payload: {
+        repo: "github.com/acme/override-device",
+        project_id: project.id,
+        project_type: "Acme Edge Device",
+        specs: [{ filename: "DESIGN.md", version: "1.1.0", project_type: "github.com/acme/override-device" }],
+      },
+    });
+    expect(report.statusCode).toBe(200);
+
+    const consumers = await getJson("/api/v1/cli/consumers");
+    expect(consumers.find((row: any) => row.id === project.id)).toMatchObject({ spec_count: 1, outdated_count: 0 });
+    const projects = await getJson("/api/v1/projects");
+    expect(projects.find((row: any) => row.id === project.id)).toMatchObject({ spec_count: 1, outdated_count: 0 });
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

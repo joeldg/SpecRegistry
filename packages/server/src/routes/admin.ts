@@ -47,6 +47,7 @@ import { DEFAULT_COMPLIANCE_POLICY, getCompliancePolicy } from "../lib/complianc
 import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
 import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
 import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
+import { projectSpecCurrency } from "../lib/projectCurrency.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -1355,21 +1356,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const projects = app.db
+    const projectRows = app.db
       .prepare(
         `SELECT rc.id, rc.repo, rc.branch, rc.project_type_id, pt.name AS project_type_name,
                 rc.specs_path, rc.manifest_path, rc.last_seen_at,
-                COUNT(DISTINCT rcs.filename) AS reported_specs,
                 COUNT(DISTINCT ps.id) AS project_specs,
                 COUNT(DISTINCT CASE WHEN af.status = 'open' THEN af.id END) AS open_feedback,
                 COUNT(DISTINCT af.id) AS feedback_total,
                 COUNT(DISTINCT CASE WHEN cr.status = 'pending' THEN cr.id END) AS pending_reviews,
-                COUNT(DISTINCT CASE
-                  WHEN s.status = 'published'
-                   AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
-                   AND (rcs.version IS NULL OR rcs.version != s.current_version)
-                  THEN s.id
-                END) AS outdated_specs,
                 ctr.id AS code_trace_report_id,
                 ctr.coverage_ratio AS code_coverage_ratio,
                 ctr.drift_score AS code_drift_score,
@@ -1380,9 +1374,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
                 ctr.created_at AS code_trace_reported_at
          FROM repo_consumers rc
          JOIN project_types pt ON pt.id = rc.project_type_id
-         LEFT JOIN repo_consumer_specs rcs ON rcs.consumer_id = rc.id
          LEFT JOIN specs ps ON ps.project_id = rc.id AND ps.deleted_at IS NULL
-         LEFT JOIN specs s ON s.deleted_at IS NULL AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
          LEFT JOIN agent_feedback af ON af.spec_id = ps.id
          LEFT JOIN change_requests cr ON cr.spec_id = ps.id
          LEFT JOIN code_trace_reports ctr ON ctr.id = (
@@ -1394,7 +1386,15 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
          GROUP BY rc.id
          ORDER BY rc.last_seen_at DESC, rc.repo`
       )
-      .all();
+      .all() as Array<Record<string, unknown>>;
+    const projects = projectRows.map((row) => {
+      const currency = projectSpecCurrency(app.db, String(row.id), String(row.project_type_id));
+      return {
+        ...row,
+        reported_specs: currency.spec_count,
+        outdated_specs: currency.outdated_count,
+      };
+    });
 
     const codeTraceReports = app.db
       .prepare(

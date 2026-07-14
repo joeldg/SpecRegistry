@@ -1,23 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { now, uuid } from "../db.js";
 import { HttpError, requireProjectConsumer, requireProjectType, requireString } from "../helpers.js";
+import { projectSpecCurrency } from "../lib/projectCurrency.js";
 
 function projectRows(app: FastifyInstance, where = "", params: unknown[] = []) {
-  return app.db
+  const rows = app.db
     .prepare(
       `SELECT rc.*, pt.name AS project_type_name,
-              COUNT(DISTINCT rcs.filename) AS spec_count,
               COUNT(DISTINCT ps.id) AS project_spec_count,
-              SUM(CASE WHEN s.current_version IS NOT NULL AND s.current_version != rcs.version THEN 1 ELSE 0 END) AS outdated_count,
               MAX(ctr.created_at) AS code_trace_reported_at,
               (SELECT COUNT(*) FROM agent_feedback f WHERE f.project_type_id = rc.project_type_id AND f.status = 'open') AS open_feedback_count
        FROM repo_consumers rc
        JOIN project_types pt ON pt.id = rc.project_type_id
-       LEFT JOIN repo_consumer_specs rcs ON rcs.consumer_id = rc.id
-       LEFT JOIN specs s ON s.filename = rcs.filename
-        AND s.status = 'published'
-        AND s.deleted_at IS NULL
-        AND (s.project_id = rc.id OR (s.project_id IS NULL AND (s.project_type_id = rc.project_type_id OR s.project_type_id IN (SELECT id FROM project_types WHERE scope = 'global'))))
        LEFT JOIN specs ps ON ps.project_id = rc.id AND ps.deleted_at IS NULL
        LEFT JOIN code_trace_reports ctr ON ctr.consumer_id = rc.id
        ${where}
@@ -25,6 +19,10 @@ function projectRows(app: FastifyInstance, where = "", params: unknown[] = []) {
        ORDER BY rc.last_seen_at DESC`
     )
     .all(...params);
+  return (rows as Array<Record<string, unknown>>).map((row) => ({
+    ...row,
+    ...projectSpecCurrency(app.db, String(row.id), String(row.project_type_id)),
+  }));
 }
 
 export async function projectRoutes(app: FastifyInstance): Promise<void> {

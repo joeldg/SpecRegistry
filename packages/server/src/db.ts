@@ -291,6 +291,14 @@ CREATE TABLE IF NOT EXISTS agent_skills (
   risk_level TEXT NOT NULL DEFAULT 'safe' CHECK (risk_level IN ('safe', 'restricted')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   built_in INTEGER NOT NULL DEFAULT 0,
+  source_candidate_id TEXT REFERENCES skill_candidates(id),
+  source_url TEXT,
+  source_path TEXT,
+  source_commit TEXT,
+  imported_at TEXT,
+  transformed_by TEXT,
+  transformation_note TEXT,
+  upstream_content_hash TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -1178,6 +1186,20 @@ Project types are reusable baselines; projects are concrete repositories. The pr
     sql: `
       ALTER TABLE skill_candidates ADD COLUMN gate_status TEXT NOT NULL DEFAULT 'pending' CHECK (gate_status IN ('pass', 'review', 'block', 'pending'));
       ALTER TABLE skill_candidates ADD COLUMN gate_results TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
+  {
+    // Track provenance for governed skills converted from marketplace candidates.
+    version: 37,
+    sql: `
+      ALTER TABLE agent_skills ADD COLUMN source_candidate_id TEXT REFERENCES skill_candidates(id);
+      ALTER TABLE agent_skills ADD COLUMN source_url TEXT;
+      ALTER TABLE agent_skills ADD COLUMN source_path TEXT;
+      ALTER TABLE agent_skills ADD COLUMN source_commit TEXT;
+      ALTER TABLE agent_skills ADD COLUMN imported_at TEXT;
+      ALTER TABLE agent_skills ADD COLUMN transformed_by TEXT;
+      ALTER TABLE agent_skills ADD COLUMN transformation_note TEXT;
+      ALTER TABLE agent_skills ADD COLUMN upstream_content_hash TEXT;
     `,
   },
 ];

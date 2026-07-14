@@ -120,6 +120,18 @@ export default function SkillsMarketplacePage() {
     }
   }
 
+  async function convertCandidate(id: string) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.convertSkillCandidate(id);
+      setNotice("Candidate converted to a disabled skill draft.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -279,6 +291,12 @@ export default function SkillsMarketplacePage() {
                     <td>
                       <button onClick={() => classifyCandidate(candidate.id)}>Reclassify</button>{" "}
                       <button onClick={() => runCandidateGates(candidate.id)}>Run gates</button>
+                      {candidate.candidate_type === "agent_skill" && candidate.gate_status !== "block" && candidate.status !== "converted" && (
+                        <>
+                          {" "}
+                          <button onClick={() => convertCandidate(candidate.id)}>Convert draft</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );

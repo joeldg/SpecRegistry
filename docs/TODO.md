@@ -323,6 +323,9 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.
+- [x] Add inline marketplace triage details for installed skills, sources, and candidates,
+  including rendered instructions/raw candidate text, provenance, gate details, risk,
+  status, and source metadata.
 - [x] Add external skill source registry for GitHub repos, local uploads, built-in packs,
   and manually authored sources. Store URL, provider, license, default branch, last fetched
   commit, last scan time, status, trust decision, and source notes.
@@ -398,6 +401,8 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add marketplace search/filter facets: category, project type, language/framework,
   risk level, source, license, status, installed/assigned state, version freshness, and
   related spec.
+- [x] Add first-pass marketplace filters for installed skills, sources, and candidates:
+  text search, risk, status, trust, source type, candidate type, gate status, and source.
 - [ ] Add duplicate and conflict detection across skills. Warn when two active skills give
   competing instructions for the same workflow, tool, command, safety boundary, or spec.
 - [ ] Add export/import of approved skill packs so organizations can curate internal packs

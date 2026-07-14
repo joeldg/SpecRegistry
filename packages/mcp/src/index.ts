@@ -154,6 +154,54 @@ server.tool(
 );
 
 server.tool(
+  "report_token_usage",
+  "Best-effort telemetry: report real LLM token usage from the agent host when available. Use this after a model call if your runtime exposes token counts. This does not replace finish_task, check_compliance, or specreg comply.",
+  {
+    session_id: z.string().optional().describe("Session id returned by begin_task, if this usage belongs to a governed task."),
+    provider: z.string().optional().describe("LLM provider, e.g. openai, anthropic, gemini, openrouter, local."),
+    model: z.string().optional().describe("Model name used for the call."),
+    route: z.string().optional().describe("Task route or purpose, e.g. coding, planning, review, summarization."),
+    prompt_tokens: z.number().optional().describe("Prompt/input tokens reported by the model provider or agent host."),
+    completion_tokens: z.number().optional().describe("Completion/output tokens reported by the model provider or agent host."),
+    total_tokens: z.number().optional().describe("Total tokens if reported directly."),
+    cached_tokens: z.number().optional().describe("Cached input tokens when reported by the provider."),
+    total_cost_usd: z.number().optional().describe("Optional total estimated cost in USD."),
+    latency_ms: z.number().optional().describe("Optional model call latency in milliseconds."),
+    detail: z.string().optional().describe("Short human-readable context for the usage report."),
+    agent_identifier: z.string().optional().describe("Your model/agent name."),
+    project_type: z.string().optional().describe("Project type name. Defaults to the repo's configured type when session_id is omitted."),
+    repo: z.string().optional().describe("Repo/project identity. Defaults to SPECREG_REPO when set."),
+    project_id: z.string().optional().describe("Explicit SpecRegistry project id."),
+  },
+  async ({ session_id, provider, model, route, prompt_tokens, completion_tokens, total_tokens, cached_tokens, total_cost_usd, latency_ms, detail, agent_identifier, project_type, repo, project_id }) => {
+    const type = project_type ?? DEFAULT_TYPE;
+    return text(
+      await api("/api/v1/ai/token-usage", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          session_id,
+          provider,
+          model,
+          route,
+          prompt_tokens,
+          completion_tokens,
+          total_tokens,
+          cached_tokens,
+          total_cost_usd,
+          latency_ms,
+          detail,
+          agent_identifier: agent_identifier ?? "mcp-agent",
+          project_type: session_id ? undefined : type,
+          project_id,
+          repo: session_id || project_id ? undefined : (repo ?? DEFAULT_REPO),
+        }),
+      })
+    );
+  }
+);
+
+server.tool(
   "list_project_types",
   "List the project types (organization hierarchy) configured in the spec registry.",
   {},

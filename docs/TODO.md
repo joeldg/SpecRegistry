@@ -175,7 +175,7 @@ real tokens explain actual model spend and efficiency.
 - [ ] Instrument existing server-side LLM operations to report real usage when providers
   expose it, including spec assist, draft generation, audits, contradiction checks,
   classifiers, recommendations, and test prompts.
-- [ ] Extend MCP/client guidance so agents can report real model usage when their host
+- [x] Extend MCP/client guidance so agents can report real model usage when their host
   exposes token accounting. Treat this as best-effort telemetry; projected context tokens
   remain the baseline when real usage is unavailable.
 - [ ] Add aggregation APIs for token reports:

@@ -60,6 +60,7 @@ Do not edit code, configuration, tests, or generated artifacts until the pre-imp
 11. If repeated \`finish_task\`, \`check_compliance\`, or \`specreg comply\` attempts still fail, halt autonomous remediation and show the user the exact latest output.
 12. Before creating a git commit for implementation work, include compact compliance evidence in the commit message body: the \`SpecRegistry-Compliance:\`, \`SpecRegistry-Signals:\`, and \`SpecRegistry-Command:\` trailer emitted by \`specreg comply\`, or equivalent \`finish_task\` evidence with verdict, objective score, and session id.
 13. If \`finish_task\`, \`check_compliance\`, or \`specreg comply\` cannot run because MCP or the SpecRegistry server appears unavailable, halt before reporting completion or committing. Notify the user that objective compliance could not be verified, include the exact tool or command output, and do not substitute local-only checks for the registry completion gate.
+14. If the agent host exposes model token usage, call \`report_token_usage\` with the \`session_id\`; this is optional telemetry for token ROI and never replaces the completion/compliance gate.
 
 ## MCP Tools
 
@@ -70,6 +71,7 @@ Do not edit code, configuration, tests, or generated artifacts until the pre-imp
 - \`search_specs\`: search matching spec sections with FTS, semantic, or hybrid retrieval, including project-scoped specs when a repo is configured.
 - \`resolve_guidance\`: check whether a language/domain is covered before inventing a local standard.
 - \`check_compliance\`: record and evaluate the objective compliance loop for the repo.
+- \`report_token_usage\`: report real LLM token usage from the agent host when available.
 - \`report_spec_feedback\`: file ambiguity, contradiction, or outdated-guidance feedback for review, or (\`error_type: "missing_guidance"\`) a pure coverage gap with no spec to attach to.
 - \`get_audit_prompt\`: fetch reverse-conformance prompts for checking implementation against spec intent.
 `;

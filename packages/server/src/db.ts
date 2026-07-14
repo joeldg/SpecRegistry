@@ -1239,6 +1239,58 @@ const DEFAULT_AGENT_SKILLS = [
   },
 ] as const;
 
+const DEFAULT_SKILL_SOURCES = [
+  {
+    id: "starter-github-agent-skills-search",
+    url: "https://github.com/search?q=agent+skills&type=repositories",
+    provider: "github",
+    source_type: "github_search",
+    notes: "Curated starter search for public repositories advertising agent skills. Search results must be imported as untrusted candidates before review.",
+  },
+  {
+    id: "starter-agency-agents",
+    url: "https://github.com/msitarzewski/agency-agents",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source suggested by users for reusable agency/agent role material. Treat imported material as candidates until reviewed.",
+  },
+  {
+    id: "starter-anthropics-skills",
+    url: "https://github.com/anthropics/skills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for Anthropic-style skill packages. Verify license and upstream structure before conversion.",
+  },
+  {
+    id: "starter-addyosmani-agent-skills",
+    url: "https://github.com/addyosmani/agent-skills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for agent skill examples and patterns. Imported material remains untrusted until review.",
+  },
+  {
+    id: "starter-vercel-labs-skills",
+    url: "https://github.com/vercel-labs/skills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for framework-oriented skill examples. Review for project specificity before conversion.",
+  },
+  {
+    id: "starter-google-skills",
+    url: "https://github.com/google/skills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for possible Google-authored skill examples. Confirm repository existence, license, and current contents before import.",
+  },
+  {
+    id: "starter-agentskills",
+    url: "https://github.com/agentskills/agentskills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for the agentskills catalog. Import only through candidate review.",
+  },
+] as const;
+
 function seedDefaultAgentSkills(db: Db): void {
   const insert = db.prepare(
     `INSERT OR IGNORE INTO agent_skills
@@ -1248,6 +1300,18 @@ function seedDefaultAgentSkills(db: Db): void {
   const ts = now();
   for (const skill of DEFAULT_AGENT_SKILLS) {
     insert.run(`builtin-${skill.slug}`, skill.slug, skill.name, skill.description, skill.instructions, ts, ts);
+  }
+}
+
+function seedDefaultSkillSources(db: Db): void {
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO skill_sources
+      (id, url, provider, source_type, status, trust_decision, notes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'active', 'unreviewed', ?, ?, ?)`
+  );
+  const ts = now();
+  for (const source of DEFAULT_SKILL_SOURCES) {
+    insert.run(source.id, source.url, source.provider, source.source_type, source.notes, ts, ts);
   }
 }
 
@@ -1290,6 +1354,7 @@ export function createDb(path: string): Db {
   }
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
   seedDefaultAgentSkills(db);
+  seedDefaultSkillSources(db);
   return db;
 }
 

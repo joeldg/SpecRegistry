@@ -71,6 +71,51 @@ function detectCandidateSignals(content: string) {
   };
 }
 
+function classifyCandidate(input: { content: string; source_path?: string | null; proposed_name?: string | null }) {
+  const haystack = `${input.proposed_name ?? ""}\n${input.source_path ?? ""}\n${input.content}`.toLowerCase();
+  const has = (pattern: RegExp) => pattern.test(haystack);
+  if (has(/\b(ignore previous|jailbreak|exfiltrate|steal|disable safety|bypass approval|sudo rm|rm -rf|credential dump)\b/)) {
+    return {
+      candidate_type: "unsafe" as CandidateType,
+      category: "security",
+      notes: "Classified as unsafe because the material appears to request bypass, exfiltration, destructive commands, or safety evasion.",
+    };
+  }
+  if (has(/\b(project type|project-type|baseline|template|starter kit|scaffold)\b/)) {
+    return {
+      candidate_type: "project_type_template" as CandidateType,
+      category: "template",
+      notes: "Classified as a project type template because it describes reusable baseline or template material.",
+    };
+  }
+  if (has(/\b(requirement|requirements|shall|must|specification|acceptance criteria|api contract|data contract)\b/)) {
+    return {
+      candidate_type: "spec_seed" as CandidateType,
+      category: "requirements",
+      notes: "Classified as a spec seed because it reads like requirements, constraints, or acceptance criteria.",
+    };
+  }
+  if (has(/\b(skill\.md|agent skill|workflow|procedure|playbook|when to use|steps|use this skill|agent should)\b/)) {
+    return {
+      candidate_type: "agent_skill" as CandidateType,
+      category: "workflow",
+      notes: "Classified as an agent skill because it describes an agent procedure or workflow.",
+    };
+  }
+  if (has(/\b(readme|awesome|catalog|index|reference|examples|resources|links)\b/)) {
+    return {
+      candidate_type: "reference_only" as CandidateType,
+      category: "reference",
+      notes: "Classified as reference-only material because it appears to list resources or examples rather than govern agent behavior.",
+    };
+  }
+  return {
+    candidate_type: "unknown" as CandidateType,
+    category: "unknown",
+    notes: "No deterministic classifier rule matched; keep as unknown until reviewed.",
+  };
+}
+
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
   app.get("/skills", async (req) => {
     const { include_disabled } = req.query as { include_disabled?: string };
@@ -229,10 +274,18 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     const proposedName = bounded(requireString(body, "proposed_name"), "proposed_name", 160);
     const proposedSlug = slugValue(body.proposed_slug ?? proposedName);
     const detected = detectCandidateSignals(rawContent);
-    const candidateType = enumValue<CandidateType>(body.candidate_type, ["agent_skill", "spec_seed", "project_type_template", "reference_only", "unsafe", "unknown"], "candidate_type", "unknown");
+    const classification = classifyCandidate({
+      content: rawContent,
+      source_path: optionalBounded(body.source_path, "source_path", 500),
+      proposed_name: proposedName,
+    });
+    const candidateType = body.candidate_type
+      ? enumValue<CandidateType>(body.candidate_type, ["agent_skill", "spec_seed", "project_type_template", "reference_only", "unsafe", "unknown"], "candidate_type", "unknown")
+      : classification.candidate_type;
     const status = enumValue<CandidateStatus>(body.status, ["candidate", "converted", "rejected", "archived"], "status", "candidate");
     const id = uuid();
     const ts = now();
+    const sourcePath = optionalBounded(body.source_path, "source_path", 500);
     app.db.prepare(
       `INSERT INTO skill_candidates
         (id, source_id, source_url, source_path, source_commit, detected_format, raw_content_hash,
@@ -244,28 +297,62 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       id,
       source ? source.id : null,
       optionalBounded(body.source_url, "source_url", 1000) ?? source?.url ?? null,
-      optionalBounded(body.source_path, "source_path", 500),
+      sourcePath,
       optionalBounded(body.source_commit, "source_commit", 120) ?? source?.last_fetched_commit ?? null,
       optionalBounded(body.detected_format, "detected_format", 120) ?? "unknown",
       contentHash(rawContent),
       rawContent,
       optionalBounded(body.license, "license", 120) ?? source?.license ?? null,
-      optionalBounded(body.category, "category", 120),
+      optionalBounded(body.category, "category", 120) ?? classification.category,
       candidateType,
       proposedName,
       proposedSlug,
-      body.risk_level ? riskValue(body.risk_level) : detected.risk_level,
+      body.risk_level ? riskValue(body.risk_level) : candidateType === "unsafe" ? "restricted" : detected.risk_level,
       optionalBounded(body.risk_summary, "risk_summary", 1000) ?? detected.risk_summary,
       jsonList(detected.commands),
       jsonList(detected.network),
       jsonList(detected.secrets),
-      optionalBounded(body.classifier_notes, "classifier_notes", 4000) ?? "",
+      optionalBounded(body.classifier_notes, "classifier_notes", 4000) ?? classification.notes,
       status,
       ts,
       ts
     );
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.created", target_type: "skill_candidate", target_id: id, summary: `Skill candidate created: ${proposedName}`, detail: { source_id: source?.id ?? null, candidate_type: candidateType, status } });
     reply.code(201);
+    return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
+  });
+
+  app.post("/skills/candidates/:id/classify", async (req) => {
+    const { id } = req.params as { id: string };
+    const existing = app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as
+      | { raw_content: string; proposed_name: string; source_path: string | null }
+      | undefined;
+    if (!existing) throw new HttpError(404, `Unknown skill candidate: ${id}`);
+    const detected = detectCandidateSignals(existing.raw_content);
+    const classification = classifyCandidate({
+      content: existing.raw_content,
+      source_path: existing.source_path,
+      proposed_name: existing.proposed_name,
+    });
+    app.db.prepare(
+      `UPDATE skill_candidates
+       SET candidate_type = ?, category = ?, risk_level = ?, risk_summary = ?,
+           detected_commands = ?, detected_network = ?, detected_secrets = ?,
+           classifier_notes = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      classification.candidate_type,
+      classification.category,
+      classification.candidate_type === "unsafe" ? "restricted" : detected.risk_level,
+      detected.risk_summary,
+      jsonList(detected.commands),
+      jsonList(detected.network),
+      jsonList(detected.secrets),
+      classification.notes,
+      now(),
+      id
+    );
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.classified", target_type: "skill_candidate", target_id: id, summary: `Skill candidate classified: ${existing.proposed_name}`, detail: { candidate_type: classification.candidate_type, category: classification.category } });
     return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
   });
 }

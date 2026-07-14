@@ -1110,6 +1110,8 @@ export const api = {
     classifier_notes?: string;
     status?: SkillCandidateRow["status"];
   }) => request<SkillCandidateRow>("/api/v1/skills/candidates", { method: "POST", body: JSON.stringify(body) }),
+  classifySkillCandidate: (id: string) =>
+    request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/classify`, { method: "POST", body: JSON.stringify({}) }),
   approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
   createApprovalPolicy: (body: {
     project_type_id?: string | null;

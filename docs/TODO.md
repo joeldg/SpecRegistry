@@ -323,7 +323,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Add external skill source registry for GitHub repos, local uploads, built-in packs,
   and manually authored sources. Store URL, provider, license, default branch, last fetched
   commit, last scan time, status, trust decision, and source notes.
-- [ ] Support curated starter sources such as:
+- [x] Support curated starter sources such as:
   - `https://github.com/search?q=agent+skills&type=repositories`
   - `https://github.com/msitarzewski/agency-agents`
   - `anthropics/skills`
@@ -338,7 +338,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Create `skill_candidates` for imported but untrusted material. Candidates should
   retain source repo/path/commit, detected format, raw content hash, license, category,
   proposed name/slug, detected commands/network/secrets risk, and classifier notes.
-- [ ] Classify candidates into `agent_skill`, `spec_seed`, `project_type_template`,
+- [x] Classify candidates into `agent_skill`, `spec_seed`, `project_type_template`,
   `reference_only`, `unsafe`, or `unknown`. Do not allow candidates to publish directly
   into active agent packs.
 - [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion

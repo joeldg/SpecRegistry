@@ -137,6 +137,34 @@ describe("project types & specs", () => {
     });
     expect(converted.json().instructions).toContain("This draft was converted from an untrusted marketplace candidate.");
 
+    const enableReview = await app.inject({
+      method: "POST",
+      url: `/api/v1/skills/${converted.json().id}/reviews`,
+      payload: { action: "enable", summary: "Enable reviewed external workflow draft." },
+    });
+    expect(enableReview.statusCode).toBe(201);
+    expect(enableReview.json()).toMatchObject({
+      skill_id: converted.json().id,
+      action: "enable",
+      proposed_status: "active",
+      status: "pending",
+    });
+
+    const selfApprove = await app.inject({
+      method: "POST",
+      url: `/api/v1/skills/reviews/${enableReview.json().id}/approve`,
+      payload: { reviewed_by: enableReview.json().proposed_by },
+    });
+    expect(selfApprove.statusCode).toBe(403);
+
+    const approvedReview = await app.inject({
+      method: "POST",
+      url: `/api/v1/skills/reviews/${enableReview.json().id}/approve`,
+      payload: { reviewed_by: "reviewer-one" },
+    });
+    expect(approvedReview.statusCode).toBe(200);
+    expect(approvedReview.json()).toMatchObject({ status: "approved", reviewed_by: "reviewer-one" });
+
     const candidates = await getJson(`/api/v1/skills/candidates?source_id=${encodeURIComponent(source.id)}`);
     expect(candidates).toHaveLength(1);
     expect(candidates[0].status).toBe("converted");
@@ -185,7 +213,7 @@ describe("project types & specs", () => {
     expect(unsafeRes.json()).toMatchObject({ candidate_type: "unsafe", gate_status: "block", risk_level: "restricted" });
 
     const skills = await getJson("/api/v1/skills");
-    expect(skills.map((skill: any) => skill.slug)).not.toContain("external-reviewer-workflow");
+    expect(skills.find((skill: any) => skill.slug === "external-reviewer-workflow")).toMatchObject({ status: "active" });
   });
 
   it("creates, edits, and publishes a draft spec", async () => {

@@ -763,6 +763,30 @@ export interface SkillCandidateRow {
   created_at: string;
   updated_at: string;
 }
+export interface SkillReviewRow {
+  id: string;
+  skill_id: string;
+  skill_slug: string;
+  skill_built_in: number;
+  action: "update" | "enable" | "disable" | "delete";
+  current_name: string;
+  current_description: string;
+  current_instructions: string;
+  current_risk_level: AgentSkillRow["risk_level"];
+  current_status: AgentSkillRow["status"];
+  proposed_name: string;
+  proposed_description: string;
+  proposed_instructions: string;
+  proposed_risk_level: AgentSkillRow["risk_level"];
+  proposed_status: AgentSkillRow["status"];
+  summary: string;
+  status: "pending" | "approved" | "rejected";
+  proposed_by: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
 export interface ComplianceAttestationRow {
   id: string;
   project_type_id: string | null;
@@ -1126,6 +1150,14 @@ export const api = {
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/gates`, { method: "POST", body: JSON.stringify({}) }),
   convertSkillCandidate: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "slug" | "description" | "instructions" | "risk_level">> & { transformation_note?: string } = {}) =>
     request<AgentSkillRow>(`/api/v1/skills/candidates/${id}/convert-skill`, { method: "POST", body: JSON.stringify(body) }),
+  skillReviews: (status?: SkillReviewRow["status"]) =>
+    request<SkillReviewRow[]>(`/api/v1/skills/reviews${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  createSkillReview: (skillId: string, body: Partial<Pick<AgentSkillRow, "name" | "description" | "instructions" | "risk_level" | "status">> & { action: SkillReviewRow["action"]; summary?: string }) =>
+    request<SkillReviewRow>(`/api/v1/skills/${skillId}/reviews`, { method: "POST", body: JSON.stringify(body) }),
+  approveSkillReview: (id: string, reviewed_by: string) =>
+    request<SkillReviewRow>(`/api/v1/skills/reviews/${id}/approve`, { method: "POST", body: JSON.stringify({ reviewed_by }) }),
+  rejectSkillReview: (id: string, reviewed_by: string) =>
+    request<SkillReviewRow>(`/api/v1/skills/reviews/${id}/reject`, { method: "POST", body: JSON.stringify({ reviewed_by }) }),
   approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
   createApprovalPolicy: (body: {
     project_type_id?: string | null;

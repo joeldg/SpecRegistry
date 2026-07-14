@@ -303,6 +303,31 @@ CREATE TABLE IF NOT EXISTS agent_skills (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS skill_change_requests (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (action IN ('update', 'enable', 'disable', 'delete')),
+  current_name TEXT NOT NULL,
+  current_description TEXT NOT NULL,
+  current_instructions TEXT NOT NULL,
+  current_risk_level TEXT NOT NULL,
+  current_status TEXT NOT NULL,
+  proposed_name TEXT NOT NULL,
+  proposed_description TEXT NOT NULL,
+  proposed_instructions TEXT NOT NULL,
+  proposed_risk_level TEXT NOT NULL,
+  proposed_status TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  proposed_by TEXT NOT NULL,
+  reviewed_by TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_skill_change_requests_status ON skill_change_requests(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_skill_change_requests_skill ON skill_change_requests(skill_id, created_at);
+
 CREATE TABLE IF NOT EXISTS skill_sources (
   id TEXT PRIMARY KEY,
   url TEXT NOT NULL UNIQUE,
@@ -1200,6 +1225,36 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       ALTER TABLE agent_skills ADD COLUMN transformed_by TEXT;
       ALTER TABLE agent_skills ADD COLUMN transformation_note TEXT;
       ALTER TABLE agent_skills ADD COLUMN upstream_content_hash TEXT;
+    `,
+  },
+  {
+    // Review-gated skill changes before active governed procedure updates.
+    version: 38,
+    sql: `
+      CREATE TABLE IF NOT EXISTS skill_change_requests (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+        action TEXT NOT NULL CHECK (action IN ('update', 'enable', 'disable', 'delete')),
+        current_name TEXT NOT NULL,
+        current_description TEXT NOT NULL,
+        current_instructions TEXT NOT NULL,
+        current_risk_level TEXT NOT NULL,
+        current_status TEXT NOT NULL,
+        proposed_name TEXT NOT NULL,
+        proposed_description TEXT NOT NULL,
+        proposed_instructions TEXT NOT NULL,
+        proposed_risk_level TEXT NOT NULL,
+        proposed_status TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        proposed_by TEXT NOT NULL,
+        reviewed_by TEXT,
+        reviewed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_change_requests_status ON skill_change_requests(status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_skill_change_requests_skill ON skill_change_requests(skill_id, created_at);
     `,
   },
 ];

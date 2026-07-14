@@ -123,12 +123,51 @@ function dateFilter(days: number): string {
   return since.toISOString();
 }
 
-export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: number }) {
+type TokenUsageReportOptions = {
+  project_id?: string;
+  days?: number;
+  event_type?: string;
+  agent_session_id?: string;
+  provider?: string;
+  model?: string;
+  spec_id?: string;
+  section?: string;
+};
+
+function addFilter(parts: string[], params: unknown[], value: string | undefined, sql: string) {
+  if (!value?.trim()) return;
+  parts.push(sql);
+  params.push(value.trim());
+}
+
+export function tokenUsageReport(db: Db, opts: TokenUsageReportOptions) {
   const days = Math.max(1, Math.min(3650, Number(opts.days ?? 30) || 30));
   const since = dateFilter(days);
-  const params: unknown[] = [since];
-  const projectFilter = opts.project_id ? "AND ce.consumer_id = ?" : "";
-  if (opts.project_id) params.push(opts.project_id);
+
+  const contextFilters = ["ce.created_at >= ?"];
+  const contextParams: unknown[] = [since];
+  addFilter(contextFilters, contextParams, opts.project_id, "ce.consumer_id = ?");
+  addFilter(contextFilters, contextParams, opts.event_type, "ce.event_type = ?");
+  addFilter(contextFilters, contextParams, opts.agent_session_id, "ce.agent_session_id = ?");
+
+  const sectionFilters = [...contextFilters];
+  const sectionParams = [...contextParams];
+  addFilter(sectionFilters, sectionParams, opts.spec_id, "ces.spec_id = ?");
+  addFilter(sectionFilters, sectionParams, opts.section, "ces.section_anchor = ?");
+
+  const llmFilters = ["created_at >= ?"];
+  const llmParams: unknown[] = [since];
+  addFilter(llmFilters, llmParams, opts.project_id, "consumer_id = ?");
+  addFilter(llmFilters, llmParams, opts.agent_session_id, "agent_session_id = ?");
+  addFilter(llmFilters, llmParams, opts.provider, "provider = ?");
+  addFilter(llmFilters, llmParams, opts.model, "model = ?");
+
+  const llmAliasFilters = ["lr.created_at >= ?"];
+  const llmAliasParams: unknown[] = [since];
+  addFilter(llmAliasFilters, llmAliasParams, opts.project_id, "lr.consumer_id = ?");
+  addFilter(llmAliasFilters, llmAliasParams, opts.agent_session_id, "lr.agent_session_id = ?");
+  addFilter(llmAliasFilters, llmAliasParams, opts.provider, "lr.provider = ?");
+  addFilter(llmAliasFilters, llmAliasParams, opts.model, "lr.model = ?");
 
   const projectRows = db
     .prepare(
@@ -152,14 +191,14 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
                 SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd,
                 MAX(created_at) AS last_reported_at
          FROM llm_usage_reports
-         WHERE created_at >= ?
+         WHERE ${llmFilters.join(" AND ")}
          GROUP BY consumer_id
        ) llm ON llm.consumer_id = rc.id
        ${opts.project_id ? "WHERE rc.id = ?" : ""}
        GROUP BY rc.id
        ORDER BY projected_tokens DESC, real_total_tokens DESC, rc.last_seen_at DESC`
     )
-    .all(since, since, ...(opts.project_id ? [opts.project_id] : []));
+    .all(since, ...llmParams, ...(opts.project_id ? [opts.project_id] : []));
 
   const bySpec = db
     .prepare(
@@ -171,12 +210,12 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
               MAX(ce.created_at) AS last_delivered_at
        FROM context_event_sections ces
        JOIN context_events ce ON ce.id = ces.context_event_id
-       WHERE ce.created_at >= ? ${projectFilter}
+       WHERE ${sectionFilters.join(" AND ")}
        GROUP BY ces.spec_id, ces.filename
        ORDER BY projected_tokens DESC, delivered_sections DESC
        LIMIT 100`
     )
-    .all(...params);
+    .all(...sectionParams);
 
   const bySection = db
     .prepare(
@@ -189,12 +228,12 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
               MAX(ce.created_at) AS last_delivered_at
        FROM context_event_sections ces
        JOIN context_events ce ON ce.id = ces.context_event_id
-       WHERE ce.created_at >= ? ${projectFilter}
+       WHERE ${sectionFilters.join(" AND ")}
        GROUP BY ces.spec_id, ces.filename, ces.section_anchor
        ORDER BY projected_tokens DESC, deliveries DESC
        LIMIT 200`
     )
-    .all(...params);
+    .all(...sectionParams);
 
   const byEventType = db
     .prepare(
@@ -203,11 +242,11 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
               SUM(ce.estimated_tokens) AS projected_tokens,
               MAX(ce.created_at) AS last_delivered_at
        FROM context_events ce
-       WHERE ce.created_at >= ? ${projectFilter}
+       WHERE ${contextFilters.join(" AND ")}
        GROUP BY ce.event_type
        ORDER BY projected_tokens DESC`
     )
-    .all(...params);
+    .all(...contextParams);
 
   const sessions = db
     .prepare(
@@ -219,12 +258,12 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
               MAX(ce.created_at) AS last_delivered_at
        FROM context_events ce
        LEFT JOIN agent_sessions ags ON ags.id = ce.agent_session_id
-       WHERE ce.created_at >= ? ${projectFilter} AND ce.agent_session_id IS NOT NULL
+       WHERE ${contextFilters.join(" AND ")} AND ce.agent_session_id IS NOT NULL
        GROUP BY ce.agent_session_id
        ORDER BY projected_tokens DESC
        LIMIT 100`
     )
-    .all(...params);
+    .all(...contextParams);
 
   const realUsage = db
     .prepare(
@@ -237,11 +276,11 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
               SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd,
               MAX(created_at) AS last_reported_at
        FROM llm_usage_reports
-       WHERE created_at >= ? ${opts.project_id ? "AND consumer_id = ?" : ""}
+       WHERE ${llmFilters.join(" AND ")}
        GROUP BY provider, model, route
        ORDER BY total_tokens DESC`
     )
-    .all(...params);
+    .all(...llmParams);
 
   const trendRows = db
     .prepare(
@@ -256,7 +295,7 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
                 0 AS reports,
                 0 AS total_cost_usd
          FROM context_events ce
-         WHERE ce.created_at >= ? ${projectFilter}
+         WHERE ${contextFilters.join(" AND ")}
          GROUP BY date(created_at)
          UNION ALL
          SELECT date(created_at) AS day,
@@ -269,7 +308,7 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
                 COUNT(*) AS reports,
                 SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd
          FROM llm_usage_reports lr
-         WHERE lr.created_at >= ? ${opts.project_id ? "AND lr.consumer_id = ?" : ""}
+         WHERE ${llmAliasFilters.join(" AND ")}
          GROUP BY date(created_at)
        )
        SELECT day,
@@ -285,7 +324,7 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
        GROUP BY day
        ORDER BY day`
     )
-    .all(...params, ...params);
+    .all(...contextParams, ...llmAliasParams);
 
   return {
     generated_at: now(),

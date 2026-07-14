@@ -344,6 +344,16 @@ export interface TokenUsageReport {
     total_cost_usd: number;
   }>;
 }
+export type TokenUsageFilters = {
+  project_id?: string;
+  days?: number;
+  event_type?: string;
+  agent_session_id?: string;
+  provider?: string;
+  model?: string;
+  spec_id?: string;
+  section?: string;
+};
 export interface DependencyMap {
   specs: Array<{ id: string; filename: string; project_type_name: string; project_name?: string | null }>;
   edges: Array<{ from_spec_id: string; from_filename: string; to_spec_id: string | null; to_filename: string; relation: string }>;
@@ -915,8 +925,15 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
   reports: () => request<ReportsOverview>("/api/v1/reports/overview"),
-  tokenUsageReport: (projectId?: string, days = 30) =>
-    request<TokenUsageReport>(`/api/v1/reports/token-usage?days=${days}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ""}`),
+  tokenUsageReport: (filters: TokenUsageFilters = {}) => {
+    const params = new URLSearchParams();
+    params.set("days", String(filters.days ?? 30));
+    for (const [key, value] of Object.entries(filters)) {
+      if (key === "days" || value == null || value === "") continue;
+      params.set(key, String(value));
+    }
+    return request<TokenUsageReport>(`/api/v1/reports/token-usage?${params.toString()}`);
+  },
   manifestDiagnostics: (body: { manifest?: unknown; project_type?: string; repo?: string; project_id?: string }) =>
     request<ManifestDiagnostics>("/api/v1/cli/manifest-diagnostics", { method: "POST", body: JSON.stringify(body) }),
   dependencyMap: () => request<DependencyMap>("/api/v1/specs/dependency-map"),

@@ -1,3 +1,5 @@
+import type { Db } from "../db.js";
+
 export interface AgentSkillRecord {
   id: string;
   slug: string;
@@ -46,4 +48,25 @@ This skill is a governed operating procedure, not permission to take external or
 actions. Follow the agent host's approval policy, current published specifications, and the
 principle of least privilege. Stop and ask when required authorization or intent is unclear.
 `;
+}
+
+export function assignedSkills(
+  db: Db,
+  projectTypeId?: string | null,
+  projectId?: string | null
+): AgentSkillRecord[] {
+  const rows = db.prepare(
+    `SELECT ask.*
+     FROM skill_assignments sa
+     JOIN agent_skills ask ON ask.id = sa.skill_id
+     WHERE ask.status = 'active'
+       AND (
+         sa.scope = 'global'
+         OR (sa.scope = 'project_type' AND sa.project_type_id = ?)
+         OR (sa.scope = 'project' AND sa.project_id = ?)
+       )
+     GROUP BY ask.id
+     ORDER BY ask.name`
+  ).all(projectTypeId ?? null, projectId ?? null) as AgentSkillRecord[];
+  return rows;
 }

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, getAuthor, type AgentSkillRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow } from "../api";
+import { api, getAuthor, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
-type SkillTab = "installed" | "sources" | "candidates" | "reviews";
+type SkillTab = "installed" | "sources" | "candidates" | "reviews" | "assignments";
 
 function parseList(value: string): string[] {
   try {
@@ -19,6 +19,9 @@ export default function SkillsMarketplacePage() {
   const [sources, setSources] = useState<SkillSourceRow[]>([]);
   const [candidates, setCandidates] = useState<SkillCandidateRow[]>([]);
   const [reviews, setReviews] = useState<SkillReviewRow[]>([]);
+  const [assignments, setAssignments] = useState<SkillAssignmentRow[]>([]);
+  const [projectTypes, setProjectTypes] = useState<ProjectTypeWithCount[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [sourceUrl, setSourceUrl] = useState("");
@@ -30,15 +33,27 @@ export default function SkillsMarketplacePage() {
   const [candidatePath, setCandidatePath] = useState("");
   const [candidateType, setCandidateType] = useState<SkillCandidateRow["candidate_type"] | "">("");
   const [candidateContent, setCandidateContent] = useState("");
+  const [assignmentSkillId, setAssignmentSkillId] = useState("");
+  const [assignmentScope, setAssignmentScope] = useState<SkillAssignmentRow["scope"]>("global");
+  const [assignmentProjectTypeId, setAssignmentProjectTypeId] = useState("");
+  const [assignmentProjectId, setAssignmentProjectId] = useState("");
 
   const reload = useCallback(() => {
     setError(undefined);
-    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates(), api.skillReviews()])
-      .then(([nextSkills, nextSources, nextCandidates, nextReviews]) => {
+    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates(), api.skillReviews(), api.skillAssignments(), api.projectTypes(), api.projects()])
+      .then(([nextSkills, nextSources, nextCandidates, nextReviews, nextAssignments, nextProjectTypes, nextProjects]) => {
         setSkills(nextSkills);
         setSources(nextSources);
         setCandidates(nextCandidates);
         setReviews(nextReviews);
+        setAssignments(nextAssignments);
+        setProjectTypes(nextProjectTypes);
+        setProjects(nextProjects);
+        const active = nextSkills.find((skill) => skill.status === "active");
+        if (!assignmentSkillId && active) setAssignmentSkillId(active.id);
+        const reusableTypes = nextProjectTypes.filter((projectType) => projectType.scope === "project_type");
+        if (!assignmentProjectTypeId && reusableTypes[0]) setAssignmentProjectTypeId(reusableTypes[0].id);
+        if (!assignmentProjectId && nextProjects[0]) setAssignmentProjectId(nextProjects[0].id);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -50,8 +65,8 @@ export default function SkillsMarketplacePage() {
     const openCandidates = candidates.filter((candidate) => candidate.status === "candidate").length;
     const restrictedCandidates = candidates.filter((candidate) => candidate.risk_level === "restricted").length;
     const pendingReviews = reviews.filter((review) => review.status === "pending").length;
-    return { activeSkills, openCandidates, restrictedCandidates, pendingReviews };
-  }, [skills, candidates, reviews]);
+    return { activeSkills, openCandidates, restrictedCandidates, pendingReviews, assignments: assignments.length };
+  }, [skills, candidates, reviews, assignments]);
 
   async function createSource() {
     if (!sourceUrl.trim()) return;
@@ -165,6 +180,42 @@ export default function SkillsMarketplacePage() {
     }
   }
 
+  async function createAssignment() {
+    if (!assignmentSkillId) return;
+    if (assignmentScope === "project_type" && !assignmentProjectTypeId) return;
+    if (assignmentScope === "project" && !assignmentProjectId) return;
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.createSkillAssignment({
+        skill_id: assignmentSkillId,
+        scope: assignmentScope,
+        project_type_id: assignmentScope === "project_type" ? assignmentProjectTypeId : undefined,
+        project_id: assignmentScope === "project" ? assignmentProjectId : undefined,
+      });
+      setNotice("Skill assignment saved.");
+      reload();
+      setTab("assignments");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function deleteAssignment(id: string) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.deleteSkillAssignment(id);
+      setNotice("Skill assignment removed.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const reusableProjectTypes = projectTypes.filter((projectType) => projectType.scope === "project_type");
+  const activeSkills = skills.filter((skill) => skill.status === "active");
+
   return (
     <>
       <div className="page-head">
@@ -195,6 +246,10 @@ export default function SkillsMarketplacePage() {
           <div className="metric">{summary.pendingReviews}</div>
           <div className="label">Pending reviews</div>
         </div>
+        <div className="card">
+          <div className="metric">{summary.assignments}</div>
+          <div className="label">Assignments</div>
+        </div>
       </div>
 
       <div className="settings-tabs" style={{ marginBottom: 16 }}>
@@ -202,6 +257,7 @@ export default function SkillsMarketplacePage() {
         <button className={tab === "sources" ? "active" : ""} onClick={() => setTab("sources")}>Sources</button>
         <button className={tab === "candidates" ? "active" : ""} onClick={() => setTab("candidates")}>Candidates</button>
         <button className={tab === "reviews" ? "active" : ""} onClick={() => setTab("reviews")}>Reviews</button>
+        <button className={tab === "assignments" ? "active" : ""} onClick={() => setTab("assignments")}>Assignments</button>
       </div>
 
       {tab === "installed" && (
@@ -384,6 +440,72 @@ export default function SkillsMarketplacePage() {
                       <span className="faint">{review.reviewed_by ?? "closed"}</span>
                     )}
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "assignments" && (
+        <div className="section">
+          <h2>Skill Assignments</h2>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="form-row">
+              <select value={assignmentSkillId} onChange={(e) => setAssignmentSkillId(e.target.value)}>
+                <option value="">Select active skill</option>
+                {activeSkills.map((skill) => (
+                  <option key={skill.id} value={skill.id}>{skill.name}</option>
+                ))}
+              </select>
+              <select value={assignmentScope} onChange={(e) => setAssignmentScope(e.target.value as SkillAssignmentRow["scope"])}>
+                <option value="global">Global</option>
+                <option value="project_type">Project type</option>
+                <option value="project">Project</option>
+              </select>
+              {assignmentScope === "project_type" && (
+                <select value={assignmentProjectTypeId} onChange={(e) => setAssignmentProjectTypeId(e.target.value)}>
+                  {reusableProjectTypes.map((projectType) => (
+                    <option key={projectType.id} value={projectType.id}>{projectType.name}</option>
+                  ))}
+                </select>
+              )}
+              {assignmentScope === "project" && (
+                <select value={assignmentProjectId} onChange={(e) => setAssignmentProjectId(e.target.value)}>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.repo}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                className="primary"
+                onClick={createAssignment}
+                disabled={!assignmentSkillId || (assignmentScope === "project_type" && !assignmentProjectTypeId) || (assignmentScope === "project" && !assignmentProjectId)}
+              >
+                Assign skill
+              </button>
+            </div>
+          </div>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Skill</th>
+                <th>Scope</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assignments.map((assignment) => (
+                <tr key={assignment.id}>
+                  <td><strong>{assignment.skill_name}</strong><div className="mono faint">{assignment.skill_slug}</div></td>
+                  <td>{assignment.scope}</td>
+                  <td>{assignment.project_repo ?? assignment.project_type_name ?? "All projects"}</td>
+                  <td><StatusBadge status={assignment.skill_status} /> <StatusBadge status={assignment.risk_level} /></td>
+                  <td>{assignment.created_by}<div className="faint">{timeAgo(assignment.created_at)}</div></td>
+                  <td><button onClick={() => deleteAssignment(assignment.id)}>Remove</button></td>
                 </tr>
               ))}
             </tbody>

@@ -27,7 +27,7 @@ export default function SkillsMarketplacePage() {
   const [candidateSourceId, setCandidateSourceId] = useState("");
   const [candidateName, setCandidateName] = useState("");
   const [candidatePath, setCandidatePath] = useState("");
-  const [candidateType, setCandidateType] = useState<SkillCandidateRow["candidate_type"]>("unknown");
+  const [candidateType, setCandidateType] = useState<SkillCandidateRow["candidate_type"] | "">("");
   const [candidateContent, setCandidateContent] = useState("");
 
   const reload = useCallback(() => {
@@ -83,7 +83,7 @@ export default function SkillsMarketplacePage() {
         detected_format: candidatePath.endsWith("SKILL.md") ? "skill_markdown" : "manual_markdown",
         raw_content: candidateContent,
         proposed_name: candidateName.trim(),
-        candidate_type: candidateType,
+        candidate_type: candidateType || undefined,
       });
       setCandidateName("");
       setCandidatePath("");
@@ -91,6 +91,18 @@ export default function SkillsMarketplacePage() {
       setNotice("Candidate captured for review.");
       reload();
       setTab("candidates");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function classifyCandidate(id: string) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.classifySkillCandidate(id);
+      setNotice("Candidate reclassified.");
+      reload();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -214,7 +226,8 @@ export default function SkillsMarketplacePage() {
               </select>
               <input type="text" placeholder="Candidate name" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} />
               <input type="text" placeholder="Source path" value={candidatePath} onChange={(e) => setCandidatePath(e.target.value)} />
-              <select value={candidateType} onChange={(e) => setCandidateType(e.target.value as SkillCandidateRow["candidate_type"])}>
+              <select value={candidateType} onChange={(e) => setCandidateType(e.target.value as SkillCandidateRow["candidate_type"] | "")}>
+                <option value="">Auto classify</option>
                 <option value="unknown">Unknown</option>
                 <option value="agent_skill">Agent skill</option>
                 <option value="spec_seed">Spec seed</option>
@@ -235,6 +248,7 @@ export default function SkillsMarketplacePage() {
                 <th>Signals</th>
                 <th>Status</th>
                 <th>Source</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -243,11 +257,12 @@ export default function SkillsMarketplacePage() {
                 return (
                   <tr key={candidate.id}>
                     <td><strong>{candidate.proposed_name}</strong><div className="mono faint">{candidate.proposed_slug}</div></td>
-                    <td>{candidate.candidate_type}</td>
+                    <td>{candidate.candidate_type}<div className="faint">{candidate.category ?? "uncategorized"}</div></td>
                     <td><StatusBadge status={candidate.risk_level} /></td>
-                    <td>{signalCount ? <span className="badge pending">{signalCount} signals</span> : <span className="badge approved">clear</span>}<div className="faint">{candidate.risk_summary}</div></td>
+                    <td>{signalCount ? <span className="badge pending">{signalCount} signals</span> : <span className="badge approved">clear</span>}<div className="faint">{candidate.risk_summary}</div><div className="faint">{candidate.classifier_notes}</div></td>
                     <td><StatusBadge status={candidate.status} /></td>
                     <td className="mono">{candidate.source_path ?? candidate.source_url ?? "manual"}<div className="faint">{candidate.raw_content_hash.slice(0, 12)}</div></td>
+                    <td><button onClick={() => classifyCandidate(candidate.id)}>Reclassify</button></td>
                   </tr>
                 );
               })}

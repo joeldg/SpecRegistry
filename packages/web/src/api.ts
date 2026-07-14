@@ -332,6 +332,17 @@ export interface TokenUsageReport {
     total_cost_usd: number;
     last_reported_at: string | null;
   }>;
+  trend: Array<{
+    day: string;
+    projected_tokens: number;
+    delivered_sections: number;
+    context_events: number;
+    real_prompt_tokens: number;
+    real_completion_tokens: number;
+    real_total_tokens: number;
+    reports: number;
+    total_cost_usd: number;
+  }>;
 }
 export interface DependencyMap {
   specs: Array<{ id: string; filename: string; project_type_name: string; project_name?: string | null }>;

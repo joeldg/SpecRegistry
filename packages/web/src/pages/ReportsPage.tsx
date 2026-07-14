@@ -406,6 +406,30 @@ export default function ReportsPage() {
                 <div className="label">Estimator</div>
               </div>
             </div>
+            {tokenUsage && tokenUsage.trend.length > 0 && (
+              <div className="report-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <h3>Projected Token Trend</h3>
+                  <BarChart
+                    data={tokenUsage.trend.slice(-14).map((row) => ({
+                      label: row.day.slice(5),
+                      value: Number(row.projected_tokens ?? 0),
+                      tone: "accent",
+                    }))}
+                  />
+                </div>
+                <div>
+                  <h3>Real LLM Token Trend</h3>
+                  <BarChart
+                    data={tokenUsage.trend.slice(-14).map((row) => ({
+                      label: row.day.slice(5),
+                      value: Number(row.real_total_tokens ?? 0),
+                      tone: "green",
+                    }))}
+                  />
+                </div>
+              </div>
+            )}
             {!tokenUsage || tokenUsage.projects.length === 0 ? (
               <div className="empty">No token usage has been recorded yet. Agent spec reads and searches will populate this report.</div>
             ) : (
@@ -443,6 +467,30 @@ export default function ReportsPage() {
                 {projectTokenUsage && (
                   <div style={{ marginTop: 16 }}>
                     <h3>{projectTokenUsage.projects[0]?.repo ?? "Project"} Token Drilldown</h3>
+                    {projectTokenUsage.trend.length > 0 && (
+                      <div className="report-grid">
+                        <div>
+                          <h3>Projected Daily Trend</h3>
+                          <BarChart
+                            data={projectTokenUsage.trend.slice(-14).map((row) => ({
+                              label: row.day.slice(5),
+                              value: Number(row.projected_tokens ?? 0),
+                              tone: "accent",
+                            }))}
+                          />
+                        </div>
+                        <div>
+                          <h3>Real Daily Trend</h3>
+                          <BarChart
+                            data={projectTokenUsage.trend.slice(-14).map((row) => ({
+                              label: row.day.slice(5),
+                              value: Number(row.real_total_tokens ?? 0),
+                              tone: "green",
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    )}
                     <div className="report-grid">
                       <div>
                         <h3>By Spec</h3>

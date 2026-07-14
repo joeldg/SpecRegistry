@@ -243,6 +243,50 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
     )
     .all(...params);
 
+  const trendRows = db
+    .prepare(
+      `WITH days AS (
+         SELECT date(created_at) AS day,
+                SUM(estimated_tokens) AS projected_tokens,
+                SUM(section_count) AS delivered_sections,
+                COUNT(*) AS context_events,
+                0 AS real_prompt_tokens,
+                0 AS real_completion_tokens,
+                0 AS real_total_tokens,
+                0 AS reports,
+                0 AS total_cost_usd
+         FROM context_events ce
+         WHERE ce.created_at >= ? ${projectFilter}
+         GROUP BY date(created_at)
+         UNION ALL
+         SELECT date(created_at) AS day,
+                0 AS projected_tokens,
+                0 AS delivered_sections,
+                0 AS context_events,
+                SUM(prompt_tokens) AS real_prompt_tokens,
+                SUM(completion_tokens) AS real_completion_tokens,
+                SUM(total_tokens) AS real_total_tokens,
+                COUNT(*) AS reports,
+                SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd
+         FROM llm_usage_reports lr
+         WHERE lr.created_at >= ? ${opts.project_id ? "AND lr.consumer_id = ?" : ""}
+         GROUP BY date(created_at)
+       )
+       SELECT day,
+              SUM(projected_tokens) AS projected_tokens,
+              SUM(delivered_sections) AS delivered_sections,
+              SUM(context_events) AS context_events,
+              SUM(real_prompt_tokens) AS real_prompt_tokens,
+              SUM(real_completion_tokens) AS real_completion_tokens,
+              SUM(real_total_tokens) AS real_total_tokens,
+              SUM(reports) AS reports,
+              SUM(total_cost_usd) AS total_cost_usd
+       FROM days
+       GROUP BY day
+       ORDER BY day`
+    )
+    .all(...params, ...params);
+
   return {
     generated_at: now(),
     window_days: days,
@@ -254,6 +298,7 @@ export function tokenUsageReport(db: Db, opts: { project_id?: string; days?: num
     by_event_type: byEventType,
     sessions,
     real_usage: realUsage,
+    trend: trendRows,
   };
 }
 
@@ -376,6 +421,9 @@ export function tokenUsageCsv(report: ReturnType<typeof tokenUsageReport>): stri
   }
   for (const row of report.real_usage as Array<Record<string, unknown>>) {
     rows.push(["real_usage", "", "", "", "", "", row.provider, row.model, row.route, "", row.prompt_tokens, row.completion_tokens, row.total_tokens, "", row.reports, row.last_reported_at]);
+  }
+  for (const row of report.trend as Array<Record<string, unknown>>) {
+    rows.push(["trend", "", "", "", "", "", "", "", "", row.projected_tokens, row.real_prompt_tokens, row.real_completion_tokens, row.real_total_tokens, row.delivered_sections, row.context_events, row.day]);
   }
   return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
 }

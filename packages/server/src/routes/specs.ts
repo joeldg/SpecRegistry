@@ -26,7 +26,7 @@ import { reindexSpecSearch } from "../lib/search.js";
 import { sha256, signManifest } from "../lib/sign.js";
 import { reviewImpact } from "../lib/reviewImpact.js";
 import { migrationChecklist, specChangeSummaryMarkdown } from "../lib/specChangeSummary.js";
-import { assignedSkills, renderSkillMarkdown } from "../lib/skills.js";
+import { assignedSkills, renderSkillMarkdown, skillManifestEntry } from "../lib/skills.js";
 import { assistNewSpecDraft, assistSpec, type SpecAssistMode } from "../lib/specAssist.js";
 import { recordContextEvent, sectionsFromSpecs } from "../lib/tokenUsage.js";
 
@@ -370,7 +370,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     }
     zip.addFile(
       ".spec/skills/manifest.json",
-      Buffer.from(JSON.stringify({ source: "specregistry", skills: skills.map(({ id, slug, name, description, risk_level }) => ({ id, slug, name, description, risk_level })) }, null, 2) + "\n", "utf8")
+      Buffer.from(JSON.stringify({ source: "specregistry", skills: skills.map(skillManifestEntry) }, null, 2) + "\n", "utf8")
     );
     recordUsage(app.db, "download", pt.id, "agent-pack");
     recordContextEvent(app.db, {

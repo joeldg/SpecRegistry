@@ -367,7 +367,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
   recommendation.
 - [ ] Add deeper third-party skill quality gates: near-duplicate detection, conflict checks
   against active skills, richer license policy, and reviewer-tunable gate thresholds.
-- [ ] Add explicit "skill does not grant permission" language to every rendered marketplace
+- [x] Add explicit "skill does not grant permission" language to every rendered marketplace
   skill. Skills may tell an agent how to perform a workflow, but host approval policies,
   governed specs, RBAC, and tool permissions still decide what may actually be done.
 - [ ] Add skill-spec relationships. Skills can declare related specs/sections; specs can
@@ -376,6 +376,9 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Include locked skill versions in generated agent packs and `.spec/skills/manifest.json`.
   Manifest entries should include slug, version, scope, risk level, hash, source, and
   related specs.
+- [x] Enrich generated `.spec/skills/manifest.json` entries with assignment scope,
+  risk/status, content hash, built-in/custom origin, source URL/path/commit, imported
+  candidate id, transformer, and upstream content hash.
 - [ ] Extend `specreg check` to verify local skill currency alongside spec currency:
   up-to-date skills, outdated skills, missing skills, unknown local skills, and hash
   mismatches.

@@ -246,6 +246,19 @@ describe("project types & specs", () => {
     expect(scopedZip.getEntry(".spec/skills/external-reviewer-workflow/SKILL.md")).toBeTruthy();
     const manifest = JSON.parse(scopedZip.readAsText(".spec/skills/manifest.json"));
     expect(manifest.skills.map((skill: any) => skill.slug)).toContain("external-reviewer-workflow");
+    const manifestSkill = manifest.skills.find((skill: any) => skill.slug === "external-reviewer-workflow");
+    expect(manifestSkill).toMatchObject({
+      assignment_scopes: ["project_type"],
+      built_in: false,
+      source: {
+        candidate_id: candidate.id,
+        url: "https://github.com/msitarzewski/agency-agents",
+        path: "agents/reviewer.md",
+        commit: "abc123",
+        upstream_content_hash: candidate.raw_content_hash,
+      },
+    });
+    expect(manifestSkill.content_hash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("creates, edits, and publishes a draft spec", async () => {

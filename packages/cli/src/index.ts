@@ -13,6 +13,7 @@ import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
 import { readStoredCredentials } from "./credentials.js";
 import { runComply } from "./comply.js";
 import { runScan } from "./scanCommand.js";
+import { runMigrate } from "./migrate.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { reportCodeTrace, type Manifest } from "./repo.js";
 import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
@@ -29,6 +30,7 @@ Usage:
   specreg submit-drafts  Submit generated draft specs into the registry workflow
   specreg check     Compare local specs to the registry; exit 1 on drift (CI gate)
   specreg sync      Like check, but pulls the latest approved specs when drift is found
+  specreg migrate   Move this governed repo to a different registry (--server target; --apply to upload)
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
@@ -67,6 +69,7 @@ Options:
   --force           Overwrite protected/generated files where supported
   --ci              audit: exit 1 when findings exist
   --score <n>       comply: your honest 0-100 self-assessed compliance score
+  --apply           migrate: upload diffs for review + stamp the manifest (default: dry run)
   --json            scan: print the machine-readable report instead of the summary
   --html <path>     scan: also write a self-contained, shareable HTML report
   -h, --help        Show this help
@@ -148,6 +151,15 @@ try {
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       json: flags.json === true,
       html: typeof flags.html === "string" ? flags.html : undefined,
+    });
+  } else if (command === "migrate") {
+    await runMigrate({
+      toServer: requireServer(),
+      token,
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      apply: flags.apply === true,
+      author: typeof flags.author === "string" ? flags.author : process.env.USER || "cli",
+      force: flags.force === true,
     });
   } else if (command === "init") {
     await runInit({

@@ -354,9 +354,12 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add upstream drift detection for imported sources. When a tracked repo/path changes,
   show "upstream update available" and create a reviewed update candidate rather than
   silently mutating the active skill.
-- [ ] Add security and quality gates for third-party skills: prompt-injection scan,
-  command intent scan, network/API intent scan, secrets scan, license check, size/token
-  budget check, duplicate/near-duplicate detection, and risk-level recommendation.
+- [x] Add deterministic security and quality gates for third-party skill candidates:
+  prompt-injection scan, command intent scan, network/API intent scan, secrets scan,
+  license check, size/token budget check, exact duplicate detection, and risk-level
+  recommendation.
+- [ ] Add deeper third-party skill quality gates: near-duplicate detection, conflict checks
+  against active skills, richer license policy, and reviewer-tunable gate thresholds.
 - [ ] Add explicit "skill does not grant permission" language to every rendered marketplace
   skill. Skills may tell an agent how to perform a workflow, but host approval policies,
   governed specs, RBAC, and tool permissions still decide what may actually be done.

@@ -108,6 +108,18 @@ export default function SkillsMarketplacePage() {
     }
   }
 
+  async function runCandidateGates(id: string) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.runSkillCandidateGates(id);
+      setNotice("Candidate gates evaluated.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -245,6 +257,7 @@ export default function SkillsMarketplacePage() {
                 <th>Candidate</th>
                 <th>Type</th>
                 <th>Risk</th>
+                <th>Gates</th>
                 <th>Signals</th>
                 <th>Status</th>
                 <th>Source</th>
@@ -259,10 +272,14 @@ export default function SkillsMarketplacePage() {
                     <td><strong>{candidate.proposed_name}</strong><div className="mono faint">{candidate.proposed_slug}</div></td>
                     <td>{candidate.candidate_type}<div className="faint">{candidate.category ?? "uncategorized"}</div></td>
                     <td><StatusBadge status={candidate.risk_level} /></td>
+                    <td><StatusBadge status={candidate.gate_status} /><div className="faint">{parseList(candidate.gate_results).length} checks</div></td>
                     <td>{signalCount ? <span className="badge pending">{signalCount} signals</span> : <span className="badge approved">clear</span>}<div className="faint">{candidate.risk_summary}</div><div className="faint">{candidate.classifier_notes}</div></td>
                     <td><StatusBadge status={candidate.status} /></td>
                     <td className="mono">{candidate.source_path ?? candidate.source_url ?? "manual"}<div className="faint">{candidate.raw_content_hash.slice(0, 12)}</div></td>
-                    <td><button onClick={() => classifyCandidate(candidate.id)}>Reclassify</button></td>
+                    <td>
+                      <button onClick={() => classifyCandidate(candidate.id)}>Reclassify</button>{" "}
+                      <button onClick={() => runCandidateGates(candidate.id)}>Run gates</button>
+                    </td>
                   </tr>
                 );
               })}

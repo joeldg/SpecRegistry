@@ -748,6 +748,8 @@ export interface SkillCandidateRow {
   detected_commands: string;
   detected_network: string;
   detected_secrets: string;
+  gate_status: "pass" | "review" | "block" | "pending";
+  gate_results: string;
   classifier_notes: string;
   status: "candidate" | "converted" | "rejected" | "archived";
   created_at: string;
@@ -1112,6 +1114,8 @@ export const api = {
   }) => request<SkillCandidateRow>("/api/v1/skills/candidates", { method: "POST", body: JSON.stringify(body) }),
   classifySkillCandidate: (id: string) =>
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/classify`, { method: "POST", body: JSON.stringify({}) }),
+  runSkillCandidateGates: (id: string) =>
+    request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/gates`, { method: "POST", body: JSON.stringify({}) }),
   approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
   createApprovalPolicy: (body: {
     project_type_id?: string | null;

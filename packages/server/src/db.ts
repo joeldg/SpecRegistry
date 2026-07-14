@@ -331,6 +331,8 @@ CREATE TABLE IF NOT EXISTS skill_candidates (
   detected_commands TEXT NOT NULL DEFAULT '[]',
   detected_network TEXT NOT NULL DEFAULT '[]',
   detected_secrets TEXT NOT NULL DEFAULT '[]',
+  gate_status TEXT NOT NULL DEFAULT 'pending' CHECK (gate_status IN ('pass', 'review', 'block', 'pending')),
+  gate_results TEXT NOT NULL DEFAULT '[]',
   classifier_notes TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'converted', 'rejected', 'archived')),
   created_at TEXT NOT NULL,
@@ -1159,6 +1161,8 @@ Project types are reusable baselines; projects are concrete repositories. The pr
         detected_commands TEXT NOT NULL DEFAULT '[]',
         detected_network TEXT NOT NULL DEFAULT '[]',
         detected_secrets TEXT NOT NULL DEFAULT '[]',
+        gate_status TEXT NOT NULL DEFAULT 'pending' CHECK (gate_status IN ('pass', 'review', 'block', 'pending')),
+        gate_results TEXT NOT NULL DEFAULT '[]',
         classifier_notes TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'converted', 'rejected', 'archived')),
         created_at TEXT NOT NULL,
@@ -1166,6 +1170,14 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       );
       CREATE INDEX IF NOT EXISTS idx_skill_candidates_source ON skill_candidates(source_id, status);
       CREATE INDEX IF NOT EXISTS idx_skill_candidates_type ON skill_candidates(candidate_type, status);
+    `,
+  },
+  {
+    // Persist deterministic candidate security/quality gate outcomes.
+    version: 36,
+    sql: `
+      ALTER TABLE skill_candidates ADD COLUMN gate_status TEXT NOT NULL DEFAULT 'pending' CHECK (gate_status IN ('pass', 'review', 'block', 'pending'));
+      ALTER TABLE skill_candidates ADD COLUMN gate_results TEXT NOT NULL DEFAULT '[]';
     `,
   },
 ];

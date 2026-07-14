@@ -11,6 +11,7 @@ type SourceStatus = "active" | "paused" | "archived";
 type TrustDecision = "trusted" | "unreviewed" | "blocked";
 type CandidateType = "agent_skill" | "spec_seed" | "project_type_template" | "reference_only" | "unsafe" | "unknown";
 type CandidateStatus = "candidate" | "converted" | "rejected" | "archived";
+type GateStatus = "pass" | "review" | "block" | "pending";
 
 function slugValue(value: unknown): string {
   const slug = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -114,6 +115,66 @@ function classifyCandidate(input: { content: string; source_path?: string | null
     category: "unknown",
     notes: "No deterministic classifier rule matched; keep as unknown until reviewed.",
   };
+}
+
+function evaluateCandidateGates(input: {
+  content: string;
+  content_hash: string;
+  candidate_type: CandidateType;
+  license?: string | null;
+  detected: ReturnType<typeof detectCandidateSignals>;
+  duplicate_count?: number;
+}) {
+  const estimatedTokens = Math.max(1, Math.ceil(input.content.length / 4));
+  const lower = input.content.toLowerCase();
+  const gateResults: Array<{ gate: string; status: GateStatus; detail: string }> = [];
+  const add = (gate: string, status: GateStatus, detail: string) => gateResults.push({ gate, status, detail });
+  const injectionPattern = /\b(ignore previous|ignore all previous|jailbreak|developer mode|bypass approval|disable safety|exfiltrate|steal credentials|credential dump)\b/;
+
+  add(
+    "prompt_injection",
+    injectionPattern.test(lower) || input.candidate_type === "unsafe" ? "block" : "pass",
+    injectionPattern.test(lower) || input.candidate_type === "unsafe"
+      ? "Possible prompt-injection, bypass, exfiltration, or destructive intent detected."
+      : "No obvious prompt-injection pattern detected."
+  );
+  add(
+    "command_intent",
+    input.detected.commands.length ? "review" : "pass",
+    input.detected.commands.length ? `Mentions ${input.detected.commands.length} command-like instruction(s).` : "No command-like instructions detected."
+  );
+  add(
+    "network_intent",
+    input.detected.network.length ? "review" : "pass",
+    input.detected.network.length ? `Mentions ${input.detected.network.length} network URL(s).` : "No network URLs detected."
+  );
+  add(
+    "secrets",
+    input.detected.secrets.length ? "review" : "pass",
+    input.detected.secrets.length ? `Mentions ${input.detected.secrets.length} secret-like term(s).` : "No secret-like terms detected."
+  );
+  add(
+    "license",
+    input.license ? "pass" : "review",
+    input.license ? `License recorded: ${input.license}.` : "No license recorded; reviewer must verify before conversion."
+  );
+  add(
+    "token_budget",
+    estimatedTokens > 8000 ? "review" : "pass",
+    estimatedTokens > 8000 ? `Large candidate estimated at ${estimatedTokens} tokens.` : `Estimated at ${estimatedTokens} tokens.`
+  );
+  add(
+    "duplicate",
+    (input.duplicate_count ?? 0) > 0 ? "review" : "pass",
+    (input.duplicate_count ?? 0) > 0 ? `Matches ${input.duplicate_count} existing candidate content hash(es).` : "No duplicate content hash detected."
+  );
+
+  const gateStatus: GateStatus = gateResults.some((gate) => gate.status === "block")
+    ? "block"
+    : gateResults.some((gate) => gate.status === "review")
+      ? "review"
+      : "pass";
+  return { gate_status: gateStatus, gate_results: JSON.stringify(gateResults) };
 }
 
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
@@ -286,13 +347,25 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     const id = uuid();
     const ts = now();
     const sourcePath = optionalBounded(body.source_path, "source_path", 500);
+    const hash = contentHash(rawContent);
+    const duplicate = app.db.prepare("SELECT COUNT(*) AS n FROM skill_candidates WHERE raw_content_hash = ?").get(hash) as { n: number };
+    const sourceLicense = typeof source?.license === "string" ? source.license : null;
+    const license = optionalBounded(body.license, "license", 120) ?? sourceLicense;
+    const gates = evaluateCandidateGates({
+      content: rawContent,
+      content_hash: hash,
+      candidate_type: candidateType,
+      license,
+      detected,
+      duplicate_count: duplicate.n,
+    });
     app.db.prepare(
       `INSERT INTO skill_candidates
         (id, source_id, source_url, source_path, source_commit, detected_format, raw_content_hash,
          raw_content, license, category, candidate_type, proposed_name, proposed_slug, risk_level,
-         risk_summary, detected_commands, detected_network, detected_secrets, classifier_notes,
+         risk_summary, detected_commands, detected_network, detected_secrets, gate_status, gate_results, classifier_notes,
          status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       source ? source.id : null,
@@ -300,9 +373,9 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       sourcePath,
       optionalBounded(body.source_commit, "source_commit", 120) ?? source?.last_fetched_commit ?? null,
       optionalBounded(body.detected_format, "detected_format", 120) ?? "unknown",
-      contentHash(rawContent),
+      hash,
       rawContent,
-      optionalBounded(body.license, "license", 120) ?? source?.license ?? null,
+      license,
       optionalBounded(body.category, "category", 120) ?? classification.category,
       candidateType,
       proposedName,
@@ -312,6 +385,8 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       jsonList(detected.commands),
       jsonList(detected.network),
       jsonList(detected.secrets),
+      gates.gate_status,
+      gates.gate_results,
       optionalBounded(body.classifier_notes, "classifier_notes", 4000) ?? classification.notes,
       status,
       ts,
@@ -325,7 +400,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
   app.post("/skills/candidates/:id/classify", async (req) => {
     const { id } = req.params as { id: string };
     const existing = app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as
-      | { raw_content: string; proposed_name: string; source_path: string | null }
+      | { raw_content: string; raw_content_hash: string; proposed_name: string; source_path: string | null; license: string | null }
       | undefined;
     if (!existing) throw new HttpError(404, `Unknown skill candidate: ${id}`);
     const detected = detectCandidateSignals(existing.raw_content);
@@ -334,11 +409,20 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       source_path: existing.source_path,
       proposed_name: existing.proposed_name,
     });
+    const duplicate = app.db.prepare("SELECT COUNT(*) AS n FROM skill_candidates WHERE raw_content_hash = ? AND id <> ?").get(existing.raw_content_hash, id) as { n: number };
+    const gates = evaluateCandidateGates({
+      content: existing.raw_content,
+      content_hash: existing.raw_content_hash,
+      candidate_type: classification.candidate_type,
+      license: existing.license,
+      detected,
+      duplicate_count: duplicate.n,
+    });
     app.db.prepare(
       `UPDATE skill_candidates
        SET candidate_type = ?, category = ?, risk_level = ?, risk_summary = ?,
            detected_commands = ?, detected_network = ?, detected_secrets = ?,
-           classifier_notes = ?, updated_at = ?
+           gate_status = ?, gate_results = ?, classifier_notes = ?, updated_at = ?
        WHERE id = ?`
     ).run(
       classification.candidate_type,
@@ -348,11 +432,49 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       jsonList(detected.commands),
       jsonList(detected.network),
       jsonList(detected.secrets),
+      gates.gate_status,
+      gates.gate_results,
       classification.notes,
       now(),
       id
     );
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.classified", target_type: "skill_candidate", target_id: id, summary: `Skill candidate classified: ${existing.proposed_name}`, detail: { candidate_type: classification.candidate_type, category: classification.category } });
+    return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
+  });
+
+  app.post("/skills/candidates/:id/gates", async (req) => {
+    const { id } = req.params as { id: string };
+    const existing = app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as
+      | { raw_content: string; raw_content_hash: string; candidate_type: CandidateType; license: string | null; proposed_name: string }
+      | undefined;
+    if (!existing) throw new HttpError(404, `Unknown skill candidate: ${id}`);
+    const detected = detectCandidateSignals(existing.raw_content);
+    const duplicate = app.db.prepare("SELECT COUNT(*) AS n FROM skill_candidates WHERE raw_content_hash = ? AND id <> ?").get(existing.raw_content_hash, id) as { n: number };
+    const gates = evaluateCandidateGates({
+      content: existing.raw_content,
+      content_hash: existing.raw_content_hash,
+      candidate_type: existing.candidate_type,
+      license: existing.license,
+      detected,
+      duplicate_count: duplicate.n,
+    });
+    app.db.prepare(
+      `UPDATE skill_candidates
+       SET risk_level = ?, risk_summary = ?, detected_commands = ?, detected_network = ?,
+           detected_secrets = ?, gate_status = ?, gate_results = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      existing.candidate_type === "unsafe" ? "restricted" : detected.risk_level,
+      detected.risk_summary,
+      jsonList(detected.commands),
+      jsonList(detected.network),
+      jsonList(detected.secrets),
+      gates.gate_status,
+      gates.gate_results,
+      now(),
+      id
+    );
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.gated", target_type: "skill_candidate", target_id: id, summary: `Skill candidate gates evaluated: ${existing.proposed_name}`, detail: { gate_status: gates.gate_status } });
     return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
   });
 }

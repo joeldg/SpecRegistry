@@ -711,6 +711,14 @@ export interface AgentSkillRow {
   risk_level: "safe" | "restricted";
   status: "active" | "disabled";
   built_in: number;
+  source_candidate_id: string | null;
+  source_url: string | null;
+  source_path: string | null;
+  source_commit: string | null;
+  imported_at: string | null;
+  transformed_by: string | null;
+  transformation_note: string | null;
+  upstream_content_hash: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1116,6 +1124,8 @@ export const api = {
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/classify`, { method: "POST", body: JSON.stringify({}) }),
   runSkillCandidateGates: (id: string) =>
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/gates`, { method: "POST", body: JSON.stringify({}) }),
+  convertSkillCandidate: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "slug" | "description" | "instructions" | "risk_level">> & { transformation_note?: string } = {}) =>
+    request<AgentSkillRow>(`/api/v1/skills/candidates/${id}/convert-skill`, { method: "POST", body: JSON.stringify(body) }),
   approvalPolicies: () => request<ApprovalPolicyRow[]>("/api/v1/approval-policies"),
   createApprovalPolicy: (body: {
     project_type_id?: string | null;

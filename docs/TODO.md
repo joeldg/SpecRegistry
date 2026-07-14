@@ -341,6 +341,8 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Classify candidates into `agent_skill`, `spec_seed`, `project_type_template`,
   `reference_only`, `unsafe`, or `unknown`. Do not allow candidates to publish directly
   into active agent packs.
+- [x] Add deterministic candidate conversion into disabled governed skill drafts with
+  source provenance, gate status, and review-before-enable instructions.
 - [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion
   should preserve useful workflow logic, remove irrelevant persona/fluff, normalize to
   SpecRegistry skill format, add safety boundaries, add related-spec references, and
@@ -348,9 +350,11 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [ ] Add LLM-assisted conversion from candidate material into spec drafts when the source
   is better treated as reusable requirements than as agent procedure. This avoids turning
   agent role repositories into project types by accident.
-- [ ] Add provenance metadata to governed skills: source URL, source commit SHA, source path,
-  imported_at, transformed_by, transformation prompt/version, reviewer, local version, and
-  whether local content intentionally diverged from upstream.
+- [x] Add basic provenance metadata to governed skills converted from candidates: source URL,
+  source commit SHA, source path, imported_at, transformed_by, transformation note, and
+  upstream content hash.
+- [ ] Extend governed skill provenance with transformation prompt/version, reviewer, local
+  version, and whether local content intentionally diverged from upstream.
 - [ ] Add upstream drift detection for imported sources. When a tracked repo/path changes,
   show "upstream update available" and create a reviewed update candidate rather than
   silently mutating the active skill.

@@ -177,6 +177,35 @@ function evaluateCandidateGates(input: {
   return { gate_status: gateStatus, gate_results: JSON.stringify(gateResults) };
 }
 
+function normalizeCandidateInstructions(candidate: {
+  raw_content: string;
+  source_url: string | null;
+  source_path: string | null;
+  source_commit: string | null;
+  classifier_notes: string;
+  gate_status: string;
+}): string {
+  const sourceLines = [
+    candidate.source_url ? `- Source URL: ${candidate.source_url}` : null,
+    candidate.source_path ? `- Source path: ${candidate.source_path}` : null,
+    candidate.source_commit ? `- Source commit: ${candidate.source_commit}` : null,
+    `- Gate status: ${candidate.gate_status}`,
+  ].filter(Boolean).join("\n");
+  return `This draft was converted from an untrusted marketplace candidate. Review and edit it before enabling the skill.
+
+## Source Provenance
+
+${sourceLines}
+
+## Conversion Notes
+
+${candidate.classifier_notes || "No classifier notes were recorded."}
+
+## Draft Procedure
+
+${candidate.raw_content.trim()}`;
+}
+
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
   app.get("/skills", async (req) => {
     const { include_disabled } = req.query as { include_disabled?: string };
@@ -476,5 +505,98 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     );
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.gated", target_type: "skill_candidate", target_id: id, summary: `Skill candidate gates evaluated: ${existing.proposed_name}`, detail: { gate_status: gates.gate_status } });
     return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
+  });
+
+  app.post("/skills/candidates/:id/convert-skill", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const candidate = app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as
+      | {
+          id: string;
+          source_url: string | null;
+          source_path: string | null;
+          source_commit: string | null;
+          raw_content: string;
+          raw_content_hash: string;
+          proposed_name: string;
+          proposed_slug: string;
+          candidate_type: CandidateType;
+          risk_level: RiskLevel;
+          gate_status: GateStatus;
+          classifier_notes: string;
+          status: CandidateStatus;
+        }
+      | undefined;
+    if (!candidate) throw new HttpError(404, `Unknown skill candidate: ${id}`);
+    if (candidate.status === "converted") throw new HttpError(409, "Candidate has already been converted");
+    if (candidate.candidate_type !== "agent_skill") {
+      throw new HttpError(409, "Only agent_skill candidates can be converted into governed skills");
+    }
+    if (candidate.gate_status === "block") {
+      throw new HttpError(409, "Blocked candidates cannot be converted into governed skills");
+    }
+    const slug = slugValue(body.slug ?? candidate.proposed_slug);
+    if (app.db.prepare("SELECT id FROM agent_skills WHERE slug = ?").get(slug)) {
+      throw new HttpError(409, `Agent skill already exists: ${slug}`);
+    }
+    const skillId = uuid();
+    const ts = now();
+    const name = bounded(
+      typeof body.name === "string" && body.name.trim() ? body.name.trim() : candidate.proposed_name,
+      "name",
+      120
+    );
+    const description = bounded(
+      typeof body.description === "string" && body.description.trim()
+        ? body.description.trim()
+        : `Draft skill converted from marketplace candidate ${candidate.proposed_slug}.`,
+      "description",
+      500
+    );
+    const instructions = bounded(
+      typeof body.instructions === "string" && body.instructions.trim()
+        ? body.instructions.trim()
+        : normalizeCandidateInstructions(candidate),
+      "instructions",
+      20000
+    );
+    const risk = body.risk_level ? riskValue(body.risk_level) : candidate.risk_level;
+    app.db.transaction(() => {
+      app.db.prepare(
+        `INSERT INTO agent_skills
+          (id, slug, name, description, instructions, risk_level, status, built_in,
+           source_candidate_id, source_url, source_path, source_commit, imported_at,
+           transformed_by, transformation_note, upstream_content_hash, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'disabled', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        skillId,
+        slug,
+        name,
+        description,
+        instructions,
+        risk,
+        candidate.id,
+        candidate.source_url,
+        candidate.source_path,
+        candidate.source_commit,
+        ts,
+        actorFrom(req, "settings"),
+        optionalBounded(body.transformation_note, "transformation_note", 1000) ?? "Deterministic candidate-to-skill draft conversion.",
+        candidate.raw_content_hash,
+        ts,
+        ts
+      );
+      app.db.prepare("UPDATE skill_candidates SET status = 'converted', updated_at = ? WHERE id = ?").run(ts, id);
+    })();
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "skill_candidate.converted",
+      target_type: "agent_skill",
+      target_id: skillId,
+      summary: `Skill candidate converted to disabled skill draft: ${name}`,
+      detail: { candidate_id: id, slug, gate_status: candidate.gate_status },
+    });
+    reply.code(201);
+    return app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(skillId);
   });
 }

@@ -120,8 +120,26 @@ describe("project types & specs", () => {
       expect.arrayContaining(["prompt_injection", "command_intent", "network_intent", "secrets", "license", "token_budget", "duplicate"])
     );
 
+    const converted = await app.inject({
+      method: "POST",
+      url: `/api/v1/skills/candidates/${candidate.id}/convert-skill`,
+      payload: {},
+    });
+    expect(converted.statusCode).toBe(201);
+    expect(converted.json()).toMatchObject({
+      slug: "external-reviewer-workflow",
+      status: "disabled",
+      source_candidate_id: candidate.id,
+      source_url: "https://github.com/msitarzewski/agency-agents",
+      source_path: "agents/reviewer.md",
+      source_commit: "abc123",
+      upstream_content_hash: candidate.raw_content_hash,
+    });
+    expect(converted.json().instructions).toContain("This draft was converted from an untrusted marketplace candidate.");
+
     const candidates = await getJson(`/api/v1/skills/candidates?source_id=${encodeURIComponent(source.id)}`);
     expect(candidates).toHaveLength(1);
+    expect(candidates[0].status).toBe("converted");
 
     const specSeedRes = await app.inject({
       method: "POST",

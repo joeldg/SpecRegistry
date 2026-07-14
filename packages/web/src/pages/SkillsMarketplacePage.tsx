@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type AgentSkillRow, type SkillCandidateRow, type SkillSourceRow } from "../api";
+import { api, getAuthor, type AgentSkillRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
-type SkillTab = "installed" | "sources" | "candidates";
+type SkillTab = "installed" | "sources" | "candidates" | "reviews";
 
 function parseList(value: string): string[] {
   try {
@@ -18,6 +18,7 @@ export default function SkillsMarketplacePage() {
   const [skills, setSkills] = useState<AgentSkillRow[]>([]);
   const [sources, setSources] = useState<SkillSourceRow[]>([]);
   const [candidates, setCandidates] = useState<SkillCandidateRow[]>([]);
+  const [reviews, setReviews] = useState<SkillReviewRow[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [sourceUrl, setSourceUrl] = useState("");
@@ -32,11 +33,12 @@ export default function SkillsMarketplacePage() {
 
   const reload = useCallback(() => {
     setError(undefined);
-    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates()])
-      .then(([nextSkills, nextSources, nextCandidates]) => {
+    Promise.all([api.agentSkills(true), api.skillSources(), api.skillCandidates(), api.skillReviews()])
+      .then(([nextSkills, nextSources, nextCandidates, nextReviews]) => {
         setSkills(nextSkills);
         setSources(nextSources);
         setCandidates(nextCandidates);
+        setReviews(nextReviews);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -47,8 +49,9 @@ export default function SkillsMarketplacePage() {
     const activeSkills = skills.filter((skill) => skill.status === "active").length;
     const openCandidates = candidates.filter((candidate) => candidate.status === "candidate").length;
     const restrictedCandidates = candidates.filter((candidate) => candidate.risk_level === "restricted").length;
-    return { activeSkills, openCandidates, restrictedCandidates };
-  }, [skills, candidates]);
+    const pendingReviews = reviews.filter((review) => review.status === "pending").length;
+    return { activeSkills, openCandidates, restrictedCandidates, pendingReviews };
+  }, [skills, candidates, reviews]);
 
   async function createSource() {
     if (!sourceUrl.trim()) return;
@@ -132,6 +135,36 @@ export default function SkillsMarketplacePage() {
     }
   }
 
+  async function submitSkillReview(skill: AgentSkillRow, action: SkillReviewRow["action"]) {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.createSkillReview(skill.id, {
+        action,
+        status: action === "enable" ? "active" : action === "disable" || action === "delete" ? "disabled" : skill.status,
+        summary: `Review ${action} for ${skill.slug}.`,
+      });
+      setNotice("Skill review submitted.");
+      reload();
+      setTab("reviews");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function closeSkillReview(id: string, action: "approve" | "reject") {
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      if (action === "approve") await api.approveSkillReview(id, getAuthor());
+      else await api.rejectSkillReview(id, getAuthor());
+      setNotice(action === "approve" ? "Skill review approved." : "Skill review rejected.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -158,12 +191,17 @@ export default function SkillsMarketplacePage() {
           <div className="metric">{summary.restrictedCandidates}</div>
           <div className="label">Restricted candidates</div>
         </div>
+        <div className={`card${summary.pendingReviews ? " alert" : ""}`}>
+          <div className="metric">{summary.pendingReviews}</div>
+          <div className="label">Pending reviews</div>
+        </div>
       </div>
 
       <div className="settings-tabs" style={{ marginBottom: 16 }}>
         <button className={tab === "installed" ? "active" : ""} onClick={() => setTab("installed")}>Installed</button>
         <button className={tab === "sources" ? "active" : ""} onClick={() => setTab("sources")}>Sources</button>
         <button className={tab === "candidates" ? "active" : ""} onClick={() => setTab("candidates")}>Candidates</button>
+        <button className={tab === "reviews" ? "active" : ""} onClick={() => setTab("reviews")}>Reviews</button>
       </div>
 
       {tab === "installed" && (
@@ -177,6 +215,7 @@ export default function SkillsMarketplacePage() {
                 <th>Status</th>
                 <th>Description</th>
                 <th>Updated</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -187,6 +226,13 @@ export default function SkillsMarketplacePage() {
                   <td><StatusBadge status={skill.status} /></td>
                   <td>{skill.description}</td>
                   <td className="faint">{timeAgo(skill.updated_at)}</td>
+                  <td>
+                    {skill.status === "disabled" ? (
+                      <button onClick={() => submitSkillReview(skill, "enable")}>Review enable</button>
+                    ) : (
+                      <button onClick={() => submitSkillReview(skill, "disable")}>Review disable</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -304,6 +350,45 @@ export default function SkillsMarketplacePage() {
             </tbody>
           </table>
         </>
+      )}
+
+      {tab === "reviews" && (
+        <div className="section">
+          <h2>Skill Reviews</h2>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Skill</th>
+                <th>Action</th>
+                <th>Proposed</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review) => (
+                <tr key={review.id}>
+                  <td><strong>{review.proposed_name}</strong><div className="mono faint">{review.skill_slug}</div></td>
+                  <td>{review.action}</td>
+                  <td><StatusBadge status={review.proposed_status} /> <StatusBadge status={review.proposed_risk_level} /><div className="faint">{review.summary}</div></td>
+                  <td><StatusBadge status={review.status} /></td>
+                  <td>{review.proposed_by}<div className="faint">{timeAgo(review.created_at)}</div></td>
+                  <td>
+                    {review.status === "pending" ? (
+                      <>
+                        <button onClick={() => closeSkillReview(review.id, "approve")}>Approve</button>{" "}
+                        <button onClick={() => closeSkillReview(review.id, "reject")}>Reject</button>
+                      </>
+                    ) : (
+                      <span className="faint">{review.reviewed_by ?? "closed"}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

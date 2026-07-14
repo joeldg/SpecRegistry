@@ -302,9 +302,10 @@ passes provenance, review, versioning, assignment, and distribution gates.
   immutable `agent_skill_versions`, mirroring spec versioning. Preserve stable slugs,
   current version, status, built-in/custom origin, published content hash, changelog, and
   created/updated/published metadata.
-- [ ] Add skill review/change-request workflow for creating, updating, disabling, deleting,
-  and promoting skills. Built-in and marketplace skills should be reviewable through the
-  same queue as specs, with audit log entries and reviewer attribution.
+- [x] Add skill review/change-request workflow for updating and enabling/disabling skills,
+  with audit log entries, reviewer attribution, and separation of duties.
+- [ ] Extend skill reviews to cover reviewed creation/deletion semantics and unify skill
+  reviews with the broader spec review queue where appropriate.
 - [ ] Add scoped skill assignment: global, project type, and concrete project. Generated
   agent packs should include only active skills assigned to the target scope hierarchy,
   with project-scoped skills overriding or supplementing broader skills without mutating
@@ -315,8 +316,9 @@ passes provenance, review, versioning, assignment, and distribution gates.
   and agent pack summaries.
 - [x] Add first-class skill marketplace UI outside the LLM settings page for Installed,
   Candidates, and Sources.
-- [ ] Extend the skill marketplace UI with Marketplace discovery, Reviews, and Assignments
-  tabs as those backends land.
+- [x] Extend the skill marketplace UI with a Reviews tab for skill change requests.
+- [ ] Extend the skill marketplace UI with Marketplace discovery and Assignments tabs as
+  those backends land.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.

@@ -12,6 +12,7 @@ type TrustDecision = "trusted" | "unreviewed" | "blocked";
 type CandidateType = "agent_skill" | "spec_seed" | "project_type_template" | "reference_only" | "unsafe" | "unknown";
 type CandidateStatus = "candidate" | "converted" | "rejected" | "archived";
 type GateStatus = "pass" | "review" | "block" | "pending";
+type SkillReviewAction = "update" | "enable" | "disable" | "delete";
 
 function slugValue(value: unknown): string {
   const slug = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -204,6 +205,16 @@ ${candidate.classifier_notes || "No classifier notes were recorded."}
 ## Draft Procedure
 
 ${candidate.raw_content.trim()}`;
+}
+
+function skillReviewActionValue(value: unknown): SkillReviewAction {
+  return enumValue<SkillReviewAction>(value, ["update", "enable", "disable", "delete"], "action", "update");
+}
+
+function proposedStatusForAction(action: SkillReviewAction, fallback: SkillStatus): SkillStatus {
+  if (action === "enable") return "active";
+  if (action === "disable" || action === "delete") return "disabled";
+  return fallback;
 }
 
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
@@ -598,5 +609,153 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     });
     reply.code(201);
     return app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(skillId);
+  });
+
+  app.get("/skills/reviews", async (req) => {
+    const { status } = req.query as { status?: string };
+    const where = status ? "WHERE scr.status = ?" : "";
+    const params = status ? [status] : [];
+    return app.db
+      .prepare(
+        `SELECT scr.*, ask.slug AS skill_slug, ask.built_in AS skill_built_in
+         FROM skill_change_requests scr
+         JOIN agent_skills ask ON ask.id = scr.skill_id
+         ${where}
+         ORDER BY scr.created_at DESC`
+      )
+      .all(...params);
+  });
+
+  app.post("/skills/:id/reviews", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(id) as
+      | {
+          id: string;
+          name: string;
+          description: string;
+          instructions: string;
+          risk_level: RiskLevel;
+          status: SkillStatus;
+        }
+      | undefined;
+    if (!existing) throw new HttpError(404, `Unknown agent skill: ${id}`);
+    const pending = app.db.prepare("SELECT id FROM skill_change_requests WHERE skill_id = ? AND status = 'pending'").get(id);
+    if (pending) throw new HttpError(409, "Skill already has a pending review");
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const action = skillReviewActionValue(body.action);
+    const proposedName = bounded(typeof body.name === "string" && body.name.trim() ? body.name.trim() : existing.name, "name", 120);
+    const proposedDescription = bounded(
+      typeof body.description === "string" && body.description.trim() ? body.description.trim() : existing.description,
+      "description",
+      500
+    );
+    const proposedInstructions = bounded(
+      typeof body.instructions === "string" && body.instructions.trim() ? body.instructions.trim() : existing.instructions,
+      "instructions",
+      20000
+    );
+    const proposedRisk = body.risk_level ? riskValue(body.risk_level) : existing.risk_level;
+    const proposedStatus = proposedStatusForAction(action, body.status ? statusValue(body.status, existing.status) : existing.status);
+    const reviewId = uuid();
+    const ts = now();
+    const summary = bounded(
+      typeof body.summary === "string" && body.summary.trim() ? body.summary.trim() : `Propose ${action} for skill ${existing.name}.`,
+      "summary",
+      1000
+    );
+    app.db.prepare(
+      `INSERT INTO skill_change_requests
+        (id, skill_id, action, current_name, current_description, current_instructions,
+         current_risk_level, current_status, proposed_name, proposed_description,
+         proposed_instructions, proposed_risk_level, proposed_status, summary,
+         status, proposed_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
+    ).run(
+      reviewId,
+      id,
+      action,
+      existing.name,
+      existing.description,
+      existing.instructions,
+      existing.risk_level,
+      existing.status,
+      proposedName,
+      proposedDescription,
+      proposedInstructions,
+      proposedRisk,
+      proposedStatus,
+      summary,
+      actorFrom(req, "settings"),
+      ts,
+      ts
+    );
+    recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_review.submitted", target_type: "agent_skill", target_id: id, summary, detail: { review_id: reviewId, action } });
+    reply.code(201);
+    return app.db.prepare("SELECT * FROM skill_change_requests WHERE id = ?").get(reviewId);
+  });
+
+  app.post("/skills/reviews/:id/approve", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const reviewedBy = bounded(requireString(body, "reviewed_by"), "reviewed_by", 160);
+    const review = app.db.prepare("SELECT * FROM skill_change_requests WHERE id = ?").get(id) as
+      | {
+          id: string;
+          skill_id: string;
+          action: SkillReviewAction;
+          proposed_by: string;
+          proposed_name: string;
+          proposed_description: string;
+          proposed_instructions: string;
+          proposed_risk_level: RiskLevel;
+          proposed_status: SkillStatus;
+          status: "pending" | "approved" | "rejected";
+        }
+      | undefined;
+    if (!review) throw new HttpError(404, `Unknown skill review: ${id}`);
+    if (review.status !== "pending") throw new HttpError(409, "Skill review is already closed");
+    if (review.proposed_by.trim().toLowerCase() === reviewedBy.trim().toLowerCase()) {
+      throw new HttpError(403, "Separation of duties: a different reviewer must approve this skill change.");
+    }
+    const ts = now();
+    app.db.transaction(() => {
+      if (review.action === "delete") {
+        app.db.prepare("UPDATE agent_skills SET status = 'disabled', updated_at = ? WHERE id = ?").run(ts, review.skill_id);
+      } else {
+        app.db.prepare(
+          `UPDATE agent_skills
+           SET name = ?, description = ?, instructions = ?, risk_level = ?, status = ?, updated_at = ?
+           WHERE id = ?`
+        ).run(
+          review.proposed_name,
+          review.proposed_description,
+          review.proposed_instructions,
+          review.proposed_risk_level,
+          review.proposed_status,
+          ts,
+          review.skill_id
+        );
+      }
+      app.db.prepare("UPDATE skill_change_requests SET status = 'approved', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
+        .run(reviewedBy, ts, ts, id);
+    })();
+    recordAudit(app.db, { actor: actorFrom(req, reviewedBy), action: "skill_review.approved", target_type: "agent_skill", target_id: review.skill_id, summary: `${reviewedBy} approved skill ${review.action}`, detail: { review_id: id } });
+    return app.db.prepare("SELECT * FROM skill_change_requests WHERE id = ?").get(id);
+  });
+
+  app.post("/skills/reviews/:id/reject", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const reviewedBy = bounded(requireString(body, "reviewed_by"), "reviewed_by", 160);
+    const review = app.db.prepare("SELECT * FROM skill_change_requests WHERE id = ?").get(id) as
+      | { id: string; skill_id: string; action: SkillReviewAction; status: "pending" | "approved" | "rejected" }
+      | undefined;
+    if (!review) throw new HttpError(404, `Unknown skill review: ${id}`);
+    if (review.status !== "pending") throw new HttpError(409, "Skill review is already closed");
+    const ts = now();
+    app.db.prepare("UPDATE skill_change_requests SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
+      .run(reviewedBy, ts, ts, id);
+    recordAudit(app.db, { actor: actorFrom(req, reviewedBy), action: "skill_review.rejected", target_type: "agent_skill", target_id: review.skill_id, summary: `${reviewedBy} rejected skill ${review.action}`, detail: { review_id: id } });
+    return app.db.prepare("SELECT * FROM skill_change_requests WHERE id = ?").get(id);
   });
 }

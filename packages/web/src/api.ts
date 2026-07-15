@@ -302,6 +302,7 @@ export interface TokenUsageReport {
     deliveries: number;
     chars: number;
     projected_tokens: number;
+    section_preview: string;
     last_delivered_at: string | null;
   }>;
   by_event_type: Array<{

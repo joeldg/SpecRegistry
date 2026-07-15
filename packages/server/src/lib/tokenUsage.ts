@@ -234,6 +234,14 @@ export function tokenUsageReport(db: Db, opts: TokenUsageReportOptions) {
        LIMIT 200`
     )
     .all(...sectionParams);
+  const specContent = db.prepare("SELECT content FROM specs WHERE id = ?");
+  const bySectionWithPreview = (bySection as Array<Record<string, unknown>>).map((row) => {
+    const spec = specContent.get(row.spec_id) as { content: string } | undefined;
+    const anchor = String(row.section_anchor ?? "");
+    const section = spec ? splitSections(spec.content).find((candidate) => candidate.anchor === anchor) : undefined;
+    const preview = section?.text.replace(/\s+/g, " ").trim().slice(0, 220) ?? "";
+    return { ...row, section_preview: preview };
+  });
 
   const byEventType = db
     .prepare(
@@ -333,7 +341,7 @@ export function tokenUsageReport(db: Db, opts: TokenUsageReportOptions) {
     tokenizer: TOKEN_ESTIMATOR,
     projects: projectRows,
     by_spec: bySpec,
-    by_section: bySection,
+    by_section: bySectionWithPreview,
     by_event_type: byEventType,
     sessions,
     real_usage: realUsage,

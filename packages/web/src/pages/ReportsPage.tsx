@@ -4,6 +4,7 @@ import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiag
 import { StatusBadge, timeAgo } from "../components";
 
 type ChartDatum = { label: string; value: number; tone?: "accent" | "green" | "amber" | "red" };
+type ReportsTab = "tokens" | "overview" | "projects" | "diagnostics";
 
 const toneColor: Record<NonNullable<ChartDatum["tone"]>, string> = {
   accent: "#5e6ad2",
@@ -85,6 +86,7 @@ function DonutChart({ data }: { data: ChartDatum[] }) {
 }
 
 export default function ReportsPage() {
+  const [activeTab, setActiveTab] = useState<ReportsTab>("tokens");
   const [report, setReport] = useState<ReportsOverview>();
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
@@ -330,7 +332,14 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="report-grid">
+          <div className="settings-tabs" style={{ marginBottom: 16 }}>
+            <button className={activeTab === "tokens" ? "active" : ""} onClick={() => setActiveTab("tokens")}>Tokens</button>
+            <button className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}>Overview</button>
+            <button className={activeTab === "projects" ? "active" : ""} onClick={() => setActiveTab("projects")}>Projects</button>
+            <button className={activeTab === "diagnostics" ? "active" : ""} onClick={() => setActiveTab("diagnostics")}>Diagnostics</button>
+          </div>
+
+          <div className="report-grid" style={{ display: activeTab === "overview" ? undefined : "none" }}>
             <div className="section report-panel">
               <h2>Spec Scope Mix</h2>
               <DonutChart data={scopeData} />
@@ -341,7 +350,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="report-grid">
+          <div className="report-grid" style={{ display: activeTab === "overview" ? undefined : "none" }}>
             <div className="section report-panel">
               <h2>Dependency Map</h2>
               <div className="cards" style={{ marginBottom: 12 }}>
@@ -367,7 +376,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="section report-panel">
+          <div className="section report-panel" style={{ display: activeTab === "overview" ? undefined : "none" }}>
             <h2>Efficacy Trend</h2>
             {efficacyTrend.length === 0 ? (
               <div className="empty">No efficacy runs yet.</div>
@@ -382,7 +391,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="section report-panel">
+          <div className="section report-panel" style={{ display: activeTab === "overview" ? undefined : "none" }}>
             <h2>Code-to-Spec Traceability</h2>
             <div className="cards" style={{ marginBottom: 12 }}>
               <div className="card">
@@ -415,7 +424,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="section report-panel">
+          <div className="section report-panel" style={{ display: activeTab === "tokens" ? undefined : "none" }}>
             <h2>Token Usage</h2>
             <p className="settings-help">
               Projected tokens are estimated from governed spec sections delivered by the registry. Real tokens come from best-effort LLM usage reports.
@@ -525,15 +534,15 @@ export default function ReportsPage() {
             </div>
             <div className="cards" style={{ marginBottom: 12 }}>
               <div className="card">
-                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.projected_tokens ?? 0), 0))}</div>
+                <div className="metric">{fmtTokens(tokenReportForFilters?.projects.reduce((sum, row) => sum + Number(row.projected_tokens ?? 0), 0))}</div>
                 <div className="label">Projected context tokens</div>
               </div>
               <div className="card">
-                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.real_total_tokens ?? 0), 0))}</div>
+                <div className="metric">{fmtTokens(tokenReportForFilters?.projects.reduce((sum, row) => sum + Number(row.real_total_tokens ?? 0), 0))}</div>
                 <div className="label">Real LLM tokens</div>
               </div>
               <div className="card">
-                <div className="metric">{fmtTokens(tokenUsage?.projects.reduce((sum, row) => sum + Number(row.delivered_sections ?? 0), 0))}</div>
+                <div className="metric">{fmtTokens(tokenReportForFilters?.projects.reduce((sum, row) => sum + Number(row.delivered_sections ?? 0), 0))}</div>
                 <div className="label">Delivered sections</div>
               </div>
               <div className="card">
@@ -541,12 +550,12 @@ export default function ReportsPage() {
                 <div className="label">Estimator</div>
               </div>
             </div>
-            {tokenUsage && tokenUsage.trend.length > 0 && (
+            {tokenReportForFilters && tokenReportForFilters.trend.length > 0 && (
               <div className="report-grid" style={{ marginBottom: 16 }}>
                 <div>
                   <h3>Projected Token Trend</h3>
                   <BarChart
-                    data={tokenUsage.trend.slice(-14).map((row) => ({
+                    data={tokenReportForFilters.trend.slice(-14).map((row) => ({
                       label: row.day.slice(5),
                       value: Number(row.projected_tokens ?? 0),
                       tone: "accent",
@@ -556,7 +565,7 @@ export default function ReportsPage() {
                 <div>
                   <h3>Real LLM Token Trend</h3>
                   <BarChart
-                    data={tokenUsage.trend.slice(-14).map((row) => ({
+                    data={tokenReportForFilters.trend.slice(-14).map((row) => ({
                       label: row.day.slice(5),
                       value: Number(row.real_total_tokens ?? 0),
                       tone: "green",
@@ -565,7 +574,7 @@ export default function ReportsPage() {
                 </div>
               </div>
             )}
-            {!tokenUsage || tokenUsage.projects.length === 0 ? (
+            {!tokenReportForFilters || tokenReportForFilters.projects.length === 0 ? (
               <div className="empty">No token usage has been recorded yet. Agent spec reads and searches will populate this report.</div>
             ) : (
               <>
@@ -582,7 +591,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tokenUsage.projects.slice(0, 12).map((row) => (
+                    {tokenReportForFilters.projects.slice(0, 12).map((row) => (
                       <tr key={row.project_id} className={tokenProjectId === row.project_id ? "selected-row" : ""}>
                         <td>
                           <button className="link-button mono" onClick={() => setTokenProjectId(row.project_id)}>
@@ -670,6 +679,7 @@ export default function ReportsPage() {
                           <th>Spec</th>
                           <th>Section</th>
                           <th>Projected</th>
+                          <th>Preview</th>
                           <th>Deliveries</th>
                           <th>Last used</th>
                         </tr>
@@ -680,6 +690,7 @@ export default function ReportsPage() {
                             <td className="mono">{row.filename}</td>
                             <td>{row.section_title}</td>
                             <td className="mono">{fmtTokens(row.projected_tokens)}</td>
+                            <td className="faint">{row.section_preview || "No preview available"}</td>
                             <td className="mono">{row.deliveries}</td>
                             <td className="faint">{row.last_delivered_at ? timeAgo(row.last_delivered_at) : "never"}</td>
                           </tr>
@@ -723,7 +734,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="section">
+          <div className="section" style={{ display: activeTab === "projects" ? undefined : "none" }}>
             <h2>Project Type Reports</h2>
             <table className="grid">
               <thead>
@@ -757,7 +768,7 @@ export default function ReportsPage() {
             </table>
           </div>
 
-          <div className="section">
+          <div className="section" style={{ display: activeTab === "projects" ? undefined : "none" }}>
             <h2>Project Reports</h2>
             {projectRisk.length === 0 ? (
               <div className="empty">No projects have reported manifests yet.</div>
@@ -807,7 +818,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="section report-panel">
+          <div className="section report-panel" style={{ display: activeTab === "diagnostics" ? undefined : "none" }}>
             <h2>Manifest Drift Diagnostics</h2>
             <div className="form-row">
               <input
@@ -887,7 +898,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="section">
+          <div className="section" style={{ display: activeTab === "projects" ? undefined : "none" }}>
             <h2>Global Spec Reports</h2>
             <table className="grid">
               <thead>
@@ -915,7 +926,7 @@ export default function ReportsPage() {
             </table>
           </div>
 
-          <div className="section report-panel">
+          <div className="section report-panel" style={{ display: activeTab === "diagnostics" ? undefined : "none" }}>
             <h2>AI Reporting Test Bench</h2>
             <div className="form-row">
               <select value={specId} onChange={(e) => setSpecId(e.target.value)}>

@@ -3,7 +3,7 @@ import { api, getAuthor, type AgentSkillRow, type ProjectRow, type ProjectTypeWi
 import type { SpecSummary } from "@specregistry/shared";
 import { StatusBadge, timeAgo } from "../components";
 
-type SkillTab = "installed" | "sources" | "candidates" | "reviews" | "assignments";
+type SkillTab = "discovery" | "installed" | "sources" | "candidates" | "reviews" | "assignments";
 
 function parseList(value: string): string[] {
   try {
@@ -29,7 +29,7 @@ function includesText(...values: Array<string | null | undefined>): (query: stri
 }
 
 export default function SkillsMarketplacePage() {
-  const [tab, setTab] = useState<SkillTab>("installed");
+  const [tab, setTab] = useState<SkillTab>("discovery");
   const [skills, setSkills] = useState<AgentSkillRow[]>([]);
   const [sources, setSources] = useState<SkillSourceRow[]>([]);
   const [candidates, setCandidates] = useState<SkillCandidateRow[]>([]);
@@ -330,6 +330,16 @@ export default function SkillsMarketplacePage() {
   const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId);
   const selectedSource = sources.find((source) => source.id === selectedSourceId);
   const selectedSkillLinks = selectedSkill ? skillSpecLinks.filter((link) => link.skill_id === selectedSkill.id) : [];
+  const scannableSources = sources
+    .filter((source) => source.source_type === "github_repo" && source.status === "active" && source.trust_decision !== "blocked")
+    .sort((a, b) => (a.last_scan_at ?? "").localeCompare(b.last_scan_at ?? ""));
+  const triageCandidates = candidates
+    .filter((candidate) => candidate.status === "candidate")
+    .sort((a, b) => {
+      const gateRank = { block: 0, review: 1, pending: 2, pass: 3 } as Record<SkillCandidateRow["gate_status"], number>;
+      return gateRank[a.gate_status] - gateRank[b.gate_status] || b.updated_at.localeCompare(a.updated_at);
+    })
+    .slice(0, 12);
 
   return (
     <>
@@ -368,12 +378,128 @@ export default function SkillsMarketplacePage() {
       </div>
 
       <div className="settings-tabs" style={{ marginBottom: 16 }}>
+        <button className={tab === "discovery" ? "active" : ""} onClick={() => setTab("discovery")}>Discovery</button>
         <button className={tab === "installed" ? "active" : ""} onClick={() => setTab("installed")}>Installed</button>
         <button className={tab === "sources" ? "active" : ""} onClick={() => setTab("sources")}>Sources</button>
         <button className={tab === "candidates" ? "active" : ""} onClick={() => setTab("candidates")}>Candidates</button>
         <button className={tab === "reviews" ? "active" : ""} onClick={() => setTab("reviews")}>Reviews</button>
         <button className={tab === "assignments" ? "active" : ""} onClick={() => setTab("assignments")}>Assignments</button>
       </div>
+
+      {tab === "discovery" && (
+        <div className="section">
+          <h2>Marketplace Discovery</h2>
+          <div className="report-grid">
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Add or Scan Sources</h3>
+              <div className="form-row" style={{ marginBottom: 10 }}>
+                <input type="text" placeholder="https://github.com/org/repo" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} style={{ flex: 1, minWidth: 260 }} />
+                <select value={sourceType} onChange={(e) => setSourceType(e.target.value as SkillSourceRow["source_type"])}>
+                  <option value="github_repo">GitHub repo</option>
+                  <option value="github_search">GitHub search</option>
+                  <option value="local_upload">Local upload</option>
+                  <option value="builtin_pack">Built-in pack</option>
+                  <option value="manual">Manual</option>
+                </select>
+                <button className="primary" onClick={createSource} disabled={!sourceUrl.trim()}>Add</button>
+              </div>
+              <textarea placeholder="Source notes" value={sourceNotes} onChange={(e) => setSourceNotes(e.target.value)} style={{ width: "100%", minHeight: 70 }} />
+              <h3>Scan Queue</h3>
+              {scannableSources.length === 0 ? (
+                <div className="empty">No active GitHub sources are ready to scan.</div>
+              ) : (
+                <table className="grid">
+                  <thead><tr><th>Source</th><th>Trust</th><th>Last scan</th><th></th></tr></thead>
+                  <tbody>
+                    {scannableSources.slice(0, 6).map((source) => (
+                      <tr key={source.id}>
+                        <td className="mono">{source.url}</td>
+                        <td><StatusBadge status={source.trust_decision} /></td>
+                        <td className="faint">{source.last_scan_at ? timeAgo(source.last_scan_at) : "never"}</td>
+                        <td>
+                          <button onClick={() => scanSource(source)} disabled={scanningSourceId === source.id}>
+                            {scanningSourceId === source.id ? "Scanning..." : "Scan"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Manual Candidate Capture</h3>
+              <div className="form-row" style={{ marginBottom: 10 }}>
+                <select value={candidateSourceId} onChange={(e) => setCandidateSourceId(e.target.value)}>
+                  <option value="">No source</option>
+                  {sources.map((source) => (
+                    <option key={source.id} value={source.id}>{source.url}</option>
+                  ))}
+                </select>
+                <input type="text" placeholder="Candidate name" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} />
+              </div>
+              <div className="form-row" style={{ marginBottom: 10 }}>
+                <input type="text" placeholder="Source path" value={candidatePath} onChange={(e) => setCandidatePath(e.target.value)} />
+                <select value={candidateType} onChange={(e) => setCandidateType(e.target.value as SkillCandidateRow["candidate_type"] | "")}>
+                  <option value="">Auto classify</option>
+                  <option value="agent_skill">Agent skill</option>
+                  <option value="spec_seed">Spec seed</option>
+                  <option value="project_type_template">Project type template</option>
+                  <option value="reference_only">Reference only</option>
+                  <option value="unsafe">Unsafe</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+                <button className="primary" onClick={createCandidate} disabled={!candidateName.trim() || !candidateContent.trim()}>Capture</button>
+              </div>
+              <textarea placeholder="Paste untrusted source material here. It will not be included in agent packs until reviewed and converted." value={candidateContent} onChange={(e) => setCandidateContent(e.target.value)} style={{ width: "100%", minHeight: 190 }} />
+            </div>
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="form-row" style={{ justifyContent: "space-between" }}>
+              <h3 style={{ margin: 0 }}>Candidate Triage Queue</h3>
+              <button onClick={() => setTab("candidates")}>Open full candidates</button>
+            </div>
+            {triageCandidates.length === 0 ? (
+              <div className="empty">No candidates are waiting for review.</div>
+            ) : (
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Type</th>
+                    <th>Risk</th>
+                    <th>Gate</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {triageCandidates.map((candidate) => (
+                    <tr key={candidate.id}>
+                      <td><strong>{candidate.proposed_name}</strong><div className="mono faint">{candidate.proposed_slug}</div></td>
+                      <td>{candidate.candidate_type}</td>
+                      <td><StatusBadge status={candidate.risk_level} /></td>
+                      <td><StatusBadge status={candidate.gate_status} /></td>
+                      <td className="mono">{candidate.source_path ?? candidate.source_url ?? "manual"}</td>
+                      <td>
+                        <button onClick={() => { setSelectedCandidateId(candidate.id); setTab("candidates"); }}>Details</button>{" "}
+                        <button onClick={() => classifyCandidate(candidate.id)}>Classify</button>{" "}
+                        <button onClick={() => runCandidateGates(candidate.id)}>Run gates</button>
+                        {candidate.candidate_type === "agent_skill" && candidate.gate_status !== "block" && (
+                          <>
+                            {" "}
+                            <button onClick={() => convertCandidate(candidate.id)}>Convert draft</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {tab === "installed" && (
         <div className="section">

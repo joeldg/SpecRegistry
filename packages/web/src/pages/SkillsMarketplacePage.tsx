@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, getAuthor, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow, type SkillSpecLinkRow } from "../api";
+import { api, getAuthor, type AgentSkillDetail, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow, type SkillSpecLinkRow } from "../api";
 import type { SpecSummary } from "@specregistry/shared";
 import { StatusBadge, timeAgo } from "../components";
 
@@ -67,6 +67,7 @@ export default function SkillsMarketplacePage() {
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SkillSourceRow["source_type"] | "all">("all");
   const [sourceTrustFilter, setSourceTrustFilter] = useState<SkillSourceRow["trust_decision"] | "all">("all");
   const [selectedSkillId, setSelectedSkillId] = useState("");
+  const [selectedSkillDetail, setSelectedSkillDetail] = useState<AgentSkillDetail>();
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [linkSpecId, setLinkSpecId] = useState("");
@@ -97,6 +98,16 @@ export default function SkillsMarketplacePage() {
   }, []);
 
   useEffect(reload, [reload]);
+
+  useEffect(() => {
+    if (!selectedSkillId) {
+      setSelectedSkillDetail(undefined);
+      return;
+    }
+    api.agentSkillDetail(selectedSkillId)
+      .then(setSelectedSkillDetail)
+      .catch((e) => setError(e.message));
+  }, [selectedSkillId]);
 
   const summary = useMemo(() => {
     const activeSkills = skills.filter((skill) => skill.status === "active").length;
@@ -281,6 +292,7 @@ export default function SkillsMarketplacePage() {
       setNotice("Skill spec link saved.");
       setLinkSectionAnchor("");
       reload();
+      setSelectedSkillDetail(await api.agentSkillDetail(skill.id));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -293,6 +305,7 @@ export default function SkillsMarketplacePage() {
       await api.deleteSkillSpecLink(id);
       setNotice("Skill spec link removed.");
       reload();
+      if (selectedSkillId) setSelectedSkillDetail(await api.agentSkillDetail(selectedSkillId));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -563,6 +576,10 @@ export default function SkillsMarketplacePage() {
                 <StatusBadge status={selectedSkill.risk_level} />
                 <StatusBadge status={selectedSkill.status} />
                 <span className="badge">{selectedSkill.built_in ? "built in" : "custom"}</span>
+                <span className="badge">v{selectedSkillDetail?.skill.current_version ?? selectedSkill.current_version ?? "1.0.0"}</span>
+                {(selectedSkillDetail?.skill.content_hash ?? selectedSkill.content_hash) && (
+                  <span className="mono faint">{(selectedSkillDetail?.skill.content_hash ?? selectedSkill.content_hash)?.slice(0, 12)}</span>
+                )}
               </div>
               <div className="mono faint">{selectedSkill.source_url ?? "No external source"}{selectedSkill.source_path ? ` · ${selectedSkill.source_path}` : ""}</div>
               <div style={{ marginTop: 14 }}>
@@ -592,7 +609,7 @@ export default function SkillsMarketplacePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedSkillLinks.map((link) => (
+                    {(selectedSkillDetail?.related_specs ?? selectedSkillLinks).map((link) => (
                       <tr key={link.id}>
                         <td><strong>{link.filename}</strong><div className="faint">{link.project_type_name} · v{link.current_version}</div></td>
                         <td>{link.relation}</td>
@@ -600,7 +617,7 @@ export default function SkillsMarketplacePage() {
                         <td><button onClick={() => deleteSpecLink(link.id)}>Remove</button></td>
                       </tr>
                     ))}
-                    {selectedSkillLinks.length === 0 && (
+                    {(selectedSkillDetail?.related_specs ?? selectedSkillLinks).length === 0 && (
                       <tr>
                         <td colSpan={4} className="faint">No related specs linked yet.</td>
                       </tr>
@@ -608,7 +625,102 @@ export default function SkillsMarketplacePage() {
                   </tbody>
                 </table>
               </div>
-              <pre style={{ whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" }}>{selectedSkill.instructions}</pre>
+              {selectedSkillDetail && (
+                <div className="report-grid" style={{ marginTop: 16 }}>
+                  <div>
+                    <h4>Version History</h4>
+                    <table className="grid">
+                      <thead><tr><th>Version</th><th>Hash</th><th>Published</th><th>Change</th></tr></thead>
+                      <tbody>
+                        {selectedSkillDetail.versions.map((version) => (
+                          <tr key={version.id}>
+                            <td className="mono">{version.version}</td>
+                            <td className="mono">{version.content_hash.slice(0, 12)}</td>
+                            <td>{version.published_by}<div className="faint">{timeAgo(version.created_at)}</div></td>
+                            <td>{version.changelog || "No changelog recorded."}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div>
+                    <h4>Assignments</h4>
+                    <table className="grid">
+                      <thead><tr><th>Scope</th><th>Target</th><th>Created</th></tr></thead>
+                      <tbody>
+                        {selectedSkillDetail.assignments.map((assignment) => (
+                          <tr key={assignment.id}>
+                            <td><StatusBadge status={assignment.scope} /></td>
+                            <td className="mono">{assignment.project_repo ?? assignment.project_type_name ?? "all projects"}</td>
+                            <td>{assignment.created_by}<div className="faint">{timeAgo(assignment.created_at)}</div></td>
+                          </tr>
+                        ))}
+                        {selectedSkillDetail.assignments.length === 0 && (
+                          <tr><td colSpan={3} className="faint">Not assigned to any agent pack scope.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {selectedSkillDetail && (
+                <div className="report-grid" style={{ marginTop: 16 }}>
+                  <div>
+                    <h4>Source Provenance</h4>
+                    <table className="grid">
+                      <tbody>
+                        <tr><th>Origin</th><td className="mono">{selectedSkillDetail.source?.url ?? selectedSkillDetail.skill.source_url ?? "manual"}</td></tr>
+                        <tr><th>Path</th><td className="mono">{selectedSkillDetail.skill.source_path ?? selectedSkillDetail.source_candidate?.source_path ?? "none"}</td></tr>
+                        <tr><th>Commit</th><td className="mono">{selectedSkillDetail.skill.source_commit ?? selectedSkillDetail.source_candidate?.source_commit ?? "none"}</td></tr>
+                        <tr><th>Upstream hash</th><td className="mono">{selectedSkillDetail.skill.upstream_content_hash ?? "none"}</td></tr>
+                        <tr><th>Transformed by</th><td>{selectedSkillDetail.skill.transformed_by ?? "manual"}{selectedSkillDetail.skill.imported_at ? <div className="faint">{timeAgo(selectedSkillDetail.skill.imported_at)}</div> : null}</td></tr>
+                      </tbody>
+                    </table>
+                    {selectedSkillDetail.source_candidate && (
+                      <p className="faint">{selectedSkillDetail.source_candidate.risk_summary || selectedSkillDetail.source_candidate.classifier_notes}</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4>Downstream Consumers</h4>
+                    <table className="grid">
+                      <thead><tr><th>Project</th><th>Type</th><th>Scope</th><th>Last seen</th></tr></thead>
+                      <tbody>
+                        {selectedSkillDetail.consumers.slice(0, 10).map((consumer) => (
+                          <tr key={consumer.id}>
+                            <td className="mono">{consumer.repo}</td>
+                            <td>{consumer.project_type_name}</td>
+                            <td>{consumer.scope}</td>
+                            <td className="faint">{consumer.last_seen_at ? timeAgo(consumer.last_seen_at) : "never"}</td>
+                          </tr>
+                        ))}
+                        {selectedSkillDetail.consumers.length === 0 && (
+                          <tr><td colSpan={4} className="faint">No project consumers currently match this skill's assignments.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {selectedSkillDetail?.reviews.length ? (
+                <div style={{ marginTop: 16 }}>
+                  <h4>Recent Reviews</h4>
+                  <table className="grid">
+                    <thead><tr><th>Action</th><th>Status</th><th>Summary</th><th>Submitted</th></tr></thead>
+                    <tbody>
+                      {selectedSkillDetail.reviews.map((review) => (
+                        <tr key={review.id}>
+                          <td>{review.action}</td>
+                          <td><StatusBadge status={review.status} /></td>
+                          <td>{review.summary}</td>
+                          <td>{review.proposed_by}<div className="faint">{timeAgo(review.created_at)}</div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              <h4>Rendered Skill</h4>
+              <pre style={{ whiteSpace: "pre-wrap", maxHeight: 420, overflow: "auto" }}>{selectedSkillDetail?.markdown ?? selectedSkill.instructions}</pre>
             </div>
           )}
         </div>

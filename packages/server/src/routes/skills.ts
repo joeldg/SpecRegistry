@@ -4,7 +4,7 @@ import { now, uuid, type Db } from "../db.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { getAppKeyConfig } from "../lib/appKeys.js";
 import { HttpError, requireString } from "../helpers.js";
-import { skillContentHash, type AgentSkillRecord } from "../lib/skills.js";
+import { renderSkillMarkdown, skillContentHash, type AgentSkillRecord } from "../lib/skills.js";
 
 type RiskLevel = "safe" | "restricted";
 type SkillStatus = "active" | "disabled";
@@ -478,6 +478,96 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     return app.db
       .prepare(`${skillSelectWithVersion(include_disabled === "true" ? "" : "WHERE ask.status = 'active'")} ORDER BY ask.built_in DESC, ask.name`)
       .all();
+  });
+
+  app.get("/skills/:id/detail", async (req) => {
+    const { id } = req.params as { id: string };
+    const skill = app.db.prepare(skillSelectWithVersion("WHERE ask.id = ?")).get(id) as AgentSkillRecord | undefined;
+    if (!skill) throw new HttpError(404, `Unknown agent skill: ${id}`);
+    const versions = app.db
+      .prepare(
+        `SELECT id, version, content_hash, name, description, risk_level, status, published_by, changelog, created_at
+         FROM agent_skill_versions
+         WHERE skill_id = ?
+         ORDER BY created_at DESC, version DESC`
+      )
+      .all(id);
+    const assignments = app.db
+      .prepare(
+        `SELECT sa.*, pt.name AS project_type_name, rc.repo AS project_repo
+         FROM skill_assignments sa
+         LEFT JOIN project_types pt ON pt.id = sa.project_type_id
+         LEFT JOIN repo_consumers rc ON rc.id = sa.project_id
+         WHERE sa.skill_id = ?
+         ORDER BY sa.scope, pt.name, rc.repo`
+      )
+      .all(id);
+    const related_specs = app.db
+      .prepare(
+        `SELECT ssl.*, s.filename, s.current_version, s.status AS spec_status,
+                pt.name AS project_type_name, rc.repo AS project_repo
+         FROM skill_spec_links ssl
+         JOIN specs s ON s.id = ssl.spec_id
+         JOIN project_types pt ON pt.id = s.project_type_id
+         LEFT JOIN repo_consumers rc ON rc.id = s.project_id
+         WHERE ssl.skill_id = ?
+         ORDER BY s.filename, ssl.section_anchor`
+      )
+      .all(id);
+    const reviews = app.db
+      .prepare(
+        `SELECT id, action, summary, status, proposed_by, reviewed_by, reviewed_at, created_at, updated_at
+         FROM skill_change_requests
+         WHERE skill_id = ?
+         ORDER BY created_at DESC
+         LIMIT 20`
+      )
+      .all(id);
+    const source_candidate = skill.source_candidate_id
+      ? app.db
+          .prepare(
+            `SELECT id, source_url, source_path, source_commit, detected_format, candidate_type,
+                    proposed_name, proposed_slug, risk_level, risk_summary, gate_status,
+                    classifier_notes, status, created_at, updated_at
+             FROM skill_candidates
+             WHERE id = ?`
+          )
+          .get(skill.source_candidate_id)
+      : null;
+    const source = skill.source_url
+      ? app.db
+          .prepare(
+            `SELECT id, url, provider, source_type, license, last_fetched_commit,
+                    last_scan_at, status, trust_decision, notes
+             FROM skill_sources
+             WHERE url = ?`
+          )
+          .get(skill.source_url)
+      : null;
+    const consumers = app.db
+      .prepare(
+        `SELECT DISTINCT rc.id, rc.repo, pt.name AS project_type_name, sa.scope, rc.last_seen_at
+         FROM repo_consumers rc
+         JOIN project_types pt ON pt.id = rc.project_type_id
+         JOIN skill_assignments sa ON sa.skill_id = ?
+         WHERE sa.scope = 'global'
+            OR (sa.scope = 'project_type' AND sa.project_type_id = rc.project_type_id)
+            OR (sa.scope = 'project' AND sa.project_id = rc.id)
+         ORDER BY rc.last_seen_at DESC, rc.repo
+         LIMIT 100`
+      )
+      .all(id);
+    return {
+      skill,
+      markdown: renderSkillMarkdown(skill),
+      versions,
+      assignments,
+      related_specs,
+      reviews,
+      source_candidate,
+      source,
+      consumers,
+    };
   });
 
   app.get("/skills/assignments", async () => {

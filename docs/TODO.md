@@ -321,7 +321,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Extend the skill marketplace UI with an Assignments tab for global, project type,
   and concrete project skill distribution.
 - [x] Extend the skill marketplace UI with Marketplace discovery as that backend lands.
-- [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
+- [x] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.
 - [x] Add inline marketplace triage details for installed skills, sources, and candidates,

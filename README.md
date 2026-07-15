@@ -1,10 +1,6 @@
 # SpecRegistry
 
-SpecRegistry turns your project specifications into an AI-ready control plane. Instead of
-hoping every agent, editor, prompt, and teammate remembers the same architecture rules,
-SpecRegistry gives your specs versioning, review gates, signed distribution, MCP access,
-drift checks, feedback loops, and observability. If you are building with AI, this is the
-missing layer that keeps generated work aligned with what you actually intended: approved
+SpecRegistry turns your project specifications into an AI-ready governance and control plane. Instead of hoping every agent, editor, prompt, and teammate remembers the same architecture rules, SpecRegistry gives your specs versioning, review gates, signed distribution, MCP access, drift checks, feedback loops, and observability. If you are building with AI, this is the missing layer that keeps generated work aligned with what you actually intended: approved
 Markdown specs (`DESIGN.md`, `STRUCTURE.md`, `API.md`, and more) become governed context
 that humans can review, developers can sync, and agents can load before they touch code.
 
@@ -14,6 +10,7 @@ that humans can review, developers can sync, and agents can load before they tou
 > Read the core philosophy behind SpecRegistry in the Medium article: [AI Coding Agents Need a Control Plane, Not Better Prompts](https://medium.com/@joeldg/ai-coding-agents-need-a-control-plane-not-better-prompts-bfaa8bb06951).
 > 
 > *"When an agent can generate a multi-file implementation from a Markdown design document, the spec becomes the real source of intent. The code is an artifact. The spec is the control surface."*
+> Follow-up article: [Architecting out of the vibe: How to enforce compliance in AI-coded apps](https://medium.com/@joeldg/architecting-out-of-the-vibe-how-to-enforce-compliance-in-ai-coded-apps-42b9d0113321)
 
 The full product specification lives in [docs/SPEC.md](docs/SPEC.md). The operating model
 for Spec Driven Development, observability, and token economics lives in

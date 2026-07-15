@@ -52,6 +52,53 @@ export interface SkillCurrencyReport {
   unknown: InstalledSkill[];
 }
 
+export interface SkillSource {
+  id: string;
+  url: string;
+  provider: string;
+  source_type: "github_repo" | "github_search" | "local_upload" | "builtin_pack" | "manual";
+  license: string | null;
+  default_branch: string | null;
+  last_fetched_commit: string | null;
+  last_scan_at: string | null;
+  status: "active" | "paused" | "archived";
+  trust_decision: "trusted" | "unreviewed" | "blocked";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SkillCandidate {
+  id: string;
+  source_id: string | null;
+  source_url: string | null;
+  source_path: string | null;
+  source_commit: string | null;
+  candidate_type: "agent_skill" | "spec_seed" | "project_type_template" | "reference_only" | "unsafe" | "unknown";
+  proposed_name: string;
+  proposed_slug: string;
+  risk_level: "safe" | "restricted";
+  risk_summary: string;
+  gate_status: "pass" | "review" | "block" | "pending";
+  status: "candidate" | "converted" | "rejected" | "archived";
+  updated_at: string;
+}
+
+export interface SkillSourceScanResult {
+  source_id: string;
+  scanned: number;
+  created: number;
+  skipped: number;
+  candidates: Array<{
+    id: string;
+    source_path: string;
+    proposed_name: string;
+    candidate_type: SkillCandidate["candidate_type"];
+    gate_status: SkillCandidate["gate_status"];
+    created: boolean;
+  }>;
+}
+
 interface AssignedSkillsResponse {
   project_type: string;
   project: string | null;
@@ -65,6 +112,42 @@ export async function listAgentSkills(server: string, token?: string): Promise<A
 export async function listAssignedAgentSkills(server: string, projectType: string, token?: string): Promise<AgentSkill[]> {
   const result = await fetchJson<AssignedSkillsResponse>(`${server}/api/v1/ai/skills/${encodeURIComponent(projectType)}`, undefined, token);
   return result.skills;
+}
+
+export async function listSkillSources(server: string, token?: string): Promise<SkillSource[]> {
+  return await fetchJson<SkillSource[]>(`${server}/api/v1/skills/sources`, undefined, token);
+}
+
+export async function createSkillSource(
+  server: string,
+  input: { url: string; source_type?: SkillSource["source_type"]; license?: string; notes?: string },
+  token?: string
+): Promise<SkillSource> {
+  return await fetchJson<SkillSource>(`${server}/api/v1/skills/sources`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  }, token);
+}
+
+export async function scanSkillSource(server: string, id: string, token?: string): Promise<SkillSourceScanResult> {
+  return await fetchJson<SkillSourceScanResult>(`${server}/api/v1/skills/sources/${encodeURIComponent(id)}/scan`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  }, token);
+}
+
+export async function listSkillCandidates(
+  server: string,
+  filters: { source_id?: string; status?: string } = {},
+  token?: string
+): Promise<SkillCandidate[]> {
+  const params = new URLSearchParams();
+  if (filters.source_id) params.set("source_id", filters.source_id);
+  if (filters.status) params.set("status", filters.status);
+  const query = params.toString();
+  return await fetchJson<SkillCandidate[]>(`${server}/api/v1/skills/candidates${query ? `?${query}` : ""}`, undefined, token);
 }
 
 export function resolveAgentSkills(catalog: AgentSkill[], selection?: string): AgentSkill[] {
@@ -263,9 +346,17 @@ export async function runSkillsCommand(opts: {
   server: string;
   token?: string;
   subcommand?: string;
+  args?: string[];
   projectType?: string;
   dir?: string;
   force?: boolean;
+  json?: boolean;
+  sourceType?: SkillSource["source_type"];
+  license?: string;
+  notes?: string;
+  status?: string;
+  sourceId?: string;
+  query?: string;
 }): Promise<void> {
   const subcommand = opts.subcommand ?? "list";
   if (subcommand === "list") {
@@ -274,6 +365,93 @@ export async function runSkillsCommand(opts: {
       : await listAgentSkills(opts.server, opts.token);
     for (const skill of skills.filter((candidate) => candidate.status !== "disabled")) {
       console.log(`${skill.slug}\t${skill.current_version ?? skill.version ?? "1.0.0"}\t${skill.name}`);
+    }
+    return;
+  }
+  if (subcommand === "search") {
+    const query = (opts.query ?? opts.args?.join(" ") ?? "").trim().toLowerCase();
+    if (!query) throw new Error("Usage: specreg skills search <query>");
+    const skills = await listAgentSkills(opts.server, opts.token);
+    const candidates = await listSkillCandidates(opts.server, {}, opts.token).catch(() => [] as SkillCandidate[]);
+    const matchedSkills = skills.filter((skill) => {
+      const haystack = [skill.slug, skill.name, skill.description, skill.instructions, skill.source_url, skill.source_path].join("\n").toLowerCase();
+      return skill.status === "active" && haystack.includes(query);
+    });
+    const matchedCandidates = candidates.filter((candidate) => {
+      const haystack = [candidate.proposed_name, candidate.proposed_slug, candidate.candidate_type, candidate.risk_summary, candidate.source_url, candidate.source_path].join("\n").toLowerCase();
+      return haystack.includes(query);
+    });
+    if (opts.json) {
+      console.log(JSON.stringify({ skills: matchedSkills, candidates: matchedCandidates }, null, 2));
+      return;
+    }
+    console.log(`Skills (${matchedSkills.length})`);
+    for (const skill of matchedSkills) {
+      console.log(`  ${skill.slug}\t${skill.current_version ?? skill.version ?? "1.0.0"}\t${skill.name}`);
+      if (skill.description) console.log(`    ${skill.description}`);
+    }
+    console.log(`Candidates (${matchedCandidates.length})`);
+    for (const candidate of matchedCandidates) {
+      console.log(`  ${candidate.proposed_slug}\t${candidate.candidate_type}\t${candidate.gate_status}\t${candidate.proposed_name}`);
+      if (candidate.source_path ?? candidate.source_url) console.log(`    ${candidate.source_path ?? candidate.source_url}`);
+    }
+    return;
+  }
+  if (subcommand === "sources") {
+    const action = opts.args?.[0] ?? "list";
+    if (action === "list") {
+      const sources = await listSkillSources(opts.server, opts.token);
+      if (opts.json) {
+        console.log(JSON.stringify(sources, null, 2));
+        return;
+      }
+      for (const source of sources) {
+        console.log(`${source.id}\t${source.source_type}\t${source.status}\t${source.trust_decision}\t${source.url}`);
+        if (source.last_scan_at || source.notes) console.log(`  last_scan=${source.last_scan_at ?? "never"}${source.notes ? `  notes=${source.notes}` : ""}`);
+      }
+      return;
+    }
+    if (action === "add") {
+      const url = opts.args?.[1];
+      if (!url) throw new Error("Usage: specreg skills sources add <url> [--source-type github_repo|github_search|local_upload|builtin_pack|manual] [--license <id>] [--notes <text>]");
+      const source = await createSkillSource(opts.server, {
+        url,
+        source_type: opts.sourceType ?? "github_repo",
+        license: opts.license,
+        notes: opts.notes,
+      }, opts.token);
+      if (opts.json) console.log(JSON.stringify(source, null, 2));
+      else console.log(`Added skill source: ${source.id}\t${source.url}`);
+      return;
+    }
+    if (action === "scan") {
+      const id = opts.args?.[1];
+      if (!id) throw new Error("Usage: specreg skills sources scan <source-id>");
+      const result = await scanSkillSource(opts.server, id, opts.token);
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      console.log(`Scanned ${result.scanned} file(s): ${result.created} created, ${result.skipped} skipped.`);
+      for (const candidate of result.candidates) {
+        console.log(`  ${candidate.created ? "NEW" : "OLD"}\t${candidate.candidate_type}\t${candidate.gate_status}\t${candidate.source_path}`);
+      }
+      return;
+    }
+    throw new Error("Usage: specreg skills sources list|add|scan");
+  }
+  if (subcommand === "candidates") {
+    const action = opts.args?.[0] ?? "list";
+    if (action !== "list") throw new Error("Usage: specreg skills candidates list [--status <status>] [--source-id <id>]");
+    const candidates = await listSkillCandidates(opts.server, { status: opts.status, source_id: opts.sourceId }, opts.token);
+    if (opts.json) {
+      console.log(JSON.stringify(candidates, null, 2));
+      return;
+    }
+    for (const candidate of candidates) {
+      console.log(`${candidate.id}\t${candidate.status}\t${candidate.candidate_type}\t${candidate.gate_status}\t${candidate.proposed_slug}`);
+      if (candidate.source_path ?? candidate.source_url) console.log(`  ${candidate.source_path ?? candidate.source_url}`);
+      if (candidate.risk_summary) console.log(`  ${candidate.risk_summary}`);
     }
     return;
   }
@@ -290,7 +468,7 @@ export async function runSkillsCommand(opts: {
     if (report.drift) process.exit(1);
     return;
   }
-  throw new Error("Usage: specreg skills list|check|sync");
+  throw new Error("Usage: specreg skills list|search|check|sync|sources|candidates");
 }
 
 function installedSkillFileHash(dir: string, slug: string): string | undefined {

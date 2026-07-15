@@ -387,9 +387,9 @@ passes provenance, review, versioning, assignment, and distribution gates.
   mismatches.
 - [x] Add CLI commands for local skill marketplace currency:
   `specreg skills list`, `specreg skills check`, and `specreg skills sync`.
-- [ ] Add CLI commands for broader marketplace discovery/source management:
+- [x] Add CLI commands for broader marketplace discovery/source management:
   `specreg skills search`, `specreg skills sources list`, and
-  `specreg skills sources add <url>`.
+  `specreg skills sources add <url>`, plus source scanning and candidate listing.
 - [x] Add MCP tools for agent-visible skill discovery without broad context loading:
   list assigned skills, fetch one skill by slug/version, search approved skills, and report
   ambiguous/stale/missing skill guidance.

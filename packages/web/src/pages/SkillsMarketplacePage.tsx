@@ -334,8 +334,10 @@ export default function SkillsMarketplacePage() {
   return (
     <>
       <div className="page-head">
-        <h1>Skills Marketplace</h1>
-        <span className="sub">Governed procedures, external sources, and untrusted candidates for review</span>
+        <div>
+          <h1>Skills Marketplace</h1>
+          <span className="sub">Governed procedures, external sources, and untrusted candidates for review</span>
+        </div>
       </div>
       {error && <div className="error-banner">{error}</div>}
       {notice && <div className="notice-banner">{notice}</div>}
@@ -367,7 +369,7 @@ export default function SkillsMarketplacePage() {
         </div>
       </div>
 
-      <div className="settings-tabs" style={{ marginBottom: 16 }}>
+      <div className="page-tabs" role="tablist" aria-label="Skill marketplace sections">
         <button className={tab === "installed" ? "active" : ""} onClick={() => setTab("installed")}>Installed</button>
         <button className={tab === "sources" ? "active" : ""} onClick={() => setTab("sources")}>Sources</button>
         <button className={tab === "candidates" ? "active" : ""} onClick={() => setTab("candidates")}>Candidates</button>
@@ -377,8 +379,11 @@ export default function SkillsMarketplacePage() {
 
       {tab === "installed" && (
         <div className="section">
-          <h2>Installed Skills</h2>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="panel-head">
+            <h2>Installed Skills</h2>
+            <span className="faint">{filteredSkills.length} of {skills.length}</span>
+          </div>
+          <div className="filter-panel">
             <div className="form-row">
               <input type="text" placeholder="Search skills" value={skillQuery} onChange={(e) => setSkillQuery(e.target.value)} style={{ flex: 1, minWidth: 260 }} />
               <select value={skillRiskFilter} onChange={(e) => setSkillRiskFilter(e.target.value as AgentSkillRow["risk_level"] | "all")}>
@@ -391,9 +396,9 @@ export default function SkillsMarketplacePage() {
                 <option value="active">Active</option>
                 <option value="disabled">Disabled</option>
               </select>
-              <span className="faint">{filteredSkills.length} of {skills.length}</span>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
@@ -425,8 +430,9 @@ export default function SkillsMarketplacePage() {
               ))}
             </tbody>
           </table>
+          </div>
           {selectedSkill && (
-            <div className="card" style={{ marginTop: 16 }}>
+            <div className="detail-panel">
               <div className="form-row" style={{ justifyContent: "space-between" }}>
                 <h3 style={{ margin: 0 }}>{selectedSkill.name}</h3>
                 <button onClick={() => setSelectedSkillId("")}>Close</button>
@@ -490,7 +496,11 @@ export default function SkillsMarketplacePage() {
 
       {tab === "sources" && (
         <>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="filter-panel">
+            <div className="panel-head">
+              <h2>Add Source</h2>
+              <span className="faint">Register external repositories before scanning them.</span>
+            </div>
             <div className="form-row" style={{ marginBottom: 10 }}>
               <input type="text" placeholder="https://github.com/org/repo" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} style={{ flex: 1, minWidth: 280 }} />
               <select value={sourceType} onChange={(e) => setSourceType(e.target.value as SkillSourceRow["source_type"])}>
@@ -505,7 +515,11 @@ export default function SkillsMarketplacePage() {
             </div>
             <textarea placeholder="Source notes" value={sourceNotes} onChange={(e) => setSourceNotes(e.target.value)} style={{ width: "100%", minHeight: 70 }} />
           </div>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="filter-panel">
+            <div className="panel-head">
+              <h2>Sources</h2>
+              <span className="faint">{filteredSources.length} of {sources.length}</span>
+            </div>
             <div className="form-row">
               <input type="text" placeholder="Search sources" value={sourceQuery} onChange={(e) => setSourceQuery(e.target.value)} style={{ flex: 1, minWidth: 260 }} />
               <select value={sourceTypeFilter} onChange={(e) => setSourceTypeFilter(e.target.value as SkillSourceRow["source_type"] | "all")}>
@@ -522,9 +536,9 @@ export default function SkillsMarketplacePage() {
                 <option value="unreviewed">Unreviewed</option>
                 <option value="blocked">Blocked</option>
               </select>
-              <span className="faint">{filteredSources.length} of {sources.length}</span>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
@@ -559,8 +573,9 @@ export default function SkillsMarketplacePage() {
               ))}
             </tbody>
           </table>
+          </div>
           {selectedSource && (
-            <div className="card" style={{ marginTop: 16 }}>
+            <div className="detail-panel">
               <div className="form-row" style={{ justifyContent: "space-between" }}>
                 <h3 style={{ margin: 0 }}>Source Details</h3>
                 <button onClick={() => setSelectedSourceId("")}>Close</button>
@@ -581,7 +596,11 @@ export default function SkillsMarketplacePage() {
 
       {tab === "candidates" && (
         <>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="filter-panel">
+            <div className="panel-head">
+              <h2>Capture Candidate</h2>
+              <span className="faint">Manual imports stay untrusted until review and conversion.</span>
+            </div>
             <div className="form-row" style={{ marginBottom: 10 }}>
               <select value={candidateSourceId} onChange={(e) => setCandidateSourceId(e.target.value)}>
                 <option value="">No source</option>
@@ -604,7 +623,11 @@ export default function SkillsMarketplacePage() {
             </div>
             <textarea placeholder="Paste untrusted source material here. It will not be included in agent packs until reviewed and converted." value={candidateContent} onChange={(e) => setCandidateContent(e.target.value)} style={{ width: "100%", minHeight: 120 }} />
           </div>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="filter-panel">
+            <div className="panel-head">
+              <h2>Candidates</h2>
+              <span className="faint">{filteredCandidates.length} of {candidates.length}</span>
+            </div>
             <div className="form-row">
               <input type="text" placeholder="Search candidates" value={candidateQuery} onChange={(e) => setCandidateQuery(e.target.value)} style={{ flex: 1, minWidth: 260 }} />
               <select value={candidateTypeFilter} onChange={(e) => setCandidateTypeFilter(e.target.value as SkillCandidateRow["candidate_type"] | "all")}>
@@ -637,9 +660,9 @@ export default function SkillsMarketplacePage() {
                   <option key={source.id} value={source.id}>{source.url}</option>
                 ))}
               </select>
-              <span className="faint">{filteredCandidates.length} of {candidates.length}</span>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
@@ -681,8 +704,9 @@ export default function SkillsMarketplacePage() {
               })}
             </tbody>
           </table>
+          </div>
           {selectedCandidate && (
-            <div className="card" style={{ marginTop: 16 }}>
+            <div className="detail-panel">
               <div className="form-row" style={{ justifyContent: "space-between" }}>
                 <h3 style={{ margin: 0 }}>{selectedCandidate.proposed_name}</h3>
                 <button onClick={() => setSelectedCandidateId("")}>Close</button>
@@ -718,7 +742,11 @@ export default function SkillsMarketplacePage() {
 
       {tab === "reviews" && (
         <div className="section">
-          <h2>Skill Reviews</h2>
+          <div className="panel-head">
+            <h2>Skill Reviews</h2>
+            <span className="faint">{reviews.length} total</span>
+          </div>
+          <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
@@ -752,13 +780,17 @@ export default function SkillsMarketplacePage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {tab === "assignments" && (
         <div className="section">
-          <h2>Skill Assignments</h2>
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="panel-head">
+            <h2>Skill Assignments</h2>
+            <span className="faint">{assignments.length} total</span>
+          </div>
+          <div className="filter-panel">
             <div className="form-row">
               <select value={assignmentSkillId} onChange={(e) => setAssignmentSkillId(e.target.value)}>
                 <option value="">Select active skill</option>
@@ -794,6 +826,7 @@ export default function SkillsMarketplacePage() {
               </button>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="grid">
             <thead>
               <tr>
@@ -818,6 +851,7 @@ export default function SkillsMarketplacePage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </>

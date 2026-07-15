@@ -20,6 +20,40 @@ import SettingsPage from "./pages/SettingsPage";
 import GenerationWorkbenchPage from "./pages/GenerationWorkbenchPage";
 import ImpactExplorerPage from "./pages/ImpactExplorerPage";
 
+const NAV_GROUPS = [
+  {
+    label: "Work",
+    items: [
+      { to: "/", label: "Dashboard", end: true },
+      { to: "/projects", label: "Projects" },
+      { to: "/reviews", label: "Reviews" },
+      { to: "/feedback", label: "AI Feedback" },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { to: "/reports", label: "Reports" },
+      { to: "/impact", label: "Impact" },
+      { to: "/search", label: "Search" },
+      { to: "/generate", label: "Generate Specs" },
+    ],
+  },
+  {
+    label: "Library",
+    items: [
+      { to: "/specs", label: "Specifications" },
+      { to: "/project-types", label: "Baselines" },
+      { to: "/templates", label: "Templates" },
+      { to: "/skills", label: "Skills" },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [{ to: "/settings", label: "Settings" }],
+  },
+];
+
 export default function App() {
   const [author, setAuthorState] = useState(getAuthor());
 
@@ -35,45 +69,21 @@ export default function App() {
         <div className="brand">
           <span className="dot" /> SpecRegistry
         </div>
-        <NavLink to="/" end className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/specs" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Specifications
-        </NavLink>
-        <NavLink to="/reviews" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Reviews
-        </NavLink>
-        <NavLink to="/feedback" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          AI Feedback
-        </NavLink>
-        <NavLink to="/reports" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Reports
-        </NavLink>
-        <NavLink to="/impact" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Impact
-        </NavLink>
-        <NavLink to="/generate" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Generate Specs
-        </NavLink>
-        <NavLink to="/search" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Search
-        </NavLink>
-        <NavLink to="/project-types" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Baselines
-        </NavLink>
-        <NavLink to="/projects" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Projects
-        </NavLink>
-        <NavLink to="/templates" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Templates
-        </NavLink>
-        <NavLink to="/skills" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Skills
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
-          Settings
-        </NavLink>
+        {NAV_GROUPS.map((group) => (
+          <div className="nav-group" key={group.label}>
+            <div className="nav-group-label">{group.label}</div>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        ))}
         <div className="spacer" />
         <div className="author-box">
           {getLoginUsername() ? (

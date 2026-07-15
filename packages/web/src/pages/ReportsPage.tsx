@@ -4,6 +4,7 @@ import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiag
 import { StatusBadge, timeAgo } from "../components";
 
 type ChartDatum = { label: string; value: number; tone?: "accent" | "green" | "amber" | "red" };
+type ReportTab = "overview" | "tokens" | "projects" | "diagnostics";
 
 const toneColor: Record<NonNullable<ChartDatum["tone"]>, string> = {
   accent: "#5e6ad2",
@@ -85,6 +86,7 @@ function DonutChart({ data }: { data: ChartDatum[] }) {
 }
 
 export default function ReportsPage() {
+  const [reportTab, setReportTab] = useState<ReportTab>("overview");
   const [report, setReport] = useState<ReportsOverview>();
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
@@ -330,6 +332,15 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          <div className="page-tabs" role="tablist" aria-label="Report sections">
+            <button className={reportTab === "overview" ? "active" : ""} onClick={() => setReportTab("overview")}>Overview</button>
+            <button className={reportTab === "tokens" ? "active" : ""} onClick={() => setReportTab("tokens")}>Token Usage</button>
+            <button className={reportTab === "projects" ? "active" : ""} onClick={() => setReportTab("projects")}>Projects</button>
+            <button className={reportTab === "diagnostics" ? "active" : ""} onClick={() => setReportTab("diagnostics")}>Diagnostics</button>
+          </div>
+
+          {reportTab === "overview" && (
+            <>
           <div className="report-grid">
             <div className="section report-panel">
               <h2>Spec Scope Mix</h2>
@@ -414,7 +425,10 @@ export default function ReportsPage() {
               />
             )}
           </div>
+            </>
+          )}
 
+          {reportTab === "tokens" && (
           <div className="section report-panel">
             <h2>Token Usage</h2>
             <p className="settings-help">
@@ -722,7 +736,10 @@ export default function ReportsPage() {
               </>
             )}
           </div>
+          )}
 
+          {reportTab === "projects" && (
+            <>
           <div className="section">
             <h2>Project Type Reports</h2>
             <table className="grid">
@@ -806,7 +823,10 @@ export default function ReportsPage() {
               </table>
             )}
           </div>
+            </>
+          )}
 
+          {reportTab === "diagnostics" && (
           <div className="section report-panel">
             <h2>Manifest Drift Diagnostics</h2>
             <div className="form-row">
@@ -886,7 +906,9 @@ export default function ReportsPage() {
               </>
             )}
           </div>
+          )}
 
+          {reportTab === "projects" && (
           <div className="section">
             <h2>Global Spec Reports</h2>
             <table className="grid">
@@ -914,7 +936,9 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+          )}
 
+          {reportTab === "diagnostics" && (
           <div className="section report-panel">
             <h2>AI Reporting Test Bench</h2>
             <div className="form-row">
@@ -956,6 +980,7 @@ export default function ReportsPage() {
               </div>
             )}
           </div>
+          )}
         </>
       )}
     </>

@@ -4,6 +4,7 @@ import { now, uuid, type Db } from "../db.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { getAppKeyConfig } from "../lib/appKeys.js";
 import { HttpError, requireString } from "../helpers.js";
+import { skillContentHash, type AgentSkillRecord } from "../lib/skills.js";
 
 type RiskLevel = "safe" | "restricted";
 type SkillStatus = "active" | "disabled";
@@ -77,6 +78,37 @@ function optionalBounded(value: unknown, field: string, max: number): string | n
 
 function contentHash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function skillSelectWithVersion(where: string): string {
+  return `SELECT ask.*,
+                 asv.id AS version_id,
+                 asv.version AS current_version,
+                 asv.content_hash,
+                 asv.created_at AS version_created_at
+          FROM agent_skills ask
+          LEFT JOIN agent_skill_versions asv ON asv.id = (
+            SELECT id FROM agent_skill_versions latest
+            WHERE latest.skill_id = ask.id
+            ORDER BY latest.created_at DESC, latest.version DESC
+            LIMIT 1
+          )
+          ${where}`;
+}
+
+function createSkillVersion(db: Db, skillId: string, actor: string, changelog: string): void {
+  const skill = db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(skillId) as AgentSkillRecord | undefined;
+  if (!skill) return;
+  const hash = skillContentHash(skill);
+  const existing = db.prepare("SELECT id FROM agent_skill_versions WHERE skill_id = ? AND content_hash = ?").get(skillId, hash);
+  if (existing) return;
+  const count = db.prepare("SELECT COUNT(*) AS count FROM agent_skill_versions WHERE skill_id = ?").get(skillId) as { count: number };
+  const version = count.count === 0 ? "1.0.0" : `1.0.${count.count}`;
+  db.prepare(
+    `INSERT INTO agent_skill_versions
+      (id, skill_id, version, content_hash, name, description, instructions, risk_level, status, published_by, changelog, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(uuid(), skill.id, version, hash, skill.name, skill.description, skill.instructions, skill.risk_level, skill.status, actor, changelog, now());
 }
 
 function jsonList(values: string[]): string {
@@ -444,7 +476,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "Admin role required to view disabled skills");
     }
     return app.db
-      .prepare(`SELECT * FROM agent_skills ${include_disabled === "true" ? "" : "WHERE status = 'active'"} ORDER BY built_in DESC, name`)
+      .prepare(`${skillSelectWithVersion(include_disabled === "true" ? "" : "WHERE ask.status = 'active'")} ORDER BY ask.built_in DESC, ask.name`)
       .all();
   });
 
@@ -601,9 +633,10 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       `INSERT INTO agent_skills (id, slug, name, description, instructions, risk_level, status, built_in, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
     ).run(id, slug, name, description, instructions, risk, status, ts, ts);
+    createSkillVersion(app.db, id, actorFrom(req, "settings"), "Initial governed skill version.");
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill.created", target_type: "agent_skill", target_id: id, summary: `Agent skill created: ${name}`, detail: { slug, risk_level: risk, status } });
     reply.code(201);
-    return app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(id);
+    return app.db.prepare(skillSelectWithVersion("WHERE ask.id = ?")).get(id);
   });
 
   app.put("/skills/:id", async (req) => {
@@ -618,8 +651,9 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     const status = statusValue(body.status, existing.status as SkillStatus);
     app.db.prepare("UPDATE agent_skills SET name = ?, description = ?, instructions = ?, risk_level = ?, status = ?, updated_at = ? WHERE id = ?")
       .run(name, description, instructions, risk, status, now(), id);
+    createSkillVersion(app.db, id, actorFrom(req, "settings"), "Direct skill update.");
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill.updated", target_type: "agent_skill", target_id: id, summary: `Agent skill updated: ${name}`, detail: { slug: existing.slug, risk_level: risk, status } });
-    return app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(id);
+    return app.db.prepare(skillSelectWithVersion("WHERE ask.id = ?")).get(id);
   });
 
   app.delete("/skills/:id", async (req, reply) => {
@@ -966,6 +1000,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
         ts,
         ts
       );
+      createSkillVersion(app.db, skillId, actorFrom(req, "settings"), "Initial governed skill version from marketplace candidate.");
       app.db.prepare("UPDATE skill_candidates SET status = 'converted', updated_at = ? WHERE id = ?").run(ts, id);
     })();
     recordAudit(app.db, {
@@ -977,7 +1012,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       detail: { candidate_id: id, slug, gate_status: candidate.gate_status },
     });
     reply.code(201);
-    return app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(skillId);
+    return app.db.prepare(skillSelectWithVersion("WHERE ask.id = ?")).get(skillId);
   });
 
   app.get("/skills/reviews", async (req) => {
@@ -1105,6 +1140,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
           review.skill_id
         );
       }
+      createSkillVersion(app.db, review.skill_id, reviewedBy, `Approved skill ${review.action} review.`);
       app.db.prepare("UPDATE skill_change_requests SET status = 'approved', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
         .run(reviewedBy, ts, ts, id);
     })();

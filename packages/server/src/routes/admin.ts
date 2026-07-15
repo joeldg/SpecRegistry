@@ -44,7 +44,7 @@ import {
 } from "../lib/embeddings.js";
 import { getFeatureConfig, getHarnessImprovementFeatureFlags, saveFeatureConfig, type FeatureConfig } from "../lib/features.js";
 import { DEFAULT_COMPLIANCE_POLICY, getCompliancePolicy } from "../lib/compliance.js";
-import { renderSkillMarkdown, type AgentSkillRecord } from "../lib/skills.js";
+import { renderSkillMarkdown, skillContentHash, type AgentSkillRecord } from "../lib/skills.js";
 import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.js";
 import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
 import { projectSpecCurrency } from "../lib/projectCurrency.js";
@@ -483,6 +483,23 @@ function validateStoredHarnessProposal(app: FastifyInstance, id: string) {
   };
 }
 
+function createHarnessSkillVersion(app: FastifyInstance, skillId: string, actor: string, changelog: string): void {
+  const skill = app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(skillId) as AgentSkillRecord | undefined;
+  if (!skill) return;
+  const hash = skillContentHash(skill);
+  const existing = app.db.prepare("SELECT id FROM agent_skill_versions WHERE skill_id = ? AND content_hash = ?").get(skillId, hash);
+  if (existing) return;
+  const count = app.db.prepare("SELECT COUNT(*) AS count FROM agent_skill_versions WHERE skill_id = ?").get(skillId) as { count: number };
+  const version = count.count === 0 ? "1.0.0" : `1.0.${count.count}`;
+  app.db
+    .prepare(
+      `INSERT INTO agent_skill_versions
+        (id, skill_id, version, content_hash, name, description, instructions, risk_level, status, published_by, changelog, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(uuid(), skill.id, version, hash, skill.name, skill.description, skill.instructions, skill.risk_level, skill.status, actor, changelog, now());
+}
+
 function createHarnessProposal(app: FastifyInstance, key: string, proposedBy: string, req: Parameters<typeof actorFrom>[0]) {
   const preview = harnessImprovementProposal(app, key);
   const id = uuid();
@@ -625,6 +642,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       app.db
         .prepare("UPDATE agent_skills SET instructions = ?, updated_at = ? WHERE id = ?")
         .run(proposal.proposed_instructions, ts, proposal.target_id);
+      createHarnessSkillVersion(app, proposal.target_id, reviewedBy, "Approved harness improvement proposal.");
       app.db
         .prepare("UPDATE harness_proposals SET status = 'approved', reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?")
         .run(reviewedBy, ts, ts, proposal.id);

@@ -30,6 +30,10 @@ export interface AgentSkillRecord {
   imported_at?: string | null;
   transformed_by?: string | null;
   upstream_content_hash?: string | null;
+  version_id?: string | null;
+  current_version?: string | null;
+  content_hash?: string | null;
+  version_created_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,6 +51,8 @@ export interface AgentSkillManifestEntry {
   risk_level: AgentSkillRecord["risk_level"];
   status: AgentSkillRecord["status"];
   built_in: boolean;
+  version: string;
+  version_id: string | null;
   assignment_scopes: SkillAssignmentScope[];
   content_hash: string;
   source: {
@@ -111,8 +117,10 @@ export function skillManifestEntry(skill: AssignedAgentSkillRecord): AgentSkillM
     risk_level: skill.risk_level,
     status: skill.status,
     built_in: Boolean(skill.built_in),
+    version: skill.current_version ?? "1.0.0",
+    version_id: skill.version_id ?? null,
     assignment_scopes: skill.assignment_scopes,
-    content_hash: skillContentHash(skill),
+    content_hash: skill.content_hash ?? skillContentHash(skill),
     source: {
       candidate_id: skill.source_candidate_id ?? null,
       url: skill.source_url ?? null,
@@ -139,9 +147,19 @@ export function assignedSkills(
   projectId?: string | null
 ): AssignedAgentSkillRecord[] {
   const rows = db.prepare(
-    `SELECT ask.*, sa.scope AS assignment_scope
+    `SELECT ask.*, sa.scope AS assignment_scope,
+            asv.id AS version_id,
+            asv.version AS current_version,
+            asv.content_hash,
+            asv.created_at AS version_created_at
      FROM skill_assignments sa
      JOIN agent_skills ask ON ask.id = sa.skill_id
+     LEFT JOIN agent_skill_versions asv ON asv.id = (
+       SELECT id FROM agent_skill_versions latest
+       WHERE latest.skill_id = ask.id
+       ORDER BY latest.created_at DESC, latest.version DESC
+       LIMIT 1
+     )
      WHERE ask.status = 'active'
        AND (
          sa.scope = 'global'

@@ -6,6 +6,7 @@ import { runInit } from "./init.js";
 import { runCompile, savedCompileTargets } from "./compile.js";
 import { runVerify } from "./verify.js";
 import { repoIdentity, reportManifest, type Manifest } from "./repo.js";
+import { checkSkillCurrency, printSkillCurrencyReport, syncAgentSkills } from "./skills.js";
 
 export interface SyncOptions {
   server: string;
@@ -102,18 +103,42 @@ export async function runSync(opts: SyncOptions): Promise<void> {
   for (const filename of result.not_on_server) {
     console.log(`  LOCAL ONLY:     ${filename}  (not on the server)`);
   }
+  const skillReport = await checkSkillCurrency({
+    server: opts.server,
+    token: opts.token,
+    projectType: manifest.project_type,
+    dir: ".spec/skills",
+  });
+  console.log("");
+  printSkillCurrencyReport(skillReport);
+
+  if (!result.drift && !skillReport.drift) {
+    console.log("\nSpecs and skills are in sync with the registry.");
+    return;
+  }
+
+  if (opts.mode === "check") {
+    console.error("\nSpecRegistry drift detected. Run `specreg sync` to update local specs and skills.");
+    process.exit(1);
+  }
+
+  if (skillReport.drift) {
+    console.log("\nSkill drift detected — refreshing governed agent skills...");
+    await syncAgentSkills({
+      server: opts.server,
+      token: opts.token,
+      projectType: manifest.project_type,
+      dir: ".spec/skills",
+      force: true,
+    });
+  }
 
   if (!result.drift) {
     console.log("\nSpecs are in sync with the registry.");
     return;
   }
 
-  if (opts.mode === "check") {
-    console.error("\nSpec drift detected. Run `specreg sync` to update local specs.");
-    process.exit(1);
-  }
-
-  console.log("\nDrift detected — pulling latest approved specs...");
+  console.log("\nSpec drift detected — pulling latest approved specs...");
   const compileTargets = savedCompileTargets(opts.dir);
   await runInit({
     server: opts.server,

@@ -161,6 +161,11 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         name: skill.name,
         description: skill.description,
         risk_level: skill.risk_level,
+        status: skill.status,
+        built_in: Boolean(skill.built_in),
+        version: skill.current_version ?? "1.0.0",
+        version_id: skill.version_id ?? null,
+        content_hash: skill.content_hash ?? null,
         assignment_scopes: skill.assignment_scopes,
         related_specs: skill.related_specs.map((link) => ({
           spec_id: link.spec_id,
@@ -195,6 +200,11 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
         name: skill.name,
         description: skill.description,
         risk_level: skill.risk_level,
+        status: skill.status,
+        built_in: Boolean(skill.built_in),
+        version: skill.current_version ?? "1.0.0",
+        version_id: skill.version_id ?? null,
+        content_hash: skill.content_hash ?? null,
         assignment_scopes: skill.assignment_scopes,
         markdown: renderSkillMarkdown(skill),
         related_specs: skill.related_specs.map((link) => ({

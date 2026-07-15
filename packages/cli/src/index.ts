@@ -10,6 +10,7 @@ import { runCompile, COMPILE_TARGETS, type CompileTarget } from "./compile.js";
 import { runVerify } from "./verify.js";
 import { runAudit } from "./audit.js";
 import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
+import { runSkillsCommand } from "./skills.js";
 import { readStoredCredentials } from "./credentials.js";
 import { runComply } from "./comply.js";
 import { runScan } from "./scanCommand.js";
@@ -35,6 +36,7 @@ Usage:
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
+  specreg skills list|check|sync  List assigned skills, verify local skill currency, or refresh them
   specreg comply    Verify spec compliance (coverage/drift) before declaring work done or committing; exit 1 if not
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
@@ -49,7 +51,7 @@ Options:
   --styleguides <s> init: suggested | all | none | comma ids (default: interactive/suggested)
   --styleguide-dir <path> init: local Google guide directory (default: .spec/styleguides)
   --skills <s>      init: base | all | none | comma skill slugs (default: interactive/base)
-  --skill-dir <p>   init: local governed skill directory (default: .spec/skills)
+  --skill-dir <p>   init/skills: local governed skill directory (default: .spec/skills)
   --out <path>      generate: prompt output directory (default: .spec/prompts)
                     code-map: metadata output file (default: .spec/code-map.json)
   --trace-out <p>   code-map: traceability report file (default: .spec/code-trace.json)
@@ -295,6 +297,16 @@ try {
     } else {
       throw new Error("Usage: specreg styleguide list|add <id|language>");
     }
+  } else if (command === "skills") {
+    const specsDir = typeof flags.dir === "string" ? flags.dir : "specs";
+    await runSkillsCommand({
+      server: requireServer(),
+      token,
+      subcommand: positionals[1],
+      projectType: (typeof flags.type === "string" ? flags.type : undefined) ?? manifestProjectType(specsDir),
+      dir: typeof flags["skill-dir"] === "string" ? flags["skill-dir"] : ".spec/skills",
+      force: flags.force === true,
+    });
   } else {
     console.error(`Unknown command: ${command}\n`);
     console.log(HELP);

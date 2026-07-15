@@ -76,7 +76,9 @@ describe("governed agent skills", () => {
     expect(initial.find((skill: any) => skill.slug === "load-governed-specs")).toMatchObject({
       built_in: 1,
       risk_level: "safe",
+      current_version: "1.0.0",
     });
+    expect(initial.find((skill: any) => skill.slug === "load-governed-specs").content_hash).toMatch(/^[a-f0-9]{64}$/);
     // load-governed-specs must point agents at begin_task first (matches AGENT_OPERATING_RULES).
     expect(initial.find((skill: any) => skill.slug === "load-governed-specs").instructions).toContain("begin_task");
     // The lifecycle, guidance, compliance-loop, separation-of-duties, and quality-model
@@ -100,7 +102,7 @@ describe("governed agent skills", () => {
       },
     });
     expect(created.statusCode).toBe(201);
-    expect(created.json()).toMatchObject({ slug: "prepare-deployment", risk_level: "restricted", status: "active", built_in: 0 });
+    expect(created.json()).toMatchObject({ slug: "prepare-deployment", risk_level: "restricted", status: "active", built_in: 0, current_version: "1.0.0" });
 
     const disabled = await app.inject({
       method: "PUT",
@@ -123,6 +125,7 @@ describe("governed agent skills", () => {
     expect(edited.statusCode).toBe(200);
     expect(edited.json()).toMatchObject({
       slug: "prepare-deployment",
+      current_version: "1.0.1",
       name: "Prepare release",
       description: "Prepare a reviewed release and rollback plan.",
       instructions: "Build the release checklist, rollback plan, and stop before deployment.",

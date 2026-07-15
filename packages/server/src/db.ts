@@ -303,6 +303,24 @@ CREATE TABLE IF NOT EXISTS agent_skills (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS agent_skill_versions (
+  id TEXT PRIMARY KEY,
+  skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+  version TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  instructions TEXT NOT NULL,
+  risk_level TEXT NOT NULL CHECK (risk_level IN ('safe', 'restricted')),
+  status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
+  published_by TEXT NOT NULL,
+  changelog TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(skill_id, version),
+  UNIQUE(skill_id, content_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_skill_versions_skill ON agent_skill_versions(skill_id, created_at);
+
 CREATE TABLE IF NOT EXISTS skill_change_requests (
   id TEXT PRIMARY KEY,
   skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
@@ -1317,6 +1335,29 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       CREATE INDEX IF NOT EXISTS idx_skill_spec_links_spec ON skill_spec_links(spec_id);
     `,
   },
+  {
+    // Immutable skill versions for local skill currency checks and locked agent packs.
+    version: 41,
+    sql: `
+      CREATE TABLE IF NOT EXISTS agent_skill_versions (
+        id TEXT PRIMARY KEY,
+        skill_id TEXT NOT NULL REFERENCES agent_skills(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        instructions TEXT NOT NULL,
+        risk_level TEXT NOT NULL CHECK (risk_level IN ('safe', 'restricted')),
+        status TEXT NOT NULL CHECK (status IN ('active', 'disabled')),
+        published_by TEXT NOT NULL,
+        changelog TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        UNIQUE(skill_id, version),
+        UNIQUE(skill_id, content_hash)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_skill_versions_skill ON agent_skill_versions(skill_id, created_at);
+    `,
+  },
 ];
 
 const DEFAULT_AGENT_SKILLS = [
@@ -1479,6 +1520,72 @@ function seedDefaultSkillAssignments(db: Db): void {
   }
 }
 
+interface SkillVersionSeedRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  instructions: string;
+  risk_level: string;
+  status: string;
+  source_candidate_id?: string | null;
+  source_url?: string | null;
+  source_path?: string | null;
+  source_commit?: string | null;
+  upstream_content_hash?: string | null;
+}
+
+function renderSkillMarkdownForHash(skill: SkillVersionSeedRow): string {
+  return `---
+name: ${skill.slug}
+description: ${JSON.stringify(skill.description.replace(/\s+/g, " ").trim())}
+metadata:
+  specregistry_id: ${skill.id}
+  risk_level: ${skill.risk_level}
+  source_candidate_id: ${skill.source_candidate_id ?? ""}
+  source_url: ${skill.source_url ?? ""}
+  source_path: ${skill.source_path ?? ""}
+  source_commit: ${skill.source_commit ?? ""}
+  upstream_content_hash: ${skill.upstream_content_hash ?? ""}
+---
+
+# ${skill.name}
+
+${skill.description}
+
+## Instructions
+
+${skill.instructions.trim()}
+
+## Safety Boundary
+
+This skill is a governed operating procedure, not permission to take external or destructive
+actions. Follow the agent host's approval policy, current published specifications, and the
+principle of least privilege. Stop and ask when required authorization or intent is unclear.
+`;
+}
+
+function seedDefaultSkillVersions(db: Db): void {
+  const skills = db
+    .prepare(
+      `SELECT ask.*
+       FROM agent_skills ask
+       LEFT JOIN agent_skill_versions asv ON asv.skill_id = ask.id
+       WHERE asv.id IS NULL`
+    )
+    .all() as SkillVersionSeedRow[];
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO agent_skill_versions
+      (id, skill_id, version, content_hash, name, description, instructions, risk_level, status, published_by, changelog, created_at)
+     VALUES (?, ?, '1.0.0', ?, ?, ?, ?, ?, ?, 'seed', 'Initial governed skill version.', ?)`
+  );
+  const ts = now();
+  for (const skill of skills) {
+    const hash = crypto.createHash("sha256").update(renderSkillMarkdownForHash(skill)).digest("hex");
+    insert.run(`version-${skill.id}-1-0-0`, skill.id, hash, skill.name, skill.description, skill.instructions, skill.risk_level, skill.status, ts);
+  }
+}
+
 export function createDb(path: string): Db {
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
@@ -1518,6 +1625,7 @@ export function createDb(path: string): Db {
   }
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)").run(String(version));
   seedDefaultAgentSkills(db);
+  seedDefaultSkillVersions(db);
   seedDefaultSkillSources(db);
   seedDefaultSkillAssignments(db);
   return db;

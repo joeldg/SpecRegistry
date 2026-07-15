@@ -298,7 +298,7 @@ as specs. A skill answers "how should an agent perform this workflow?", while a 
 recommend skills, but imported marketplace content must not become trusted guidance until it
 passes provenance, review, versioning, assignment, and distribution gates.
 
-- [ ] Split the current editable `agent_skills` row model into stable skill identity plus
+- [x] Split the current editable `agent_skills` row model into stable skill identity plus
   immutable `agent_skill_versions`, mirroring spec versioning. Preserve stable slugs,
   current version, status, built-in/custom origin, published content hash, changelog, and
   created/updated/published metadata.
@@ -376,17 +376,18 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Add skill-spec relationships. Skills can declare related specs/sections; specs can
   recommend skills such as `run-compliance-loop`, `evaluate-quality-model`,
   `incident-response-triage`, `api-contract-review`, or `observability-gap-analysis`.
-- [ ] Include locked skill versions in generated agent packs and `.spec/skills/manifest.json`.
+- [x] Include locked skill versions in generated agent packs and `.spec/skills/manifest.json`.
   Manifest entries should include slug, version, scope, risk level, hash, source, and
   related specs.
 - [x] Enrich generated `.spec/skills/manifest.json` entries with assignment scope,
   risk/status, content hash, built-in/custom origin, source URL/path/commit, imported
   candidate id, transformer, and upstream content hash.
-- [ ] Extend `specreg check` to verify local skill currency alongside spec currency:
+- [x] Extend `specreg check` to verify local skill currency alongside spec currency:
   up-to-date skills, outdated skills, missing skills, unknown local skills, and hash
   mismatches.
-- [ ] Add CLI commands for marketplace workflows:
-  `specreg skills list`, `specreg skills check`, `specreg skills sync`,
+- [x] Add CLI commands for local skill marketplace currency:
+  `specreg skills list`, `specreg skills check`, and `specreg skills sync`.
+- [ ] Add CLI commands for broader marketplace discovery/source management:
   `specreg skills search`, `specreg skills sources list`, and
   `specreg skills sources add <url>`.
 - [x] Add MCP tools for agent-visible skill discovery without broad context loading:

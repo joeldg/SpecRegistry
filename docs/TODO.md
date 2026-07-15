@@ -189,14 +189,15 @@ real tokens explain actual model spend and efficiency.
 - [x] Add a Reports token usage panel. The top-level view should list projects with
   projected context tokens, real prompt/completion tokens, estimated spend, most expensive
   specs, and most expensive sections.
-- [ ] Promote token usage into a first-class Reports tab once the Reports page has tabbed
+- [x] Promote token usage into a first-class Reports tab once the Reports page has tabbed
   navigation.
 - [x] Add project drilldown in the Reports token panel. Selecting a project should show:
   spec-level totals, section-level totals, retrieval source, agent sessions/tasks, and
   real-vs-projected tokens.
 - [ ] Extend project drilldown with feedback/compliance/code-trace links and last-used
   timestamps where they are not already surfaced by the aggregate tables.
-- [ ] Add section drilldown showing the section text preview, version, delivered token
+- [x] Add first-pass section text previews to the token report drilldown.
+- [ ] Deepen section drilldown with version, delivered token
   history, searches that retrieved it, agents/sessions that loaded it, citations/evidence,
   feedback clusters, code-trace links, and whether it appears to earn its prompt cost.
 - [ ] Add token ROI signals that combine delivered tokens, real prompt tokens, search hits,
@@ -319,7 +320,7 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Extend the skill marketplace UI with a Reviews tab for skill change requests.
 - [x] Extend the skill marketplace UI with an Assignments tab for global, project type,
   and concrete project skill distribution.
-- [ ] Extend the skill marketplace UI with Marketplace discovery as that backend lands.
+- [x] Extend the skill marketplace UI with Marketplace discovery as that backend lands.
 - [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.

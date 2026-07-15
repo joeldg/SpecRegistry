@@ -720,8 +720,44 @@ export interface AgentSkillRow {
   transformed_by: string | null;
   transformation_note: string | null;
   upstream_content_hash: string | null;
+  current_version?: string | null;
+  version_id?: string | null;
+  content_hash?: string | null;
+  version_created_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+export interface AgentSkillDetail {
+  skill: AgentSkillRow;
+  markdown: string;
+  versions: Array<{
+    id: string;
+    version: string;
+    content_hash: string;
+    name: string;
+    description: string;
+    risk_level: AgentSkillRow["risk_level"];
+    status: AgentSkillRow["status"];
+    published_by: string;
+    changelog: string;
+    created_at: string;
+  }>;
+  assignments: Array<{
+    id: string;
+    skill_id: string;
+    scope: SkillAssignmentRow["scope"];
+    project_type_id: string | null;
+    project_id: string | null;
+    created_by: string;
+    created_at: string;
+    project_type_name: string | null;
+    project_repo: string | null;
+  }>;
+  related_specs: Array<SkillSpecLinkRow & { spec_status: string; project_repo: string | null }>;
+  reviews: Array<Pick<SkillReviewRow, "id" | "action" | "summary" | "status" | "proposed_by" | "reviewed_by" | "reviewed_at" | "created_at" | "updated_at">>;
+  source_candidate: Pick<SkillCandidateRow, "id" | "source_url" | "source_path" | "source_commit" | "detected_format" | "candidate_type" | "proposed_name" | "proposed_slug" | "risk_level" | "risk_summary" | "gate_status" | "classifier_notes" | "status" | "created_at" | "updated_at"> | null;
+  source: Pick<SkillSourceRow, "id" | "url" | "provider" | "source_type" | "license" | "last_fetched_commit" | "last_scan_at" | "status" | "trust_decision" | "notes"> | null;
+  consumers: Array<{ id: string; repo: string; project_type_name: string; scope: SkillAssignmentRow["scope"]; last_seen_at: string }>;
 }
 export interface SkillSourceRow {
   id: string;
@@ -1155,6 +1191,7 @@ export const api = {
     request<McpGuide>(`/api/v1/ai/mcp-guide${projectType ? `/${encodeURIComponent(projectType)}` : ""}`),
   agentSkills: (includeDisabled = false) =>
     request<AgentSkillRow[]>(`/api/v1/skills${includeDisabled ? "?include_disabled=true" : ""}`),
+  agentSkillDetail: (id: string) => request<AgentSkillDetail>(`/api/v1/skills/${encodeURIComponent(id)}/detail`),
   createAgentSkill: (body: Pick<AgentSkillRow, "name" | "slug" | "description" | "instructions" | "risk_level">) =>
     request<AgentSkillRow>("/api/v1/skills", { method: "POST", body: JSON.stringify(body) }),
   updateAgentSkill: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "description" | "instructions" | "risk_level" | "status">>) =>

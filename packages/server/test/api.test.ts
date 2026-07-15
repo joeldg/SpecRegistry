@@ -337,6 +337,20 @@ describe("project types & specs", () => {
     const links = await getJson(`/api/v1/skills/spec-links?skill_id=${encodeURIComponent(converted.json().id)}`);
     expect(links).toHaveLength(1);
 
+    const assignedSkillList = await getJson("/api/v1/ai/skills/Acme%20Edge%20Device");
+    expect(assignedSkillList.skills.map((skill: any) => skill.slug)).toContain("external-reviewer-workflow");
+    const listedSkill = assignedSkillList.skills.find((skill: any) => skill.slug === "external-reviewer-workflow");
+    expect(listedSkill).toMatchObject({
+      assignment_scopes: ["project_type"],
+      related_specs: [{ filename: "GLOBAL_SECURITY.md", relation: "supports" }],
+    });
+    const searchedSkills = await getJson("/api/v1/ai/skills/Acme%20Edge%20Device?q=global_security");
+    expect(searchedSkills.skills.map((skill: any) => skill.slug)).toContain("external-reviewer-workflow");
+    const fetchedSkill = await getJson("/api/v1/ai/skills/Acme%20Edge%20Device/external-reviewer-workflow");
+    expect(fetchedSkill.skill.markdown).toContain("# External reviewer workflow");
+    expect(fetchedSkill.skill.markdown).toContain("Safety Boundary");
+    expect(fetchedSkill.skill.related_specs[0]).toMatchObject({ filename: "GLOBAL_SECURITY.md", section_anchor: "requirements" });
+
     const scopedPack = await app.inject({ method: "GET", url: "/api/v1/specs/Acme%20Edge%20Device/agent-pack" });
     expect(scopedPack.statusCode).toBe(200);
     const scopedZip = new AdmZip(scopedPack.rawPayload);

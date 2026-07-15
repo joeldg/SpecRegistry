@@ -15,6 +15,7 @@ import { ensureConsumer, persistCodeTrace } from "../lib/codeTrace.js";
 import { splitSections } from "../lib/sections.js";
 import { bundleSpecs } from "../lib/compile.js";
 import { recordContextEvent, sectionsFromSearchResults, sectionsFromSpecs } from "../lib/tokenUsage.js";
+import { assignedSkills, renderSkillMarkdown } from "../lib/skills.js";
 
 function feedbackClusterKey(
   row: Pick<AgentFeedback, "spec_id" | "error_type" | "description" | "project_type_id">
@@ -131,6 +132,85 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
           permalink: `/api/v1/specs/${spec.id}#${section.anchor}`,
         })),
       })),
+    };
+  });
+
+  app.get("/ai/skills/:projectType", async (req) => {
+    const { projectType } = req.params as { projectType: string };
+    const { project_id, repo, q } = req.query as { project_id?: string; repo?: string; q?: string };
+    const pt = requireProjectType(app.db, projectType);
+    const project = project_id ? findProjectConsumer(app.db, project_id, pt.id) : repo ? findProjectConsumer(app.db, repo, pt.id) : undefined;
+    const query = q?.trim().toLowerCase();
+    const skills = assignedSkills(app.db, pt.id, project?.id).filter((skill) => {
+      if (!query) return true;
+      const haystack = [
+        skill.slug,
+        skill.name,
+        skill.description,
+        skill.instructions,
+        ...skill.related_specs.map((link) => `${link.filename} ${link.section_anchor ?? ""} ${link.relation}`),
+      ].join("\n").toLowerCase();
+      return haystack.includes(query);
+    });
+    return {
+      project_type: pt.name,
+      project: project?.repo ?? null,
+      skills: skills.map((skill) => ({
+        id: skill.id,
+        slug: skill.slug,
+        name: skill.name,
+        description: skill.description,
+        risk_level: skill.risk_level,
+        assignment_scopes: skill.assignment_scopes,
+        related_specs: skill.related_specs.map((link) => ({
+          spec_id: link.spec_id,
+          filename: link.filename,
+          project_type: link.project_type_name,
+          section_anchor: link.section_anchor,
+          relation: link.relation,
+        })),
+        source: {
+          url: skill.source_url ?? null,
+          path: skill.source_path ?? null,
+          commit: skill.source_commit ?? null,
+          upstream_content_hash: skill.upstream_content_hash ?? null,
+        },
+      })),
+    };
+  });
+
+  app.get("/ai/skills/:projectType/:slug", async (req) => {
+    const { projectType, slug } = req.params as { projectType: string; slug: string };
+    const { project_id, repo } = req.query as { project_id?: string; repo?: string };
+    const pt = requireProjectType(app.db, projectType);
+    const project = project_id ? findProjectConsumer(app.db, project_id, pt.id) : repo ? findProjectConsumer(app.db, repo, pt.id) : undefined;
+    const skill = assignedSkills(app.db, pt.id, project?.id).find((candidate) => candidate.slug === slug);
+    if (!skill) throw new HttpError(404, `No assigned active skill found for ${slug}`);
+    return {
+      project_type: pt.name,
+      project: project?.repo ?? null,
+      skill: {
+        id: skill.id,
+        slug: skill.slug,
+        name: skill.name,
+        description: skill.description,
+        risk_level: skill.risk_level,
+        assignment_scopes: skill.assignment_scopes,
+        markdown: renderSkillMarkdown(skill),
+        related_specs: skill.related_specs.map((link) => ({
+          spec_id: link.spec_id,
+          filename: link.filename,
+          project_type: link.project_type_name,
+          section_anchor: link.section_anchor,
+          relation: link.relation,
+        })),
+        source: {
+          url: skill.source_url ?? null,
+          path: skill.source_path ?? null,
+          commit: skill.source_commit ?? null,
+          upstream_content_hash: skill.upstream_content_hash ?? null,
+        },
+      },
     };
   });
 

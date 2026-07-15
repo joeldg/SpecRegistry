@@ -755,6 +755,9 @@ describe("agent MCP guide", () => {
     expect(guide.content).toContain("get_specs");
     expect(guide.content).toContain("pre-implementation gate");
     expect(guide.content).toContain("check_compliance");
+    expect(guide.content).toContain("list_assigned_skills");
+    expect(guide.content).toContain("search_approved_skills");
+    expect(guide.content).toContain("get_skill");
     expect(guide.content).toContain("specreg comply");
     expect(guide.content).toContain("halt before reporting completion");
     expect(guide.content).toContain("exact tool or command output");

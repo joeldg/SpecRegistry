@@ -10,7 +10,7 @@ import { runCompile, COMPILE_TARGETS, type CompileTarget } from "./compile.js";
 import { runVerify } from "./verify.js";
 import { runAudit } from "./audit.js";
 import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
-import { runSkillsCommand } from "./skills.js";
+import { runSkillsCommand, type SkillSource } from "./skills.js";
 import { readStoredCredentials } from "./credentials.js";
 import { runComply } from "./comply.js";
 import { runScan } from "./scanCommand.js";
@@ -36,7 +36,9 @@ Usage:
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
-  specreg skills list|check|sync  List assigned skills, verify local skill currency, or refresh them
+  specreg skills list|search|check|sync  List/search skills, verify local skill currency, or refresh them
+  specreg skills sources list|add|scan  Manage marketplace skill sources
+  specreg skills candidates list  List untrusted marketplace candidates
   specreg comply    Verify spec compliance (coverage/drift) before declaring work done or committing; exit 1 if not
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
@@ -52,6 +54,11 @@ Options:
   --styleguide-dir <path> init: local Google guide directory (default: .spec/styleguides)
   --skills <s>      init: base | all | none | comma skill slugs (default: interactive/base)
   --skill-dir <p>   init/skills: local governed skill directory (default: .spec/skills)
+  --source-type <t> skills sources add: github_repo | github_search | local_upload | builtin_pack | manual
+  --license <id>    skills sources add: source license label
+  --notes <text>    skills sources add: reviewer/source notes
+  --source-id <id>  skills candidates list: filter by source id
+  --status <s>      skills candidates list: filter by status
   --out <path>      generate: prompt output directory (default: .spec/prompts)
                     code-map: metadata output file (default: .spec/code-map.json)
   --trace-out <p>   code-map: traceability report file (default: .spec/code-trace.json)
@@ -142,6 +149,14 @@ function manifestProjectType(dir: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function skillSourceTypeFlag(value: string | boolean | undefined): SkillSource["source_type"] | undefined {
+  if (typeof value !== "string") return undefined;
+  if (!["github_repo", "github_search", "local_upload", "builtin_pack", "manual"].includes(value)) {
+    throw new Error("--source-type must be one of: github_repo, github_search, local_upload, builtin_pack, manual");
+  }
+  return value as SkillSource["source_type"];
 }
 
 try {
@@ -303,9 +318,17 @@ try {
       server: requireServer(),
       token,
       subcommand: positionals[1],
+      args: positionals.slice(2),
       projectType: (typeof flags.type === "string" ? flags.type : undefined) ?? manifestProjectType(specsDir),
       dir: typeof flags["skill-dir"] === "string" ? flags["skill-dir"] : ".spec/skills",
       force: flags.force === true,
+      json: flags.json === true,
+      sourceType: skillSourceTypeFlag(flags["source-type"]),
+      license: typeof flags.license === "string" ? flags.license : undefined,
+      notes: typeof flags.notes === "string" ? flags.notes : undefined,
+      status: typeof flags.status === "string" ? flags.status : undefined,
+      sourceId: typeof flags["source-id"] === "string" ? flags["source-id"] : undefined,
+      query: typeof flags.query === "string" ? flags.query : undefined,
     });
   } else {
     console.error(`Unknown command: ${command}\n`);

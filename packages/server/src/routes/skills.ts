@@ -5,6 +5,7 @@ import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { getAppKeyConfig } from "../lib/appKeys.js";
 import { HttpError, requireString } from "../helpers.js";
 import { renderSkillMarkdown, skillContentHash, type AgentSkillRecord } from "../lib/skills.js";
+import { runLlmText } from "../lib/llm.js";
 
 type RiskLevel = "safe" | "restricted";
 type SkillStatus = "active" | "disabled";
@@ -17,6 +18,7 @@ type GateStatus = "pass" | "review" | "block" | "pending";
 type SkillReviewAction = "update" | "enable" | "disable" | "delete";
 type SkillAssignmentScope = "global" | "project_type" | "project";
 type SkillSpecRelation = "related" | "governs" | "recommends" | "supports";
+type CandidateAssistMode = "skill_draft" | "spec_draft";
 
 interface SkillSourceRecord {
   id: string;
@@ -467,6 +469,98 @@ function assignmentScopeValue(value: unknown): SkillAssignmentScope {
 
 function skillSpecRelationValue(value: unknown): SkillSpecRelation {
   return enumValue<SkillSpecRelation>(value, ["related", "governs", "recommends", "supports"], "relation", "related");
+}
+
+function candidateAssistMode(value: unknown): CandidateAssistMode {
+  return enumValue<CandidateAssistMode>(value, ["skill_draft", "spec_draft"], "mode", "skill_draft");
+}
+
+function extractJsonObject(text: string): Record<string, unknown> {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+    throw new HttpError(502, "LLM did not return a JSON object");
+  }
+}
+
+function stringField(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+async function assistCandidateDraft(db: Db, candidate: Record<string, unknown>, mode: CandidateAssistMode, guidance: string) {
+  const system = `You convert untrusted marketplace material into SpecRegistry review drafts.
+
+Return ONLY a JSON object. Do not wrap it in markdown fences.
+
+For mode skill_draft, return:
+{
+  "title": string,
+  "slug": string,
+  "description": string,
+  "risk_level": "safe" | "restricted",
+  "transformation_summary": string,
+  "review_notes": string[],
+  "content": string
+}
+The content must be the skill instructions body only, not full frontmatter. It must preserve useful workflow steps, remove persona/fluff, include safety boundaries, and avoid secrets or executable payloads.
+
+For mode spec_draft, return:
+{
+  "title": string,
+  "filename": string,
+  "transformation_summary": string,
+  "review_notes": string[],
+  "content": string
+}
+The content must be one complete Markdown specification beginning with "#", with Scope, Intent, Requirements, Non-Goals, Acceptance Evidence, Token Budget Class, Related Specs, and AI Agent Directives when applicable.`;
+  const user = `## Mode
+${mode}
+
+## Reviewer guidance
+${guidance || "Normalize this candidate into the most appropriate SpecRegistry draft without adding unsupported facts."}
+
+## Candidate metadata
+- proposed_name: ${candidate.proposed_name}
+- proposed_slug: ${candidate.proposed_slug}
+- candidate_type: ${candidate.candidate_type}
+- risk_level: ${candidate.risk_level}
+- risk_summary: ${candidate.risk_summary}
+- gate_status: ${candidate.gate_status}
+- classifier_notes: ${candidate.classifier_notes}
+- source_url: ${candidate.source_url ?? ""}
+- source_path: ${candidate.source_path ?? ""}
+- source_commit: ${candidate.source_commit ?? ""}
+- raw_content_hash: ${candidate.raw_content_hash}
+
+## Raw candidate content
+<candidate>
+${candidate.raw_content}
+</candidate>`;
+  const result = await runLlmText(db, {
+    system,
+    user,
+    maxTokens: mode === "spec_draft" ? 16000 : 10000,
+    route: "spec_generation",
+  });
+  const parsed = extractJsonObject(result.text);
+  const notes = Array.isArray(parsed.review_notes) ? parsed.review_notes.map((note) => String(note)) : [];
+  return {
+    mode,
+    title: stringField(parsed.title, String(candidate.proposed_name ?? "Untitled draft")),
+    slug: stringField(parsed.slug, String(candidate.proposed_slug ?? "")).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+    filename: stringField(parsed.filename, `${String(candidate.proposed_slug ?? "draft").toUpperCase().replace(/[^A-Z0-9]+/g, "_")}.md`),
+    description: stringField(parsed.description, ""),
+    risk_level: parsed.risk_level === "restricted" ? "restricted" : "safe",
+    transformation_summary: stringField(parsed.transformation_summary, ""),
+    review_notes: notes,
+    content: stringField(parsed.content, result.text),
+    model: result.model,
+    provider: result.provider,
+  };
 }
 
 export async function skillRoutes(app: FastifyInstance): Promise<void> {
@@ -1009,6 +1103,36 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     );
     recordAudit(app.db, { actor: actorFrom(req, "settings"), action: "skill_candidate.gated", target_type: "skill_candidate", target_id: id, summary: `Skill candidate gates evaluated: ${existing.proposed_name}`, detail: { gate_status: gates.gate_status } });
     return app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id);
+  });
+
+  app.post("/skills/candidates/:id/assist", async (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const mode = candidateAssistMode(body.mode);
+    const guidance = typeof body.guidance === "string" ? body.guidance.trim() : "";
+    const candidate = app.db.prepare("SELECT * FROM skill_candidates WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!candidate) throw new HttpError(404, `Unknown skill candidate: ${id}`);
+    if (candidate.status === "converted") throw new HttpError(409, "Candidate has already been converted");
+    if (candidate.gate_status === "block") throw new HttpError(409, "Blocked candidates cannot be converted with LLM assistance");
+    const draft = await assistCandidateDraft(app.db, candidate, mode, guidance);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "settings"),
+      action: "skill_candidate.assisted",
+      target_type: "skill_candidate",
+      target_id: id,
+      summary: `LLM draft generated for candidate: ${candidate.proposed_name}`,
+      detail: { mode, model: draft.model, provider: draft.provider },
+    });
+    return {
+      candidate_id: id,
+      source: {
+        url: candidate.source_url ?? null,
+        path: candidate.source_path ?? null,
+        commit: candidate.source_commit ?? null,
+        raw_content_hash: candidate.raw_content_hash,
+      },
+      ...draft,
+    };
   });
 
   app.post("/skills/candidates/:id/convert-skill", async (req, reply) => {

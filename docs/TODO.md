@@ -350,11 +350,11 @@ passes provenance, review, versioning, assignment, and distribution gates.
   into active agent packs.
 - [x] Add deterministic candidate conversion into disabled governed skill drafts with
   source provenance, gate status, and review-before-enable instructions.
-- [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion
+- [x] Add LLM-assisted candidate conversion into governed skill drafts. The conversion
   should preserve useful workflow logic, remove irrelevant persona/fluff, normalize to
   SpecRegistry skill format, add safety boundaries, add related-spec references, and
   produce a reviewer-facing diff/summary.
-- [ ] Add LLM-assisted conversion from candidate material into spec drafts when the source
+- [x] Add first-pass LLM-assisted conversion from candidate material into spec draft previews when the source
   is better treated as reusable requirements than as agent procedure. This avoids turning
   agent role repositories into project types by accident.
 - [x] Add basic provenance metadata to governed skills converted from candidates: source URL,

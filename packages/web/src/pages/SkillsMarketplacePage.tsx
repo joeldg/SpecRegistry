@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, getAuthor, type AgentSkillDetail, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow, type SkillSpecLinkRow } from "../api";
+import { api, getAuthor, type AgentSkillDetail, type AgentSkillRow, type ProjectRow, type ProjectTypeWithCount, type SkillAssignmentRow, type SkillCandidateAssistResult, type SkillCandidateRow, type SkillReviewRow, type SkillSourceRow, type SkillSpecLinkRow } from "../api";
 import type { SpecSummary } from "@specregistry/shared";
 import { StatusBadge, timeAgo } from "../components";
 
@@ -69,6 +69,9 @@ export default function SkillsMarketplacePage() {
   const [selectedSkillId, setSelectedSkillId] = useState("");
   const [selectedSkillDetail, setSelectedSkillDetail] = useState<AgentSkillDetail>();
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [candidateAssistGuidance, setCandidateAssistGuidance] = useState("");
+  const [candidateAssist, setCandidateAssist] = useState<SkillCandidateAssistResult>();
+  const [candidateAssistBusy, setCandidateAssistBusy] = useState<SkillCandidateAssistResult["mode"] | "">("");
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [linkSpecId, setLinkSpecId] = useState("");
   const [linkRelation, setLinkRelation] = useState<SkillSpecLinkRow["relation"]>("related");
@@ -108,6 +111,12 @@ export default function SkillsMarketplacePage() {
       .then(setSelectedSkillDetail)
       .catch((e) => setError(e.message));
   }, [selectedSkillId]);
+
+  useEffect(() => {
+    setCandidateAssist(undefined);
+    setCandidateAssistGuidance("");
+    setCandidateAssistBusy("");
+  }, [selectedCandidateId]);
 
   const summary = useMemo(() => {
     const activeSkills = skills.filter((skill) => skill.status === "active").length;
@@ -209,6 +218,42 @@ export default function SkillsMarketplacePage() {
     try {
       await api.convertSkillCandidate(id);
       setNotice("Candidate converted to a disabled skill draft.");
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function assistCandidate(candidate: SkillCandidateRow, mode: SkillCandidateAssistResult["mode"]) {
+    setError(undefined);
+    setNotice(undefined);
+    setCandidateAssistBusy(mode);
+    try {
+      const result = await api.assistSkillCandidate(candidate.id, { mode, guidance: candidateAssistGuidance.trim() || undefined });
+      setCandidateAssist(result);
+      setNotice(mode === "skill_draft" ? "LLM skill draft generated for review." : "LLM spec draft generated for review.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCandidateAssistBusy("");
+    }
+  }
+
+  async function convertAssistedSkill(candidate: SkillCandidateRow) {
+    if (!candidateAssist || candidateAssist.mode !== "skill_draft") return;
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await api.convertSkillCandidate(candidate.id, {
+        name: candidateAssist.title,
+        slug: candidateAssist.slug,
+        description: candidateAssist.description || candidate.risk_summary || `Draft skill converted from ${candidate.proposed_name}.`,
+        instructions: candidateAssist.content,
+        risk_level: candidateAssist.risk_level,
+        transformation_note: `LLM-assisted conversion (${candidateAssist.provider}/${candidateAssist.model}). ${candidateAssist.transformation_summary}`,
+      });
+      setNotice("LLM-assisted skill draft created as disabled governed skill.");
+      setCandidateAssist(undefined);
       reload();
     } catch (e) {
       setError((e as Error).message);
@@ -934,6 +979,62 @@ export default function SkillsMarketplacePage() {
               <div className="mono faint">{selectedCandidate.source_path ?? selectedCandidate.source_url ?? "manual"} · {selectedCandidate.raw_content_hash}</div>
               <p>{selectedCandidate.risk_summary}</p>
               <p className="faint">{selectedCandidate.classifier_notes}</p>
+              <div className="card" style={{ marginBottom: 12 }}>
+                <h4 style={{ marginTop: 0 }}>LLM-Assisted Drafting</h4>
+                <textarea
+                  placeholder="Optional reviewer guidance for the LLM conversion"
+                  value={candidateAssistGuidance}
+                  onChange={(e) => setCandidateAssistGuidance(e.target.value)}
+                  style={{ width: "100%", minHeight: 70, marginBottom: 10 }}
+                />
+                <div className="form-row">
+                  <button
+                    onClick={() => assistCandidate(selectedCandidate, "skill_draft")}
+                    disabled={candidateAssistBusy !== "" || selectedCandidate.gate_status === "block" || selectedCandidate.status === "converted"}
+                  >
+                    {candidateAssistBusy === "skill_draft" ? "Drafting..." : "Draft skill with LLM"}
+                  </button>
+                  <button
+                    onClick={() => assistCandidate(selectedCandidate, "spec_draft")}
+                    disabled={candidateAssistBusy !== "" || selectedCandidate.gate_status === "block"}
+                  >
+                    {candidateAssistBusy === "spec_draft" ? "Drafting..." : "Draft spec with LLM"}
+                  </button>
+                  {selectedCandidate.gate_status === "block" && <span className="faint">Blocked candidates cannot be LLM-converted.</span>}
+                </div>
+                {candidateAssist && candidateAssist.candidate_id === selectedCandidate.id && (
+                  <div style={{ marginTop: 12 }}>
+                    <div className="form-row" style={{ justifyContent: "space-between" }}>
+                      <div>
+                        <strong>{candidateAssist.title}</strong>{" "}
+                        <span className="badge">{candidateAssist.mode}</span>{" "}
+                        <span className="badge">{candidateAssist.provider}/{candidateAssist.model}</span>
+                      </div>
+                      {candidateAssist.mode === "skill_draft" && selectedCandidate.status !== "converted" && (
+                        <button className="primary" onClick={() => convertAssistedSkill(selectedCandidate)}>
+                          Convert assisted skill draft
+                        </button>
+                      )}
+                    </div>
+                    <p>{candidateAssist.transformation_summary}</p>
+                    {candidateAssist.review_notes.length > 0 && (
+                      <ul>
+                        {candidateAssist.review_notes.map((note, index) => (
+                          <li key={index}>{note}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="mono faint">
+                      {candidateAssist.mode === "skill_draft"
+                        ? `${candidateAssist.slug || selectedCandidate.proposed_slug} · ${candidateAssist.risk_level}`
+                        : candidateAssist.filename}
+                      {" · "}
+                      {candidateAssist.source.path ?? candidateAssist.source.url ?? "manual"} · {candidateAssist.source.raw_content_hash.slice(0, 12)}
+                    </div>
+                    <pre style={{ whiteSpace: "pre-wrap", maxHeight: 420, overflow: "auto" }}>{candidateAssist.content}</pre>
+                  </div>
+                )}
+              </div>
               <table className="grid" style={{ marginBottom: 12 }}>
                 <thead><tr><th>Gate</th><th>Status</th><th>Detail</th></tr></thead>
                 <tbody>

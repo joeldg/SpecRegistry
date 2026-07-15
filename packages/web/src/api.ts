@@ -867,6 +867,26 @@ export interface SkillSourceScanResult {
     created: boolean;
   }>;
 }
+export interface SkillCandidateAssistResult {
+  candidate_id: string;
+  mode: "skill_draft" | "spec_draft";
+  title: string;
+  slug: string;
+  filename: string;
+  description: string;
+  risk_level: AgentSkillRow["risk_level"];
+  transformation_summary: string;
+  review_notes: string[];
+  content: string;
+  model: string;
+  provider: string;
+  source: {
+    url: string | null;
+    path: string | null;
+    commit: string | null;
+    raw_content_hash: string;
+  };
+}
 export interface ComplianceAttestationRow {
   id: string;
   project_type_id: string | null;
@@ -1240,6 +1260,8 @@ export const api = {
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/classify`, { method: "POST", body: JSON.stringify({}) }),
   runSkillCandidateGates: (id: string) =>
     request<SkillCandidateRow>(`/api/v1/skills/candidates/${id}/gates`, { method: "POST", body: JSON.stringify({}) }),
+  assistSkillCandidate: (id: string, body: { mode: SkillCandidateAssistResult["mode"]; guidance?: string }) =>
+    request<SkillCandidateAssistResult>(`/api/v1/skills/candidates/${id}/assist`, { method: "POST", body: JSON.stringify(body) }),
   convertSkillCandidate: (id: string, body: Partial<Pick<AgentSkillRow, "name" | "slug" | "description" | "instructions" | "risk_level">> & { transformation_note?: string } = {}) =>
     request<AgentSkillRow>(`/api/v1/skills/candidates/${id}/convert-skill`, { method: "POST", body: JSON.stringify(body) }),
   skillReviews: (status?: SkillReviewRow["status"]) =>

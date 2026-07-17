@@ -1479,6 +1479,13 @@ const DEFAULT_SKILL_SOURCES = [
     source_type: "github_repo",
     notes: "Starter source for the agentskills catalog. Import only through candidate review.",
   },
+  {
+    id: "starter-mattpocock-skills",
+    url: "https://github.com/mattpocock/skills",
+    provider: "github",
+    source_type: "github_repo",
+    notes: "Starter source for Matt Pocock's TypeScript-focused skills. Imported material remains untrusted until review; verify license and project fit before conversion.",
+  },
 ] as const;
 
 function seedDefaultAgentSkills(db: Db): void {

@@ -84,7 +84,13 @@ describe("project types & specs", () => {
     expect(sources.map((source: any) => source.url)).toEqual(expect.arrayContaining([
       "https://github.com/search?q=agent+skills&type=repositories",
       "https://github.com/msitarzewski/agency-agents",
+      "https://github.com/mattpocock/skills",
     ]));
+    // New default sources seed as untrusted; they must not arrive pre-trusted.
+    expect(sources.find((row: any) => row.url === "https://github.com/mattpocock/skills")).toMatchObject({
+      trust_decision: "unreviewed",
+      status: "active",
+    });
     const source = sources.find((row: any) => row.url === "https://github.com/msitarzewski/agency-agents");
     expect(source).toMatchObject({
       url: "https://github.com/msitarzewski/agency-agents",

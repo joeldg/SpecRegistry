@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SpecSummary } from "@specregistry/shared";
-import { api, getAuthor, type DependencyMap, type EfficacyRun, type ManifestDiagnostics, type ProjectTypeWithCount, type ReportsOverview, type TokenUsageFilters, type TokenUsageReport } from "../api";
-import { StatusBadge, timeAgo } from "../components";
+import {
+  api,
+  getAuthor,
+  type AuditReportDetail,
+  type AuditReportSummaryRow,
+  type DependencyMap,
+  type EfficacyRun,
+  type ManifestDiagnostics,
+  type ProjectRow,
+  type ProjectTypeWithCount,
+  type ReportsOverview,
+  type TokenUsageFilters,
+  type TokenUsageReport,
+} from "../api";
+import { Markdown, StatusBadge, timeAgo } from "../components";
 
 type ChartDatum = { label: string; value: number; tone?: "accent" | "green" | "amber" | "red" };
-type ReportTab = "overview" | "tokens" | "projects" | "diagnostics";
+type ReportTab = "overview" | "tokens" | "audits" | "projects" | "diagnostics";
 
 const toneColor: Record<NonNullable<ChartDatum["tone"]>, string> = {
   accent: "#5e6ad2",
@@ -90,10 +103,15 @@ export default function ReportsPage() {
   const [report, setReport] = useState<ReportsOverview>();
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [dependencies, setDependencies] = useState<DependencyMap>();
   const [tokenRoi, setTokenRoi] = useState<Array<{ filename: string; approx_tokens: number; roi_score: number; open_feedback: number }>>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageReport>();
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
+  const [auditReports, setAuditReports] = useState<AuditReportSummaryRow[]>([]);
+  const [selectedAuditProjectId, setSelectedAuditProjectId] = useState("");
+  const [selectedAuditReportId, setSelectedAuditReportId] = useState("");
+  const [auditDetail, setAuditDetail] = useState<AuditReportDetail>();
   const [tokenProjectId, setTokenProjectId] = useState("");
   const [tokenDays, setTokenDays] = useState(30);
   const [tokenEventType, setTokenEventType] = useState("");
@@ -118,17 +136,31 @@ export default function ReportsPage() {
 
   function reload() {
     setError(undefined);
-    Promise.all([api.reports(), api.specs(), api.projectTypes(), api.dependencyMap(), api.tokenRoi(), api.efficacyTrends(), api.tokenUsageReport({ days: tokenDays })])
-      .then(([nextReport, nextSpecs, nextTypes, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage]) => {
+    Promise.all([
+      api.reports(),
+      api.specs(),
+      api.projectTypes(),
+      api.projects(),
+      api.dependencyMap(),
+      api.tokenRoi(),
+      api.efficacyTrends(),
+      api.tokenUsageReport({ days: tokenDays }),
+      api.auditReports({ report_type: "project_governance" }),
+    ])
+      .then(([nextReport, nextSpecs, nextTypes, nextProjects, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage, nextAuditReports]) => {
         setReport(nextReport);
         setSpecs(nextSpecs);
         setTypes(nextTypes.filter((t) => t.scope === "project_type"));
+        setProjects(nextProjects);
         setDependencies(nextDependencies);
         setTokenRoi(nextTokenRoi.specs.slice(0, 8));
         setEfficacyTrend(nextEfficacyTrend.runs.slice(-8));
         setTokenUsage(nextTokenUsage);
+        setAuditReports(nextAuditReports);
         setSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
         setProjectType((current) => current || nextTypes.find((t) => t.scope === "project_type")?.name || "");
+        setSelectedAuditProjectId((current) => current || nextProjects[0]?.id || "");
+        setSelectedAuditReportId((current) => current || nextAuditReports[0]?.id || "");
       })
       .catch((e) => setError(e.message));
   }
@@ -174,6 +206,16 @@ export default function ReportsPage() {
       .then(setProjectTokenUsage)
       .catch((e) => setError(e.message));
   }, [tokenFilters, tokenProjectId]);
+
+  useEffect(() => {
+    if (!selectedAuditReportId) {
+      setAuditDetail(undefined);
+      return;
+    }
+    api.auditReport(selectedAuditReportId)
+      .then(setAuditDetail)
+      .catch((e) => setError(e.message));
+  }, [selectedAuditReportId]);
 
   const tokenReportForFilters = projectTokenUsage ?? tokenUsage;
   const tokenEventTypes = useMemo(() => [...new Set((tokenUsage?.by_event_type ?? []).map((row) => row.event_type).filter(Boolean))].sort(), [tokenUsage]);
@@ -246,6 +288,24 @@ export default function ReportsPage() {
     }
   }
 
+  async function generateProjectAudit() {
+    if (!selectedAuditProjectId) return;
+    setBusy("audit-report");
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      const generated = await api.createProjectAuditReport(selectedAuditProjectId);
+      setAuditDetail(generated);
+      setSelectedAuditReportId(generated.id);
+      setNotice("Project governance audit generated.");
+      setAuditReports(await api.auditReports({ report_type: "project_governance" }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
   async function runEfficacyTest() {
     if (!specId) return;
     setBusy("efficacy");
@@ -298,6 +358,14 @@ export default function ReportsPage() {
       unmapped: rows.reduce((sum, row) => sum + Number(row.unlinked_entity_count ?? 0), 0),
     };
   }, [report]);
+  const auditEvidence = (auditDetail?.evidence ?? {}) as {
+    outstanding_actions?: string[];
+    specs?: unknown[];
+    compliance?: { latest?: { compliant?: boolean; coverage_ratio?: number; drift_score?: number; created_at?: string } | null };
+    traceability?: { latest?: { coverage_ratio?: number; drift_score?: number; drift_severity?: string; reported_at?: string } | null };
+    feedback?: { open?: unknown[] };
+    reviews?: { pending?: unknown[] };
+  };
 
   return (
     <>
@@ -335,6 +403,7 @@ export default function ReportsPage() {
           <div className="page-tabs" role="tablist" aria-label="Report sections">
             <button className={reportTab === "overview" ? "active" : ""} onClick={() => setReportTab("overview")}>Overview</button>
             <button className={reportTab === "tokens" ? "active" : ""} onClick={() => setReportTab("tokens")}>Token Usage</button>
+            <button className={reportTab === "audits" ? "active" : ""} onClick={() => setReportTab("audits")}>Audits</button>
             <button className={reportTab === "projects" ? "active" : ""} onClick={() => setReportTab("projects")}>Projects</button>
             <button className={reportTab === "diagnostics" ? "active" : ""} onClick={() => setReportTab("diagnostics")}>Diagnostics</button>
           </div>
@@ -734,6 +803,127 @@ export default function ReportsPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+          )}
+
+          {reportTab === "audits" && (
+          <div className="section report-panel">
+            <h2>Audit Reports</h2>
+            <p className="settings-help">
+              Generate deterministic project governance reports from registry evidence before adding optional LLM summaries.
+            </p>
+            <div className="form-row" style={{ marginBottom: 12 }}>
+              <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.repo} · {project.project_type_name}
+                  </option>
+                ))}
+              </select>
+              <button className="primary" disabled={!selectedAuditProjectId || busy === "audit-report"} onClick={generateProjectAudit}>
+                {busy === "audit-report" ? "Generating..." : "Generate Project Audit"}
+              </button>
+              {auditDetail && (
+                <a className="button-link" href={`/api/v1/audit-reports/${auditDetail.id}/markdown`}>
+                  Export Markdown
+                </a>
+              )}
+            </div>
+            {projects.length === 0 ? (
+              <div className="empty">No projects have reported manifests yet. Run `specreg init` or `specreg check` from a project first.</div>
+            ) : (
+              <div className="report-grid">
+                <div>
+                  <h3>History</h3>
+                  {auditReports.length === 0 ? (
+                    <div className="empty">No audit reports have been generated yet.</div>
+                  ) : (
+                    <table className="grid">
+                      <thead>
+                        <tr>
+                          <th>Project</th>
+                          <th>Status</th>
+                          <th>Generated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {auditReports.map((audit) => (
+                          <tr key={audit.id} className={selectedAuditReportId === audit.id ? "selected-row" : ""}>
+                            <td>
+                              <button className="link-button mono" onClick={() => setSelectedAuditReportId(audit.id)}>
+                                {audit.subject_label}
+                              </button>
+                              <div className="faint">{audit.summary}</div>
+                            </td>
+                            <td><StatusBadge status={audit.status} /></td>
+                            <td className="faint">{timeAgo(audit.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div>
+                  {!auditDetail ? (
+                    <div className="empty">Select a report or generate a new project audit.</div>
+                  ) : (
+                    <>
+                      <div className="cards" style={{ marginBottom: 12 }}>
+                        <div className={`card${auditDetail.status !== "pass" ? " alert" : ""}`}>
+                          <div className="label">Status</div>
+                          <StatusBadge status={auditDetail.status} />
+                        </div>
+                        <div className="card">
+                          <div className="label">Specs</div>
+                          <div className="metric">{auditEvidence.specs?.length ?? 0}</div>
+                        </div>
+                        <div className="card">
+                          <div className="label">Compliance</div>
+                          <div className="mono">
+                            {auditEvidence.compliance?.latest
+                              ? `${Math.round(Number(auditEvidence.compliance.latest.coverage_ratio ?? 0) * 100)}% / ${Math.round(Number(auditEvidence.compliance.latest.drift_score ?? 0) * 100)}% drift`
+                              : "missing"}
+                          </div>
+                        </div>
+                        <div className="card">
+                          <div className="label">Actions</div>
+                          <div className="metric">{auditEvidence.outstanding_actions?.length ?? 0}</div>
+                        </div>
+                      </div>
+                      {(auditEvidence.outstanding_actions?.length ?? 0) > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <h3>Outstanding Actions</h3>
+                          <ul>
+                            {auditEvidence.outstanding_actions?.map((action) => (
+                              <li key={action}>{action}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div className="cards" style={{ marginBottom: 12 }}>
+                        <div className="card">
+                          <div className="label">Open feedback</div>
+                          <div className="metric">{auditEvidence.feedback?.open?.length ?? 0}</div>
+                        </div>
+                        <div className="card">
+                          <div className="label">Pending reviews</div>
+                          <div className="metric">{auditEvidence.reviews?.pending?.length ?? 0}</div>
+                        </div>
+                        <div className="card">
+                          <div className="label">Code trace</div>
+                          <div className="mono">
+                            {auditEvidence.traceability?.latest
+                              ? `${Math.round(Number(auditEvidence.traceability.latest.coverage_ratio ?? 0) * 100)}% / ${auditEvidence.traceability.latest.drift_severity ?? "none"}`
+                              : "missing"}
+                          </div>
+                        </div>
+                      </div>
+                      <Markdown content={auditDetail.markdown} />
+                    </>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           )}

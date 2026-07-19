@@ -146,6 +146,38 @@
   (no cross-repo enumeration of task text/plans/models); the global cross-repo view moved to the
   admin-gated `GET /api/v1/agent-sessions`.
 
+## Audit Reports
+
+SpecRegistry should produce cohesive audit reports that assemble deterministic governance
+evidence into a human-readable artifact. LLMs may summarize findings later, but the core
+report must be built from stored evidence: specs, versions, manifests, compliance output,
+traceability, feedback, agent sessions, token usage, reviews, server posture, and exact
+timestamps.
+
+- [ ] Add persisted `audit_reports` with scope, subject id, generated_by, deterministic
+  evidence JSON, rendered Markdown, optional LLM summary, and timestamps.
+- [ ] Project Governance Audit: project identity, project type, project-scoped specs,
+  manifest/currency state, latest compliance attestation, latest code trace report,
+  open feedback, pending reviews, recent agent sessions, projected context tokens, real
+  LLM usage, and clear outstanding actions.
+- [ ] Spec Quality Audit: spec version/review history, feedback by section, contradiction
+  signals, token cost by section, usage frequency, efficacy lift, stale/unused sections,
+  and sections that appear high-token/low-signal.
+- [ ] Agent Run Audit: session identity, task/model, specs loaded, searches/context events,
+  skills loaded, token reports, compliance attempts, finish evidence, and whether the
+  agent halted correctly on unavailable/failing gates.
+- [ ] Release/PR Audit: changed files, mapped specs, required specs loaded, tests/checks
+  run, compliance result, approval state, commit evidence trailer, and residual risk.
+- [ ] Registry Operations Audit: server version, public URL posture, auth/admin-password
+  posture, API key posture, backup status, LLM provider configuration, source/candidate
+  skill status, metrics availability, and recent operational errors.
+- [ ] Add audit report UI under Reports with scope filters, generated-at history, drilldown
+  evidence, Markdown preview, and JSON/Markdown export.
+- [ ] Add `specreg audit-report` for project/release workflows so agents and CI can attach
+  deterministic governance evidence to PRs without scraping the dashboard.
+- [ ] Add optional LLM executive summaries only after the deterministic evidence payload is
+  stable; the LLM output should cite evidence keys and never replace raw audit facts.
+
 ## Token Usage Observability
 
 The AI-SDD observability model requires tracing specification context to token usage at the

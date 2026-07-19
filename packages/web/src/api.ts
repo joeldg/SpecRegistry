@@ -354,6 +354,26 @@ export type TokenUsageFilters = {
   spec_id?: string;
   section?: string;
 };
+export type AuditReportStatus = "pass" | "warning" | "fail" | "unknown";
+export type AuditReportType = "project_governance" | "spec_quality" | "agent_run" | "release" | "registry_operations";
+export type AuditReportSubjectType = "project" | "spec" | "agent_session" | "release" | "registry";
+export interface AuditReportSummaryRow {
+  id: string;
+  report_type: AuditReportType;
+  subject_type: AuditReportSubjectType;
+  subject_id: string | null;
+  subject_label: string;
+  status: AuditReportStatus;
+  summary: string;
+  generated_by: string;
+  created_at: string;
+}
+export interface AuditReportDetail extends AuditReportSummaryRow {
+  evidence_json: string;
+  markdown: string;
+  llm_summary: string | null;
+  evidence: unknown;
+}
 export interface DependencyMap {
   specs: Array<{ id: string; filename: string; project_type_name: string; project_name?: string | null }>;
   edges: Array<{ from_spec_id: string; from_filename: string; to_spec_id: string | null; to_filename: string; relation: string }>;
@@ -1041,6 +1061,16 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
   reports: () => request<ReportsOverview>("/api/v1/reports/overview"),
+  auditReports: (filters: { report_type?: string; subject_type?: string; subject_id?: string } = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params.set(key, value);
+    }
+    return request<AuditReportSummaryRow[]>(`/api/v1/audit-reports${params.size ? `?${params.toString()}` : ""}`);
+  },
+  auditReport: (id: string) => request<AuditReportDetail>(`/api/v1/audit-reports/${encodeURIComponent(id)}`),
+  createProjectAuditReport: (project: string) =>
+    request<AuditReportDetail>("/api/v1/audit-reports/project", { method: "POST", body: JSON.stringify({ project }) }),
   tokenUsageReport: (filters: TokenUsageFilters = {}) => {
     const params = new URLSearchParams();
     params.set("days", String(filters.days ?? 30));

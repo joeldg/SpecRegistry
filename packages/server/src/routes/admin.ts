@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { now, uuid } from "../db.js";
-import { HttpError, requireProjectConsumer, requireProjectType, requireString } from "../helpers.js";
+import { HttpError, requireProjectConsumer, requireProjectType, requireSpec, requireString } from "../helpers.js";
 import {
   getLdapConfig,
   ldapAuthenticate,
@@ -96,6 +96,32 @@ function auditStatus(flags: { failingCompliance: boolean; warnings: string[] }):
   return flags.warnings.length ? "warning" : "pass";
 }
 
+function markdownAnchor(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[`*_~[\]()]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "intro";
+}
+
+function markdownSections(content: string) {
+  const headings = [...content.matchAll(/^#{2,6}\s+(.+)$/gm)].map((match) => ({
+    title: match[1].trim(),
+    anchor: markdownAnchor(match[1]),
+    index: match.index ?? 0,
+  }));
+  if (headings.length === 0) {
+    return [{ title: "Document", anchor: "document", chars: content.length, approx_tokens: Math.ceil(content.length / 4) }];
+  }
+  return headings.map((heading, index) => {
+    const next = headings[index + 1]?.index ?? content.length;
+    const chars = Math.max(0, next - heading.index);
+    return { title: heading.title, anchor: heading.anchor, chars, approx_tokens: Math.ceil(chars / 4) };
+  });
+}
+
 function renderProjectGovernanceAuditMarkdown(evidence: any): string {
   const latestCompliance = evidence.compliance.latest;
   const trace = evidence.traceability.latest;
@@ -163,6 +189,213 @@ function renderProjectGovernanceAuditMarkdown(evidence: any): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function renderSpecQualityAuditMarkdown(evidence: any): string {
+  const lines = [
+    `# Spec Quality Audit: ${evidence.spec.filename}`,
+    "",
+    `Generated: ${evidence.generated_at}`,
+    `Status: ${evidence.status.toUpperCase()}`,
+    "",
+    "## Summary",
+    "",
+    evidence.summary,
+    "",
+    "## Spec",
+    "",
+    `- Filename: ${evidence.spec.filename}`,
+    `- Version: ${evidence.spec.current_version}`,
+    `- Status: ${evidence.spec.status}`,
+    `- Scope: ${evidence.spec.scope}`,
+    `- Project type: ${evidence.spec.project_type_name}`,
+    `- Updated: ${evidence.spec.updated_at}`,
+    "",
+    "## Version And Review History",
+    "",
+    `- Published versions: ${evidence.version_history.length}`,
+    `- Change requests: ${evidence.reviews.total_count}`,
+    `- Pending reviews: ${evidence.reviews.pending.length}`,
+    "",
+    "## Feedback",
+    "",
+    `- Open feedback: ${evidence.feedback.open.length}`,
+    `- Contradiction reports: ${evidence.feedback.by_type.contradiction ?? 0}`,
+    `- Ambiguity reports: ${evidence.feedback.by_type.ambiguity ?? 0}`,
+    `- Outdated reports: ${evidence.feedback.by_type.outdated ?? 0}`,
+    "",
+    "## Token And Usage Signals",
+    "",
+    `- Approx spec tokens: ${evidence.token_usage.approx_tokens}`,
+    `- Projected delivered tokens: ${evidence.token_usage.projected_tokens}`,
+    `- Context events: ${evidence.token_usage.context_events}`,
+    `- Delivered sections: ${evidence.token_usage.delivered_sections}`,
+    "",
+    "## Efficacy",
+    "",
+    `- Runs: ${evidence.efficacy.runs.length}`,
+    `- Improved runs: ${evidence.efficacy.improved_count}`,
+    `- Average lift: ${evidence.efficacy.avg_lift}`,
+    "",
+    "## Section Signals",
+    "",
+    "| Section | Approx tokens | Deliveries | Projected tokens | Last used |",
+    "| --- | ---: | ---: | ---: | --- |",
+    ...evidence.sections.map((section: any) =>
+      `| ${section.title} | ${section.approx_tokens} | ${section.deliveries} | ${section.projected_tokens} | ${section.last_delivered_at ?? "never"} |`
+    ),
+    "",
+    "## Outstanding Actions",
+    "",
+    ...(evidence.outstanding_actions.length ? evidence.outstanding_actions.map((item: string) => `- ${item}`) : ["- None detected by deterministic checks."]),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+function buildSpecQualityAudit(app: FastifyInstance, specId: string, generatedBy: string) {
+  const spec = requireSpec(app.db, specId);
+  const projectType = requireProjectType(app.db, spec.project_type_id);
+  const project = spec.project_id
+    ? (app.db.prepare("SELECT id, repo FROM repo_consumers WHERE id = ?").get(spec.project_id) as { id: string; repo: string } | undefined)
+    : undefined;
+  const versionHistory = app.db
+    .prepare("SELECT id, version, published_by, published_at, channel FROM spec_versions WHERE spec_id = ? ORDER BY published_at DESC")
+    .all(spec.id);
+  const reviews = app.db
+    .prepare(
+      `SELECT id, status, proposed_by, version_delta, summary, reviewed_by, reviewed_at,
+              resulting_version, compatibility, lint, contradictions, risk, created_at
+       FROM change_requests
+       WHERE spec_id = ?
+       ORDER BY created_at DESC`
+    )
+    .all(spec.id) as Array<Record<string, unknown>>;
+  const feedback = app.db
+    .prepare("SELECT * FROM agent_feedback WHERE spec_id = ? ORDER BY created_at DESC")
+    .all(spec.id) as Array<Record<string, unknown>>;
+  const efficacyRuns = app.db
+    .prepare("SELECT * FROM efficacy_runs WHERE spec_id = ? ORDER BY created_at DESC LIMIT 25")
+    .all(spec.id) as Array<Record<string, unknown>>;
+  const sectionUsage = app.db
+    .prepare(
+      `SELECT section_title, section_anchor,
+              COUNT(DISTINCT ce.id) AS context_events,
+              COUNT(*) AS deliveries,
+              SUM(ces.chars) AS chars,
+              SUM(ces.estimated_tokens) AS projected_tokens,
+              MAX(ce.created_at) AS last_delivered_at
+       FROM context_event_sections ces
+       JOIN context_events ce ON ce.id = ces.context_event_id
+       WHERE ces.spec_id = ?
+       GROUP BY section_anchor, section_title
+       ORDER BY projected_tokens DESC, deliveries DESC`
+    )
+    .all(spec.id) as Array<Record<string, unknown>>;
+  const usageByAnchor = new Map(sectionUsage.map((row) => [String(row.section_anchor), row]));
+  const sections = markdownSections(spec.content).map((section) => {
+    const usage = usageByAnchor.get(section.anchor);
+    return {
+      ...section,
+      context_events: Number(usage?.context_events ?? 0),
+      deliveries: Number(usage?.deliveries ?? 0),
+      projected_tokens: Number(usage?.projected_tokens ?? 0),
+      last_delivered_at: usage?.last_delivered_at ?? null,
+    };
+  });
+  const feedbackByType = feedback.reduce<Record<string, number>>((acc, item) => {
+    const key = String(item.error_type ?? "unknown");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const openFeedback = feedback.filter((item) => item.status === "open");
+  const pendingReviews = reviews.filter((item) => item.status === "pending");
+  const contradictionReviews = reviews.filter((item) => item.contradictions && String(item.contradictions) !== "{}");
+  const avgLift = efficacyRuns.length
+    ? Math.round((efficacyRuns.reduce((sum, run) => sum + (Number(run.score_with ?? 0) - Number(run.score_without ?? 0)), 0) / efficacyRuns.length) * 10) / 10
+    : 0;
+  const approxTokens = Math.ceil(spec.content.length / 4);
+  const projectedTokens = sections.reduce((sum, section) => sum + section.projected_tokens, 0);
+  const deliveredSections = sections.reduce((sum, section) => sum + section.deliveries, 0);
+  const unusedSections = sections.filter((section) => section.deliveries === 0);
+  const expensiveUnused = unusedSections.filter((section) => section.approx_tokens >= 250);
+  const outstanding = [
+    ...(openFeedback.length ? [`${openFeedback.length} open feedback item(s) need triage before this spec is considered healthy.`] : []),
+    ...(feedbackByType.contradiction ? [`${feedbackByType.contradiction} contradiction feedback report(s) need review.`] : []),
+    ...(pendingReviews.length ? [`${pendingReviews.length} pending review(s) may change this spec.`] : []),
+    ...(contradictionReviews.length ? [`${contradictionReviews.length} change request(s) include contradiction evidence.`] : []),
+    ...(!efficacyRuns.length ? ["No efficacy runs have been recorded for this spec."] : []),
+    ...(expensiveUnused.length ? [`${expensiveUnused.length} high-token section(s) have no observed retrieval usage.`] : []),
+  ];
+  const status = feedbackByType.contradiction || contradictionReviews.length ? "fail" : outstanding.length ? "warning" : "pass";
+  const summary =
+    status === "pass"
+      ? "Deterministic checks found no open feedback, pending reviews, contradiction signals, or high-token unused sections."
+      : status === "fail"
+        ? "Deterministic checks found contradiction signals that should be resolved before relying on this spec as high-quality guidance."
+        : "Deterministic checks found spec-quality warnings that should be reviewed for usefulness, token cost, or pending governance work.";
+  const evidence = {
+    generated_at: now(),
+    generated_by: generatedBy,
+    report_type: "spec_quality",
+    subject_type: "spec",
+    status,
+    summary,
+    spec: {
+      id: spec.id,
+      filename: spec.filename,
+      current_version: spec.current_version,
+      status: spec.status,
+      scope: spec.project_id ? "project" : projectType.scope,
+      project_type_id: spec.project_type_id,
+      project_type_name: projectType.name,
+      project_id: spec.project_id,
+      project_name: project?.repo ?? null,
+      updated_at: spec.updated_at,
+      chars: spec.content.length,
+    },
+    version_history: versionHistory,
+    reviews: {
+      total_count: reviews.length,
+      pending: pendingReviews,
+      recent: reviews.slice(0, 10).map((row) => ({
+        ...row,
+        compatibility: parseJson(row.compatibility, null),
+        lint: parseJson(row.lint, null),
+        contradictions: parseJson(row.contradictions, null),
+        risk: parseJson(row.risk, null),
+      })),
+    },
+    feedback: { open: openFeedback, recent: feedback.slice(0, 10), by_type: feedbackByType },
+    token_usage: {
+      approx_tokens: approxTokens,
+      projected_tokens: projectedTokens,
+      context_events: sections.reduce((sum, section) => sum + section.context_events, 0),
+      delivered_sections: deliveredSections,
+    },
+    efficacy: {
+      runs: efficacyRuns,
+      improved_count: efficacyRuns.filter((run) => Number(run.improved) === 1).length,
+      avg_lift: avgLift,
+    },
+    sections,
+    stale_or_unused_sections: unusedSections,
+    high_token_low_signal_sections: expensiveUnused,
+    outstanding_actions: outstanding,
+  };
+  return {
+    id: uuid(),
+    report_type: "spec_quality",
+    subject_type: "spec",
+    subject_id: spec.id,
+    subject_label: spec.filename,
+    status,
+    summary,
+    evidence,
+    markdown: renderSpecQualityAuditMarkdown(evidence),
+    generated_by: generatedBy,
+    created_at: evidence.generated_at,
+  };
 }
 
 function buildProjectGovernanceAudit(app: FastifyInstance, idOrRepo: string, generatedBy: string) {
@@ -1790,6 +2023,54 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       target_id: report.id,
       summary: `Project governance audit generated for ${report.subject_label}`,
       detail: { report_type: report.report_type, status: report.status, project_id: report.subject_id },
+    });
+    reply.code(201);
+    return {
+      id: report.id,
+      report_type: report.report_type,
+      subject_type: report.subject_type,
+      subject_id: report.subject_id,
+      subject_label: report.subject_label,
+      status: report.status,
+      summary: report.summary,
+      evidence: report.evidence,
+      markdown: report.markdown,
+      generated_by: report.generated_by,
+      created_at: report.created_at,
+    };
+  });
+
+  app.post("/audit-reports/spec", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const specId = requireString(body, "spec_id");
+    const report = buildSpecQualityAudit(app, specId, actorFrom(req, "admin"));
+    app.db
+      .prepare(
+        `INSERT INTO audit_reports
+          (id, report_type, subject_type, subject_id, subject_label, status, summary,
+           evidence_json, markdown, llm_summary, generated_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+      )
+      .run(
+        report.id,
+        report.report_type,
+        report.subject_type,
+        report.subject_id,
+        report.subject_label,
+        report.status,
+        report.summary,
+        JSON.stringify(report.evidence, null, 2),
+        report.markdown,
+        report.generated_by,
+        report.created_at
+      );
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "audit_report.generated",
+      target_type: "audit_report",
+      target_id: report.id,
+      summary: `Spec quality audit generated for ${report.subject_label}`,
+      detail: { report_type: report.report_type, status: report.status, spec_id: report.subject_id },
     });
     reply.code(201);
     return {

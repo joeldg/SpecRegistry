@@ -160,7 +160,7 @@ timestamps.
   manifest/currency state, latest compliance attestation, latest code trace report,
   open feedback, pending reviews, recent agent sessions, projected context tokens, real
   LLM usage, and clear outstanding actions.
-- [ ] Spec Quality Audit: spec version/review history, feedback by section, contradiction
+- [x] Spec Quality Audit: spec version/review history, feedback by section, contradiction
   signals, token cost by section, usage frequency, efficacy lift, stale/unused sections,
   and sections that appear high-token/low-signal.
 - [ ] Agent Run Audit: session identity, task/model, specs loaded, searches/context events,

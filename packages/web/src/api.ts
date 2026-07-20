@@ -1054,6 +1054,8 @@ export const api = {
   auditReport: (id: string) => request<AuditReportDetail>(`/api/v1/audit-reports/${encodeURIComponent(id)}`),
   createProjectAuditReport: (project: string) =>
     request<AuditReportDetail>("/api/v1/audit-reports/project", { method: "POST", body: JSON.stringify({ project }) }),
+  createSpecAuditReport: (specId: string) =>
+    request<AuditReportDetail>("/api/v1/audit-reports/spec", { method: "POST", body: JSON.stringify({ spec_id: specId }) }),
   tokenUsageReport: (filters: TokenUsageFilters = {}) => {
     const params = new URLSearchParams();
     params.set("days", String(filters.days ?? 30));

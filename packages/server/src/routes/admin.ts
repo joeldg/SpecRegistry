@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { now, uuid } from "../db.js";
-import { HttpError, requireProjectType, requireString } from "../helpers.js";
+import { HttpError, requireProjectConsumer, requireProjectType, requireString } from "../helpers.js";
 import {
   getLdapConfig,
   ldapAuthenticate,
@@ -73,6 +73,232 @@ function compactTokenQuery(query: Record<string, string | undefined>) {
     model: text(query.model),
     spec_id: text(query.spec_id),
     section: text(query.section),
+  };
+}
+
+function parseJson<T>(value: unknown, fallback: T): T {
+  if (typeof value !== "string" || value.trim() === "") return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function fmtPercent(value: unknown): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "0%";
+  return `${Math.round(n * 100)}%`;
+}
+
+function auditStatus(flags: { failingCompliance: boolean; warnings: string[] }): "pass" | "warning" | "fail" {
+  if (flags.failingCompliance) return "fail";
+  return flags.warnings.length ? "warning" : "pass";
+}
+
+function renderProjectGovernanceAuditMarkdown(evidence: any): string {
+  const latestCompliance = evidence.compliance.latest;
+  const trace = evidence.traceability.latest;
+  const lines = [
+    `# Project Governance Audit: ${evidence.project.repo}`,
+    "",
+    `Generated: ${evidence.generated_at}`,
+    `Status: ${evidence.status.toUpperCase()}`,
+    "",
+    "## Summary",
+    "",
+    evidence.summary,
+    "",
+    "## Project",
+    "",
+    `- Repo: ${evidence.project.repo}`,
+    `- Project type: ${evidence.project.project_type_name}`,
+    `- Branch: ${evidence.project.branch ?? "unknown"}`,
+    `- Specs path: ${evidence.project.specs_path}`,
+    `- Manifest path: ${evidence.project.manifest_path}`,
+    `- Last seen: ${evidence.project.last_seen_at ?? "never"}`,
+    "",
+    "## Spec Currency",
+    "",
+    `- Reported specs: ${evidence.spec_currency.spec_count}`,
+    `- Up to date: ${evidence.spec_currency.up_to_date_count}`,
+    `- Outdated: ${evidence.spec_currency.outdated_count}`,
+    `- Missing locally: ${evidence.spec_currency.missing_locally_count}`,
+    `- Local only: ${evidence.spec_currency.local_only_count}`,
+    "",
+    "## Compliance",
+    "",
+    latestCompliance
+      ? `- Latest verdict: ${latestCompliance.compliant ? "PASS" : "FAIL"} (${latestCompliance.objective_score}/100, attempt ${latestCompliance.iteration})`
+      : "- Latest verdict: not reported",
+    latestCompliance ? `- Coverage: ${fmtPercent(latestCompliance.coverage_ratio)}` : "- Coverage: not reported",
+    latestCompliance ? `- Drift: ${fmtPercent(latestCompliance.drift_score)}` : "- Drift: not reported",
+    "",
+    "## Traceability",
+    "",
+    trace
+      ? `- Coverage: ${fmtPercent(trace.coverage_ratio)} (${trace.linked_entity_count}/${trace.governed_entity_count} governed entities linked)`
+      : "- Coverage: not reported",
+    trace ? `- Drift: ${fmtPercent(trace.drift_score)} (${trace.drift_severity})` : "- Drift: not reported",
+    trace ? `- Unmapped entities: ${trace.unlinked_entity_count}` : "- Unmapped entities: not reported",
+    "",
+    "## Feedback And Reviews",
+    "",
+    `- Open feedback: ${evidence.feedback.open.length}`,
+    `- Pending reviews: ${evidence.reviews.pending.length}`,
+    "",
+    "## Agent Activity",
+    "",
+    `- Recent sessions: ${evidence.agent_sessions.recent.length}`,
+    `- Blocked sessions: ${evidence.agent_sessions.blocked_count}`,
+    `- Completed sessions: ${evidence.agent_sessions.completed_count}`,
+    "",
+    "## Token Usage",
+    "",
+    `- Projected context tokens: ${evidence.token_usage.projected_tokens}`,
+    `- Real LLM tokens: ${evidence.token_usage.real_total_tokens}`,
+    `- Context events: ${evidence.token_usage.context_events}`,
+    "",
+    "## Outstanding Actions",
+    "",
+    ...(evidence.outstanding_actions.length ? evidence.outstanding_actions.map((item: string) => `- ${item}`) : ["- None detected by deterministic checks."]),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+function buildProjectGovernanceAudit(app: FastifyInstance, idOrRepo: string, generatedBy: string) {
+  const project = requireProjectConsumer(app.db, idOrRepo);
+  const projectType = requireProjectType(app.db, project.project_type_id);
+  const specCurrency = projectSpecCurrency(app.db, project.id, project.project_type_id);
+  const specs = app.db
+    .prepare(
+      `SELECT s.id, s.filename, s.current_version, s.status,
+              CASE WHEN s.project_id IS NOT NULL THEN 'project' ELSE pt.scope END AS scope,
+              s.updated_at
+       FROM specs s
+       JOIN project_types pt ON pt.id = s.project_type_id
+       WHERE s.deleted_at IS NULL
+         AND (pt.scope = 'global' OR s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY CASE scope WHEN 'global' THEN 0 WHEN 'project_type' THEN 1 ELSE 2 END, s.filename`
+    )
+    .all(project.project_type_id, project.id);
+  const latestCompliance = app.db
+    .prepare("SELECT * FROM compliance_attestations WHERE consumer_id = ? OR repo = ? ORDER BY created_at DESC LIMIT 1")
+    .get(project.id, project.repo) as Record<string, unknown> | undefined;
+  const recentCompliance = app.db
+    .prepare("SELECT * FROM compliance_attestations WHERE consumer_id = ? OR repo = ? ORDER BY created_at DESC LIMIT 5")
+    .all(project.id, project.repo) as Array<Record<string, unknown>>;
+  const latestTrace = app.db
+    .prepare("SELECT * FROM code_trace_reports WHERE consumer_id = ? ORDER BY created_at DESC LIMIT 1")
+    .get(project.id) as Record<string, unknown> | undefined;
+  const openFeedback = app.db
+    .prepare(
+      `SELECT af.*, s.filename
+       FROM agent_feedback af
+       LEFT JOIN specs s ON s.id = af.spec_id
+       WHERE af.status = 'open'
+         AND (af.project_type_id = ? OR s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY af.created_at DESC
+       LIMIT 25`
+    )
+    .all(project.project_type_id, project.project_type_id, project.id);
+  const pendingReviews = app.db
+    .prepare(
+      `SELECT cr.id, cr.status, cr.summary, cr.proposed_by, cr.created_at, s.filename
+       FROM change_requests cr
+       JOIN specs s ON s.id = cr.spec_id
+       WHERE cr.status = 'pending' AND (s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY cr.created_at DESC
+       LIMIT 25`
+    )
+    .all(project.project_type_id, project.id);
+  const sessions = app.db
+    .prepare("SELECT * FROM agent_sessions WHERE consumer_id = ? OR repo = ? ORDER BY started_at DESC LIMIT 20")
+    .all(project.id, project.repo) as Array<Record<string, unknown>>;
+  const tokenReport = tokenUsageReport(app.db, { project_id: project.id, days: 30 });
+  const tokenProject = (tokenReport.projects as Array<Record<string, unknown>>)[0] ?? {};
+  const outstanding = [
+    ...(latestCompliance && Number(latestCompliance.compliant) === 0 ? ["Latest compliance attestation failed; rerun remediation before claiming the project is compliant."] : []),
+    ...(!latestCompliance ? ["No compliance attestation has been recorded for this project."] : []),
+    ...(!latestTrace ? ["No code trace report has been reported; run `specreg code-map --report`."] : []),
+    ...(specCurrency.outdated_count ? [`${specCurrency.outdated_count} governed spec(s) are out of date in the project manifest.`] : []),
+    ...(latestTrace && String(latestTrace.drift_severity) === "high" ? ["Latest code trace report has high drift."] : []),
+    ...(openFeedback.length ? [`${openFeedback.length} open feedback item(s) need triage.`] : []),
+    ...(pendingReviews.length ? [`${pendingReviews.length} pending review(s) may affect this project.`] : []),
+    ...(sessions.some((session) => session.status === "blocked") ? ["One or more recent agent sessions are blocked."] : []),
+  ];
+  const status = auditStatus({
+    failingCompliance: Boolean(latestCompliance && Number(latestCompliance.compliant) === 0),
+    warnings: outstanding,
+  });
+  const summary =
+    status === "pass"
+      ? "Deterministic checks found current specs, passing compliance, traceability evidence, and no open governance blockers."
+      : status === "fail"
+        ? "Deterministic checks found a failing compliance attestation. Treat the project as not compliant until remediated."
+        : "Deterministic checks found governance warnings that should be reviewed before relying on this project as fully compliant.";
+  const evidence = {
+    generated_at: now(),
+    generated_by: generatedBy,
+    report_type: "project_governance",
+    subject_type: "project",
+    status,
+    summary,
+    project: {
+      ...project,
+      project_type_name: projectType.name,
+    },
+    specs,
+    spec_currency: specCurrency,
+    compliance: {
+      latest: latestCompliance
+        ? {
+            ...latestCompliance,
+            outstanding: parseJson(latestCompliance.outstanding, []),
+          }
+        : null,
+      recent: recentCompliance.map((row) => ({ ...row, outstanding: parseJson(row.outstanding, []) })),
+    },
+    traceability: {
+      latest: latestTrace ? { ...latestTrace, unlinked_sample: parseJson(latestTrace.unlinked_sample, []) } : null,
+    },
+    feedback: { open: openFeedback },
+    reviews: { pending: pendingReviews },
+    agent_sessions: {
+      recent: sessions.map((session) => ({
+        ...session,
+        spec_bundle: parseJson(session.spec_bundle, []),
+        preflight_summary: parseJson(session.preflight_summary, null),
+        completion_summary: parseJson(session.completion_summary, null),
+      })),
+      blocked_count: sessions.filter((session) => session.status === "blocked").length,
+      completed_count: sessions.filter((session) => session.status === "completed").length,
+    },
+    token_usage: {
+      window_days: tokenReport.window_days,
+      projected_tokens: Number(tokenProject.projected_tokens ?? 0),
+      real_total_tokens: Number(tokenProject.real_total_tokens ?? 0),
+      context_events: Number(tokenProject.context_events ?? 0),
+      delivered_sections: Number(tokenProject.delivered_sections ?? 0),
+      top_specs: tokenReport.by_spec.slice(0, 10),
+      top_sections: tokenReport.by_section.slice(0, 10),
+      real_usage: tokenReport.real_usage,
+    },
+    outstanding_actions: outstanding,
+  };
+  return {
+    id: uuid(),
+    report_type: "project_governance",
+    subject_type: "project",
+    subject_id: project.id,
+    subject_label: project.repo,
+    status,
+    summary,
+    evidence,
+    markdown: renderProjectGovernanceAuditMarkdown(evidence),
+    generated_by: generatedBy,
+    created_at: evidence.generated_at,
   };
 }
 
@@ -1501,6 +1727,108 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       .header("content-type", "application/json; charset=utf-8")
       .header("content-disposition", `attachment; filename="specreg-token-usage-${new Date().toISOString().slice(0, 10)}.json"`);
     return JSON.stringify(report, null, 2) + "\n";
+  });
+
+  app.get("/audit-reports", async (req) => {
+    const query = req.query as Record<string, string | undefined>;
+    const reportType = query.report_type?.trim();
+    const subjectType = query.subject_type?.trim();
+    const subjectId = query.subject_id?.trim();
+    const filters: string[] = [];
+    const params: unknown[] = [];
+    if (reportType) {
+      filters.push("report_type = ?");
+      params.push(reportType);
+    }
+    if (subjectType) {
+      filters.push("subject_type = ?");
+      params.push(subjectType);
+    }
+    if (subjectId) {
+      filters.push("subject_id = ?");
+      params.push(subjectId);
+    }
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    return app.db
+      .prepare(
+        `SELECT id, report_type, subject_type, subject_id, subject_label, status, summary,
+                generated_by, created_at
+         FROM audit_reports
+         ${where}
+         ORDER BY created_at DESC
+         LIMIT 200`
+      )
+      .all(...params);
+  });
+
+  app.post("/audit-reports/project", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const project = requireString(body, "project");
+    const report = buildProjectGovernanceAudit(app, project, actorFrom(req, "admin"));
+    app.db
+      .prepare(
+        `INSERT INTO audit_reports
+          (id, report_type, subject_type, subject_id, subject_label, status, summary,
+           evidence_json, markdown, llm_summary, generated_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+      )
+      .run(
+        report.id,
+        report.report_type,
+        report.subject_type,
+        report.subject_id,
+        report.subject_label,
+        report.status,
+        report.summary,
+        JSON.stringify(report.evidence, null, 2),
+        report.markdown,
+        report.generated_by,
+        report.created_at
+      );
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "audit_report.generated",
+      target_type: "audit_report",
+      target_id: report.id,
+      summary: `Project governance audit generated for ${report.subject_label}`,
+      detail: { report_type: report.report_type, status: report.status, project_id: report.subject_id },
+    });
+    reply.code(201);
+    return {
+      id: report.id,
+      report_type: report.report_type,
+      subject_type: report.subject_type,
+      subject_id: report.subject_id,
+      subject_label: report.subject_label,
+      status: report.status,
+      summary: report.summary,
+      evidence: report.evidence,
+      markdown: report.markdown,
+      generated_by: report.generated_by,
+      created_at: report.created_at,
+    };
+  });
+
+  app.get("/audit-reports/:id", async (req) => {
+    const { id } = req.params as { id: string };
+    const row = app.db.prepare("SELECT * FROM audit_reports WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) throw new HttpError(404, `Unknown audit report: ${id}`);
+    return {
+      ...row,
+      evidence: parseJson(row.evidence_json, null),
+    };
+  });
+
+  app.get("/audit-reports/:id/markdown", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const row = app.db.prepare("SELECT subject_label, markdown FROM audit_reports WHERE id = ?").get(id) as
+      | { subject_label: string; markdown: string }
+      | undefined;
+    if (!row) throw new HttpError(404, `Unknown audit report: ${id}`);
+    reply
+      .header("content-type", "text/markdown; charset=utf-8")
+      .header("content-disposition", `attachment; filename="specreg-audit-${row.subject_label.replace(/[^a-z0-9._-]+/gi, "-")}.md"`);
+    return row.markdown;
   });
 
   // Self-update: git pull --ff-only + rebuild for a deployment running from a live

@@ -612,6 +612,70 @@ describe("project types & specs", () => {
     expect(jsonExportRes.json().projects[0]).toMatchObject({ project_id: project.id, real_total_tokens: 168 });
   });
 
+  it("generates persisted project governance audit reports with deterministic evidence", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const edge = types.find((t: any) => t.name === "Acme Edge Device");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/audited-device", project_type_id: edge.id },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const begin = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/begin",
+      payload: {
+        project_type: "Acme Edge Device",
+        repo: "github.com/acme/audited-device",
+        agent_identifier: "audit-test-agent",
+        task: "Audit governed device behavior.",
+        specs_loaded: ["DESIGN.md"],
+      },
+    });
+    expect(begin.statusCode).toBe(201);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit-reports/project",
+      payload: { project: project.id },
+    });
+    expect(generated.statusCode).toBe(201);
+    const report = generated.json();
+    expect(report).toMatchObject({
+      report_type: "project_governance",
+      subject_type: "project",
+      subject_id: project.id,
+      subject_label: "github.com/acme/audited-device",
+      status: "warning",
+    });
+    expect(report.evidence.project.project_type_name).toBe("Acme Edge Device");
+    expect(report.evidence.specs.length).toBeGreaterThan(0);
+    expect(report.evidence.agent_sessions.recent[0]).toMatchObject({ agent_identifier: "audit-test-agent" });
+    expect(report.evidence.outstanding_actions).toEqual(
+      expect.arrayContaining([
+        "No compliance attestation has been recorded for this project.",
+        "No code trace report has been reported; run `specreg code-map --report`.",
+      ])
+    );
+    expect(report.markdown).toContain("# Project Governance Audit: github.com/acme/audited-device");
+    expect(report.markdown).toContain("## Compliance");
+
+    const list = await app.inject({ method: "GET", url: `/api/v1/audit-reports?subject_id=${encodeURIComponent(project.id)}` });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()[0]).toMatchObject({ id: report.id, report_type: "project_governance" });
+
+    const detail = await app.inject({ method: "GET", url: `/api/v1/audit-reports/${report.id}` });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().evidence.project.repo).toBe("github.com/acme/audited-device");
+
+    const markdown = await app.inject({ method: "GET", url: `/api/v1/audit-reports/${report.id}/markdown` });
+    expect(markdown.statusCode).toBe(200);
+    expect(markdown.headers["content-type"]).toContain("text/markdown");
+    expect(markdown.body).toContain("## Outstanding Actions");
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

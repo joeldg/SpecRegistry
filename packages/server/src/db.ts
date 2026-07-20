@@ -546,6 +546,23 @@ CREATE TABLE IF NOT EXISTS llm_usage_reports (
 CREATE INDEX IF NOT EXISTS idx_llm_usage_project ON llm_usage_reports(consumer_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_llm_usage_type ON llm_usage_reports(project_type_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_llm_usage_session ON llm_usage_reports(agent_session_id, created_at);
+
+CREATE TABLE IF NOT EXISTS audit_reports (
+  id TEXT PRIMARY KEY,
+  report_type TEXT NOT NULL CHECK (report_type IN ('project_governance', 'spec_quality', 'agent_run', 'release', 'registry_operations')),
+  subject_type TEXT NOT NULL CHECK (subject_type IN ('project', 'spec', 'agent_session', 'release', 'registry')),
+  subject_id TEXT,
+  subject_label TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pass', 'warning', 'fail', 'unknown')),
+  summary TEXT NOT NULL,
+  evidence_json TEXT NOT NULL,
+  markdown TEXT NOT NULL,
+  llm_summary TEXT,
+  generated_by TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_reports_subject ON audit_reports(subject_type, subject_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_reports_type_time ON audit_reports(report_type, created_at);
 `;
 
 /** Versioned migrations for databases created before the current schema. Each runs once. */
@@ -1356,6 +1373,28 @@ Project types are reusable baselines; projects are concrete repositories. The pr
         UNIQUE(skill_id, content_hash)
       );
       CREATE INDEX IF NOT EXISTS idx_agent_skill_versions_skill ON agent_skill_versions(skill_id, created_at);
+    `,
+  },
+  {
+    // Persist deterministic governance audit reports as reviewable evidence artifacts.
+    version: 42,
+    sql: `
+      CREATE TABLE IF NOT EXISTS audit_reports (
+        id TEXT PRIMARY KEY,
+        report_type TEXT NOT NULL CHECK (report_type IN ('project_governance', 'spec_quality', 'agent_run', 'release', 'registry_operations')),
+        subject_type TEXT NOT NULL CHECK (subject_type IN ('project', 'spec', 'agent_session', 'release', 'registry')),
+        subject_id TEXT,
+        subject_label TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pass', 'warning', 'fail', 'unknown')),
+        summary TEXT NOT NULL,
+        evidence_json TEXT NOT NULL,
+        markdown TEXT NOT NULL,
+        llm_summary TEXT,
+        generated_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_reports_subject ON audit_reports(subject_type, subject_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_audit_reports_type_time ON audit_reports(report_type, created_at);
     `,
   },
 ];

@@ -1,4 +1,4 @@
-import type { ProjectType } from "@specregistry/shared";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL, type ProjectType } from "@specregistry/shared";
 
 export function mcpConfig(serverUrl: string, projectType?: ProjectType, repo = "owner/repo") {
   return {
@@ -19,7 +19,8 @@ export function mcpConfig(serverUrl: string, projectType?: ProjectType, repo = "
 export function mcpSkillMarkdown(serverUrl: string, projectType?: ProjectType, repo = "owner/repo"): string {
   return `# SpecRegistry MCP Skill
 
-Use this skill when working in a repository governed by SpecRegistry.
+Use this skill when working in a SpecRegistry managed project.
+Learn more: ${SPECREGISTRY_PRODUCT_REPOSITORY_URL}
 
 ## Configure MCP
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL } from "@specregistry/shared";
 import { createDb } from "../src/db.js";
 import { seed } from "../src/seed.js";
 import { sanitizeDraftFixOutput } from "../src/lib/aifix.js";
@@ -1301,6 +1302,8 @@ describe("governance and quality reports", () => {
     });
     expect(preview.impact.summary).toContain("API.md");
     expect(preview.migration_checklist.items.length).toBeGreaterThan(0);
+    expect(preview.pr_summary_markdown).toContain("This is a SpecRegistry managed project");
+    expect(preview.pr_summary_markdown).toContain(SPECREGISTRY_PRODUCT_REPOSITORY_URL);
     expect(preview.pr_summary_markdown).toContain("## Migration checklist");
     expect(preview.pr_summary_markdown).toContain("## Changelog");
   });
@@ -1315,6 +1318,7 @@ describe("governance and quality reports", () => {
       migration_checklist: expect.objectContaining({ version_delta: "major", items: expect.any(Array) }),
     });
     expect(res.json().migration_checklist.items.join("\n")).toContain("breaking governance change");
+    expect(res.json().pr_summary_markdown).toContain(SPECREGISTRY_PRODUCT_REPOSITORY_URL);
     expect(res.json().pr_summary_markdown).toContain("## Changelog");
   });
 

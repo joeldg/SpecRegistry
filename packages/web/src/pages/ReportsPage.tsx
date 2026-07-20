@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { SpecSummary } from "@specregistry/shared";
+import type { AuditReportDetail, SpecSummary } from "@specregistry/shared";
 import {
   api,
   getAuthor,
-  type AuditReportDetail,
   type AuditReportSummaryRow,
   type DependencyMap,
   type EfficacyRun,

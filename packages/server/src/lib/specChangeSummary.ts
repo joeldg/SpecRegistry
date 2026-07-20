@@ -1,4 +1,4 @@
-import type { Spec, VersionDelta } from "@specregistry/shared";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL, type Spec, type VersionDelta } from "@specregistry/shared";
 import type { Db } from "../db.js";
 import { reviewImpact } from "./reviewImpact.js";
 
@@ -92,6 +92,8 @@ export function specChangeSummaryMarkdown(
 
   const lines = [
     "Approved specification update distributed by SpecRegistry.",
+    "",
+    `This is a SpecRegistry managed project. Learn more: ${SPECREGISTRY_PRODUCT_REPOSITORY_URL}`,
     "",
     `- **File:** \`${filePath}\``,
     `- **Version:** ${version}`,

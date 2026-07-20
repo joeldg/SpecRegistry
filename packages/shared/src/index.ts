@@ -1,11 +1,16 @@
 /** Shared domain types for SpecRegistry (server, CLI, and web UI). */
 
+export const SPECREGISTRY_PRODUCT_REPOSITORY_URL = "https://github.com/joeldg/SpecRegistry";
+
 export type Scope = "global" | "project_type" | "project";
 export type SpecStatus = "draft" | "pending_review" | "published";
 export type ReviewStatus = "pending" | "approved" | "rejected";
 export type VersionDelta = "major" | "minor" | "patch";
 export type FeedbackErrorType = "ambiguity" | "contradiction" | "outdated" | "missing_guidance";
 export type FeedbackStatus = "open" | "acknowledged" | "resolved";
+export type AuditReportStatus = "pass" | "warning" | "fail" | "unknown";
+export type AuditReportType = "project_governance" | "spec_quality" | "agent_run" | "release" | "registry_operations";
+export type AuditReportSubjectType = "project" | "spec" | "agent_session" | "release" | "registry";
 
 export interface ProjectType {
   id: string;
@@ -75,6 +80,25 @@ export interface ChangeRequest {
   /** JSON risk score captured at submission time */
   risk?: string | null;
   created_at: string;
+}
+
+export interface AuditReportSummary {
+  id: string;
+  report_type: AuditReportType;
+  subject_type: AuditReportSubjectType;
+  subject_id: string | null;
+  subject_label: string;
+  status: AuditReportStatus;
+  summary: string;
+  generated_by: string;
+  created_at: string;
+}
+
+export interface AuditReportDetail extends AuditReportSummary {
+  evidence_json?: string;
+  markdown: string;
+  llm_summary: string | null;
+  evidence: unknown;
 }
 
 export interface AgentFeedback {

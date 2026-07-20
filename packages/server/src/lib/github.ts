@@ -1,4 +1,4 @@
-import type { Spec } from "@specregistry/shared";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL, type Spec } from "@specregistry/shared";
 import type { Db } from "../db.js";
 import { now, uuid } from "../db.js";
 import { specChangeSummaryMarkdown } from "./specChangeSummary.js";
@@ -84,7 +84,9 @@ async function pushSpecToRepo(db: Db, token: string, sub: SubscriptionRow, spec:
   const existingSha = existing.ok ? ((await existing.json()) as { sha: string }).sha : undefined;
 
   const put = await gh(token, "PUT", `/repos/${sub.repo}/contents/${encodeURIComponent(filePath)}`, {
-    message: `chore(specs): update ${spec.filename} to v${spec.current_version} via SpecRegistry`,
+    message:
+      `chore(specs): update ${spec.filename} to v${spec.current_version} via SpecRegistry\n\n` +
+      `This is a SpecRegistry managed project.\n${SPECREGISTRY_PRODUCT_REPOSITORY_URL}`,
     content: Buffer.from(spec.content, "utf8").toString("base64"),
     branch: branchName,
     ...(existingSha ? { sha: existingSha } : {}),

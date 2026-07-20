@@ -36,7 +36,7 @@ Usage:
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
-  specreg audit-report  Generate deterministic project, spec, agent-run, or release/PR audit evidence
+  specreg audit-report  Generate deterministic project, spec, agent-run, release/PR, or registry audit evidence
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
   specreg skills list|search|check|sync  List/search skills, verify local skill currency, or refresh them
   specreg skills sources list|add|scan  Manage marketplace skill sources
@@ -89,6 +89,7 @@ Options:
   --spec <id>       audit-report: generate a spec quality audit for this spec id
   --session <id>    audit-report: generate an agent run audit for this session id
   --release         audit-report: generate a release/PR audit for the project
+  --registry        audit-report: generate a registry operations audit
   --changed-files <csv> audit-report release: comma-separated changed files
   --tests <csv>     audit-report release: comma-separated tests run
   --checks <csv>    audit-report release: comma-separated CI/check names
@@ -316,6 +317,7 @@ try {
       spec: typeof flags.spec === "string" ? flags.spec : undefined,
       session: typeof flags.session === "string" ? flags.session : undefined,
       release: flags.release === true,
+      registry: flags.registry === true,
       changedFiles: typeof flags["changed-files"] === "string" ? flags["changed-files"] : undefined,
       tests: typeof flags.tests === "string" ? flags.tests : undefined,
       checks: typeof flags.checks === "string" ? flags.checks : undefined,

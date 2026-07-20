@@ -36,7 +36,7 @@ Usage:
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
-  specreg audit-report  Generate a deterministic project governance audit report
+  specreg audit-report  Generate a deterministic project governance or spec quality audit report
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
   specreg skills list|search|check|sync  List/search skills, verify local skill currency, or refresh them
   specreg skills sources list|add|scan  Manage marketplace skill sources
@@ -86,6 +86,7 @@ Options:
                     audit-report: print/write the full JSON evidence payload
   --html <path>     scan: also write a self-contained, shareable HTML report
   --project <id>    audit-report: project id or repo slug (default: current git repo)
+  --spec <id>       audit-report: generate a spec quality audit for this spec id
   -h, --help        Show this help
 `;
 
@@ -300,6 +301,7 @@ try {
       server: requireServer(),
       token,
       project: typeof flags.project === "string" ? flags.project : undefined,
+      spec: typeof flags.spec === "string" ? flags.spec : undefined,
       out: typeof flags.out === "string" ? flags.out : undefined,
       json: flags.json === true,
     });

@@ -677,6 +677,68 @@ describe("project types & specs", () => {
     expect(markdown.body).toContain("## Outstanding Actions");
   });
 
+  it("generates persisted spec quality audit reports with section and feedback evidence", async () => {
+    const specs = await getJson("/api/v1/specs");
+    const summary = specs.find((s: any) => s.filename === "API_ENDPOINTS.md" && s.project_type_name === "Web App Standard");
+    const spec = await getJson(`/api/v1/specs/${summary.id}`);
+    const ts = new Date().toISOString();
+    const db = (app as any).db;
+    db.prepare(
+      `INSERT INTO agent_feedback
+        (id, spec_id, spec_version, agent_identifier, error_type, context_code_snippet, description, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("feedback-spec-quality-1", spec.id, spec.current_version, "audit-test-agent", "contradiction", "src/api.ts", "Endpoint guidance conflicts with observed behavior.", "open", ts);
+    db.prepare(
+      `INSERT INTO change_requests
+        (id, spec_id, proposed_by, version_delta, diff, proposed_content, summary, status, contradictions, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("cr-spec-quality-1", spec.id, "auditor", "minor", "--- a\n+++ b\n", `${spec.content}\n`, "Clarify endpoint behavior.", "pending", JSON.stringify({ findings: ["conflict"] }), ts);
+    db.prepare(
+      `INSERT INTO efficacy_runs
+        (id, spec_id, task_prompt, score_with, score_without, improved, rationale, model, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("eff-spec-quality-1", spec.id, "Implement a compatible endpoint.", 8, 5, 1, "Spec improved implementation quality.", "test-model", ts);
+    db.prepare(
+      `INSERT INTO context_events
+        (id, project_type_id, event_type, source, detail, actor, estimated_tokens, section_count, tokenizer, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("ctx-spec-quality-1", spec.project_type_id, "agent_read", "test", "spec quality fixture", "audit-test-agent", 44, 1, "chars/4:v1", ts);
+    db.prepare(
+      `INSERT INTO context_event_sections
+        (id, context_event_id, spec_id, spec_version, filename, section_title, section_anchor, chars, estimated_tokens, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run("ctx-section-spec-quality-1", "ctx-spec-quality-1", spec.id, spec.current_version, spec.filename, "Endpoints", "endpoints", 176, 44, ts);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit-reports/spec",
+      payload: { spec_id: spec.id },
+    });
+    expect(generated.statusCode).toBe(201);
+    const report = generated.json();
+    expect(report).toMatchObject({
+      report_type: "spec_quality",
+      subject_type: "spec",
+      subject_id: spec.id,
+      subject_label: "API_ENDPOINTS.md",
+      status: "fail",
+    });
+    expect(report.evidence.feedback.by_type.contradiction).toBe(1);
+    expect(report.evidence.reviews.pending[0]).toMatchObject({ id: "cr-spec-quality-1" });
+    expect(report.evidence.efficacy.avg_lift).toBe(3);
+    expect(report.evidence.sections.find((section: any) => section.anchor === "endpoints")).toMatchObject({
+      deliveries: 1,
+      projected_tokens: 44,
+    });
+    expect(report.markdown).toContain("# Spec Quality Audit: API_ENDPOINTS.md");
+    expect(report.markdown).toContain("## Section Signals");
+    expect(report.markdown).not.toContain("undefined");
+
+    const list = await app.inject({ method: "GET", url: `/api/v1/audit-reports?report_type=spec_quality&subject_id=${encodeURIComponent(spec.id)}` });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()[0]).toMatchObject({ id: report.id, report_type: "spec_quality" });
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

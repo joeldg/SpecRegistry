@@ -75,3 +75,28 @@ test("audit-report writes full JSON evidence when requested", async () => {
   assert.equal(written.id, "audit-1");
   assert.equal(written.evidence.outstanding_actions[0], "Run specreg comply.");
 });
+
+test("audit-report can generate spec quality reports", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: URL; body: any }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return response({
+      ...reportBody(),
+      report_type: "spec_quality",
+      subject_type: "spec",
+      subject_id: "spec-1",
+      subject_label: "API.md",
+      markdown: "# Spec Quality Audit: API.md\n",
+    }, { status: 201 });
+  }) as typeof fetch;
+  try {
+    await runAuditReport({ server: "https://specreg.example.com", spec: "spec-1" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/spec");
+  assert.deepEqual(requests[0].body, { spec_id: "spec-1" });
+});

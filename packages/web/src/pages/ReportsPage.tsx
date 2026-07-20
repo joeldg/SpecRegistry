@@ -108,7 +108,9 @@ export default function ReportsPage() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageReport>();
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
   const [auditReports, setAuditReports] = useState<AuditReportSummaryRow[]>([]);
+  const [auditTarget, setAuditTarget] = useState<"project" | "spec">("project");
   const [selectedAuditProjectId, setSelectedAuditProjectId] = useState("");
+  const [selectedAuditSpecId, setSelectedAuditSpecId] = useState("");
   const [selectedAuditReportId, setSelectedAuditReportId] = useState("");
   const [auditDetail, setAuditDetail] = useState<AuditReportDetail>();
   const [tokenProjectId, setTokenProjectId] = useState("");
@@ -144,7 +146,7 @@ export default function ReportsPage() {
       api.tokenRoi(),
       api.efficacyTrends(),
       api.tokenUsageReport({ days: tokenDays }),
-      api.auditReports({ report_type: "project_governance" }),
+      api.auditReports(),
     ])
       .then(([nextReport, nextSpecs, nextTypes, nextProjects, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage, nextAuditReports]) => {
         setReport(nextReport);
@@ -157,6 +159,7 @@ export default function ReportsPage() {
         setTokenUsage(nextTokenUsage);
         setAuditReports(nextAuditReports);
         setSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
+        setSelectedAuditSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
         setProjectType((current) => current || nextTypes.find((t) => t.scope === "project_type")?.name || "");
         setSelectedAuditProjectId((current) => current || nextProjects[0]?.id || "");
         setSelectedAuditReportId((current) => current || nextAuditReports[0]?.id || "");
@@ -288,16 +291,19 @@ export default function ReportsPage() {
   }
 
   async function generateProjectAudit() {
-    if (!selectedAuditProjectId) return;
+    if (auditTarget === "project" && !selectedAuditProjectId) return;
+    if (auditTarget === "spec" && !selectedAuditSpecId) return;
     setBusy("audit-report");
     setError(undefined);
     setNotice(undefined);
     try {
-      const generated = await api.createProjectAuditReport(selectedAuditProjectId);
+      const generated = auditTarget === "spec"
+        ? await api.createSpecAuditReport(selectedAuditSpecId)
+        : await api.createProjectAuditReport(selectedAuditProjectId);
       setAuditDetail(generated);
       setSelectedAuditReportId(generated.id);
-      setNotice("Project governance audit generated.");
-      setAuditReports(await api.auditReports({ report_type: "project_governance" }));
+      setNotice(auditTarget === "spec" ? "Spec quality audit generated." : "Project governance audit generated.");
+      setAuditReports(await api.auditReports());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -364,6 +370,9 @@ export default function ReportsPage() {
     traceability?: { latest?: { coverage_ratio?: number; drift_score?: number; drift_severity?: string; reported_at?: string } | null };
     feedback?: { open?: unknown[] };
     reviews?: { pending?: unknown[] };
+    sections?: unknown[];
+    token_usage?: { approx_tokens?: number; projected_tokens?: number; context_events?: number };
+    efficacy?: { runs?: unknown[]; improved_count?: number; avg_lift?: number };
   };
 
   return (
@@ -810,18 +819,36 @@ export default function ReportsPage() {
           <div className="section report-panel">
             <h2>Audit Reports</h2>
             <p className="settings-help">
-              Generate deterministic project governance reports from registry evidence before adding optional LLM summaries.
+              Generate deterministic governance reports from registry evidence before adding optional LLM summaries.
             </p>
             <div className="form-row" style={{ marginBottom: 12 }}>
-              <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.repo} · {project.project_type_name}
-                  </option>
-                ))}
+              <select value={auditTarget} onChange={(e) => setAuditTarget(e.target.value as typeof auditTarget)}>
+                <option value="project">Project Governance</option>
+                <option value="spec">Spec Quality</option>
               </select>
-              <button className="primary" disabled={!selectedAuditProjectId || busy === "audit-report"} onClick={generateProjectAudit}>
-                {busy === "audit-report" ? "Generating..." : "Generate Project Audit"}
+              {auditTarget === "project" ? (
+                <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.repo} · {project.project_type_name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select value={selectedAuditSpecId} onChange={(e) => setSelectedAuditSpecId(e.target.value)}>
+                  {specs.map((spec) => (
+                    <option key={spec.id} value={spec.id}>
+                      {spec.filename} · {spec.project_type_name} · v{spec.current_version}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                className="primary"
+                disabled={(auditTarget === "project" ? !selectedAuditProjectId : !selectedAuditSpecId) || busy === "audit-report"}
+                onClick={generateProjectAudit}
+              >
+                {busy === "audit-report" ? "Generating..." : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
               </button>
               {auditDetail && (
                 <a className="button-link" href={`/api/v1/audit-reports/${auditDetail.id}/markdown`}>
@@ -829,7 +856,7 @@ export default function ReportsPage() {
                 </a>
               )}
             </div>
-            {projects.length === 0 ? (
+            {auditTarget === "project" && projects.length === 0 ? (
               <div className="empty">No projects have reported manifests yet. Run `specreg init` or `specreg check` from a project first.</div>
             ) : (
               <div className="report-grid">
@@ -841,7 +868,8 @@ export default function ReportsPage() {
                     <table className="grid">
                       <thead>
                         <tr>
-                          <th>Project</th>
+                          <th>Subject</th>
+                          <th>Type</th>
                           <th>Status</th>
                           <th>Generated</th>
                         </tr>
@@ -855,6 +883,7 @@ export default function ReportsPage() {
                               </button>
                               <div className="faint">{audit.summary}</div>
                             </td>
+                            <td><StatusBadge status={audit.report_type} /></td>
                             <td><StatusBadge status={audit.status} /></td>
                             <td className="faint">{timeAgo(audit.created_at)}</td>
                           </tr>
@@ -873,18 +902,33 @@ export default function ReportsPage() {
                           <div className="label">Status</div>
                           <StatusBadge status={auditDetail.status} />
                         </div>
-                        <div className="card">
-                          <div className="label">Specs</div>
-                          <div className="metric">{auditEvidence.specs?.length ?? 0}</div>
-                        </div>
-                        <div className="card">
-                          <div className="label">Compliance</div>
-                          <div className="mono">
-                            {auditEvidence.compliance?.latest
-                              ? `${Math.round(Number(auditEvidence.compliance.latest.coverage_ratio ?? 0) * 100)}% / ${Math.round(Number(auditEvidence.compliance.latest.drift_score ?? 0) * 100)}% drift`
-                              : "missing"}
-                          </div>
-                        </div>
+                        {auditDetail.report_type === "spec_quality" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Sections</div>
+                              <div className="metric">{auditEvidence.sections?.length ?? 0}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Spec tokens</div>
+                              <div className="metric">{fmtTokens(auditEvidence.token_usage?.approx_tokens)}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="card">
+                              <div className="label">Specs</div>
+                              <div className="metric">{auditEvidence.specs?.length ?? 0}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Compliance</div>
+                              <div className="mono">
+                                {auditEvidence.compliance?.latest
+                                  ? `${Math.round(Number(auditEvidence.compliance.latest.coverage_ratio ?? 0) * 100)}% / ${Math.round(Number(auditEvidence.compliance.latest.drift_score ?? 0) * 100)}% drift`
+                                  : "missing"}
+                              </div>
+                            </div>
+                          </>
+                        )}
                         <div className="card">
                           <div className="label">Actions</div>
                           <div className="metric">{auditEvidence.outstanding_actions?.length ?? 0}</div>
@@ -909,14 +953,21 @@ export default function ReportsPage() {
                           <div className="label">Pending reviews</div>
                           <div className="metric">{auditEvidence.reviews?.pending?.length ?? 0}</div>
                         </div>
-                        <div className="card">
-                          <div className="label">Code trace</div>
-                          <div className="mono">
-                            {auditEvidence.traceability?.latest
-                              ? `${Math.round(Number(auditEvidence.traceability.latest.coverage_ratio ?? 0) * 100)}% / ${auditEvidence.traceability.latest.drift_severity ?? "none"}`
-                              : "missing"}
+                        {auditDetail.report_type === "spec_quality" ? (
+                          <div className="card">
+                            <div className="label">Efficacy</div>
+                            <div className="mono">{auditEvidence.efficacy?.runs?.length ?? 0} runs / lift {auditEvidence.efficacy?.avg_lift ?? 0}</div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="card">
+                            <div className="label">Code trace</div>
+                            <div className="mono">
+                              {auditEvidence.traceability?.latest
+                                ? `${Math.round(Number(auditEvidence.traceability.latest.coverage_ratio ?? 0) * 100)}% / ${auditEvidence.traceability.latest.drift_severity ?? "none"}`
+                                : "missing"}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <Markdown content={auditDetail.markdown} />
                     </>

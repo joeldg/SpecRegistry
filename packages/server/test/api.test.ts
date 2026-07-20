@@ -739,6 +739,76 @@ describe("project types & specs", () => {
     expect(list.json()[0]).toMatchObject({ id: report.id, report_type: "spec_quality" });
   });
 
+  it("generates persisted agent run audit reports with lifecycle and halt evidence", async () => {
+    const begin = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/begin",
+      payload: {
+        project_type: "Web App Standard",
+        repo: "github.com/acme/agent-audited-app",
+        agent_identifier: "agent-run-audit-test",
+        model: "test-model",
+        mcp_server: "specreg",
+        task: "Implement audited agent workflow.",
+        specs_loaded: ["API_ENDPOINTS.md"],
+        plan: "Load specs, implement, finish task.",
+      },
+    });
+    expect(begin.statusCode).toBe(201);
+    const sessionId = begin.json().session_id;
+
+    const tokenUsage = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/token-usage",
+      payload: {
+        session_id: sessionId,
+        provider: "openai",
+        model: "test-model",
+        route: "agent",
+        prompt_tokens: 120,
+        completion_tokens: 30,
+        total_tokens: 150,
+      },
+    });
+    expect(tokenUsage.statusCode).toBe(201);
+
+    const finish = await app.inject({
+      method: "POST",
+      url: "/api/v1/ai/agent-sessions/finish",
+      payload: {
+        session_id: sessionId,
+        summary: "Blocked until code trace exists.",
+        tests: ["npm test"],
+        changed_files: ["src/app.ts"],
+        self_assessed_score: 40,
+      },
+    });
+    expect(finish.statusCode).toBe(200);
+    expect(finish.json().status).toBe("blocked");
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit-reports/agent-session",
+      payload: { session_id: sessionId },
+    });
+    expect(generated.statusCode).toBe(201);
+    const report = generated.json();
+    expect(report).toMatchObject({
+      report_type: "agent_run",
+      subject_type: "agent_session",
+      subject_id: sessionId,
+      status: "warning",
+    });
+    expect(report.evidence.session.agent_identifier).toBe("agent-run-audit-test");
+    expect(report.evidence.context.events.length).toBeGreaterThan(0);
+    expect(report.evidence.token_usage.total_tokens).toBe(150);
+    expect(report.evidence.halt_assessment).toMatchObject({ verdict: "warning" });
+    expect(report.evidence.compliance.linked_attestation.compliant).toBe(0);
+    expect(report.markdown).toContain("# Agent Run Audit:");
+    expect(report.markdown).toContain("## Halt Assessment");
+    expect(report.markdown).not.toContain("undefined");
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

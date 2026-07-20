@@ -3,6 +3,7 @@ import type { AuditReportDetail, SpecSummary } from "@specregistry/shared";
 import {
   api,
   getAuthor,
+  type AgentSessionRow,
   type AuditReportSummaryRow,
   type DependencyMap,
   type EfficacyRun,
@@ -108,9 +109,11 @@ export default function ReportsPage() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageReport>();
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
   const [auditReports, setAuditReports] = useState<AuditReportSummaryRow[]>([]);
-  const [auditTarget, setAuditTarget] = useState<"project" | "spec">("project");
+  const [agentSessions, setAgentSessions] = useState<AgentSessionRow[]>([]);
+  const [auditTarget, setAuditTarget] = useState<"project" | "spec" | "session">("project");
   const [selectedAuditProjectId, setSelectedAuditProjectId] = useState("");
   const [selectedAuditSpecId, setSelectedAuditSpecId] = useState("");
+  const [selectedAuditSessionId, setSelectedAuditSessionId] = useState("");
   const [selectedAuditReportId, setSelectedAuditReportId] = useState("");
   const [auditDetail, setAuditDetail] = useState<AuditReportDetail>();
   const [tokenProjectId, setTokenProjectId] = useState("");
@@ -147,12 +150,14 @@ export default function ReportsPage() {
       api.efficacyTrends(),
       api.tokenUsageReport({ days: tokenDays }),
       api.auditReports(),
+      api.agentSessions(100),
     ])
-      .then(([nextReport, nextSpecs, nextTypes, nextProjects, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage, nextAuditReports]) => {
+      .then(([nextReport, nextSpecs, nextTypes, nextProjects, nextDependencies, nextTokenRoi, nextEfficacyTrend, nextTokenUsage, nextAuditReports, nextAgentSessions]) => {
         setReport(nextReport);
         setSpecs(nextSpecs);
         setTypes(nextTypes.filter((t) => t.scope === "project_type"));
         setProjects(nextProjects);
+        setAgentSessions(nextAgentSessions);
         setDependencies(nextDependencies);
         setTokenRoi(nextTokenRoi.specs.slice(0, 8));
         setEfficacyTrend(nextEfficacyTrend.runs.slice(-8));
@@ -160,6 +165,7 @@ export default function ReportsPage() {
         setAuditReports(nextAuditReports);
         setSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
         setSelectedAuditSpecId((current) => current || nextSpecs.find((s) => s.status === "published")?.id || nextSpecs[0]?.id || "");
+        setSelectedAuditSessionId((current) => current || nextAgentSessions[0]?.id || "");
         setProjectType((current) => current || nextTypes.find((t) => t.scope === "project_type")?.name || "");
         setSelectedAuditProjectId((current) => current || nextProjects[0]?.id || "");
         setSelectedAuditReportId((current) => current || nextAuditReports[0]?.id || "");
@@ -293,16 +299,25 @@ export default function ReportsPage() {
   async function generateProjectAudit() {
     if (auditTarget === "project" && !selectedAuditProjectId) return;
     if (auditTarget === "spec" && !selectedAuditSpecId) return;
+    if (auditTarget === "session" && !selectedAuditSessionId) return;
     setBusy("audit-report");
     setError(undefined);
     setNotice(undefined);
     try {
-      const generated = auditTarget === "spec"
-        ? await api.createSpecAuditReport(selectedAuditSpecId)
-        : await api.createProjectAuditReport(selectedAuditProjectId);
+      const generated = auditTarget === "session"
+        ? await api.createAgentRunAuditReport(selectedAuditSessionId)
+        : auditTarget === "spec"
+          ? await api.createSpecAuditReport(selectedAuditSpecId)
+          : await api.createProjectAuditReport(selectedAuditProjectId);
       setAuditDetail(generated);
       setSelectedAuditReportId(generated.id);
-      setNotice(auditTarget === "spec" ? "Spec quality audit generated." : "Project governance audit generated.");
+      setNotice(
+        auditTarget === "session"
+          ? "Agent run audit generated."
+          : auditTarget === "spec"
+            ? "Spec quality audit generated."
+            : "Project governance audit generated."
+      );
       setAuditReports(await api.auditReports());
     } catch (e) {
       setError((e as Error).message);
@@ -371,8 +386,11 @@ export default function ReportsPage() {
     feedback?: { open?: unknown[] };
     reviews?: { pending?: unknown[] };
     sections?: unknown[];
-    token_usage?: { approx_tokens?: number; projected_tokens?: number; context_events?: number };
+    token_usage?: { approx_tokens?: number; projected_tokens?: number; context_events?: number; total_tokens?: number };
     efficacy?: { runs?: unknown[]; improved_count?: number; avg_lift?: number };
+    session?: { status?: string; spec_count?: number };
+    context?: { events?: unknown[]; projected_tokens?: number; delivered_sections?: number };
+    halt_assessment?: { verdict?: string; reason?: string };
   };
 
   return (
@@ -825,6 +843,7 @@ export default function ReportsPage() {
               <select value={auditTarget} onChange={(e) => setAuditTarget(e.target.value as typeof auditTarget)}>
                 <option value="project">Project Governance</option>
                 <option value="spec">Spec Quality</option>
+                <option value="session">Agent Run</option>
               </select>
               {auditTarget === "project" ? (
                 <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
@@ -834,7 +853,7 @@ export default function ReportsPage() {
                     </option>
                   ))}
                 </select>
-              ) : (
+              ) : auditTarget === "spec" ? (
                 <select value={selectedAuditSpecId} onChange={(e) => setSelectedAuditSpecId(e.target.value)}>
                   {specs.map((spec) => (
                     <option key={spec.id} value={spec.id}>
@@ -842,13 +861,21 @@ export default function ReportsPage() {
                     </option>
                   ))}
                 </select>
+              ) : (
+                <select value={selectedAuditSessionId} onChange={(e) => setSelectedAuditSessionId(e.target.value)}>
+                  {agentSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.agent_identifier} · {session.status} · {session.task}
+                    </option>
+                  ))}
+                </select>
               )}
               <button
                 className="primary"
-                disabled={(auditTarget === "project" ? !selectedAuditProjectId : !selectedAuditSpecId) || busy === "audit-report"}
+                disabled={(auditTarget === "project" ? !selectedAuditProjectId : auditTarget === "spec" ? !selectedAuditSpecId : !selectedAuditSessionId) || busy === "audit-report"}
                 onClick={generateProjectAudit}
               >
-                {busy === "audit-report" ? "Generating..." : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
+                {busy === "audit-report" ? "Generating..." : auditTarget === "session" ? "Generate Agent Audit" : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
               </button>
               {auditDetail && (
                 <a className="button-link" href={`/api/v1/audit-reports/${auditDetail.id}/markdown`}>
@@ -858,6 +885,8 @@ export default function ReportsPage() {
             </div>
             {auditTarget === "project" && projects.length === 0 ? (
               <div className="empty">No projects have reported manifests yet. Run `specreg init` or `specreg check` from a project first.</div>
+            ) : auditTarget === "session" && agentSessions.length === 0 ? (
+              <div className="empty">No agent sessions have been recorded yet. Agents should call `begin_task` before governed work.</div>
             ) : (
               <div className="report-grid">
                 <div>
@@ -894,7 +923,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   {!auditDetail ? (
-                    <div className="empty">Select a report or generate a new project audit.</div>
+                    <div className="empty">Select a report or generate a new audit.</div>
                   ) : (
                     <>
                       <div className="cards" style={{ marginBottom: 12 }}>
@@ -902,7 +931,18 @@ export default function ReportsPage() {
                           <div className="label">Status</div>
                           <StatusBadge status={auditDetail.status} />
                         </div>
-                        {auditDetail.report_type === "spec_quality" ? (
+                        {auditDetail.report_type === "agent_run" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Session</div>
+                              <StatusBadge status={auditEvidence.session?.status ?? "unknown"} />
+                            </div>
+                            <div className="card">
+                              <div className="label">Context</div>
+                              <div className="metric">{auditEvidence.context?.events?.length ?? 0}</div>
+                            </div>
+                          </>
+                        ) : auditDetail.report_type === "spec_quality" ? (
                           <>
                             <div className="card">
                               <div className="label">Sections</div>
@@ -945,15 +985,30 @@ export default function ReportsPage() {
                         </div>
                       )}
                       <div className="cards" style={{ marginBottom: 12 }}>
-                        <div className="card">
-                          <div className="label">Open feedback</div>
-                          <div className="metric">{auditEvidence.feedback?.open?.length ?? 0}</div>
-                        </div>
-                        <div className="card">
-                          <div className="label">Pending reviews</div>
-                          <div className="metric">{auditEvidence.reviews?.pending?.length ?? 0}</div>
-                        </div>
-                        {auditDetail.report_type === "spec_quality" ? (
+                        {auditDetail.report_type === "agent_run" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Tokens</div>
+                              <div className="metric">{fmtTokens(auditEvidence.token_usage?.total_tokens)}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Halt</div>
+                              <StatusBadge status={auditEvidence.halt_assessment?.verdict ?? "unknown"} />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="card">
+                              <div className="label">Open feedback</div>
+                              <div className="metric">{auditEvidence.feedback?.open?.length ?? 0}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Pending reviews</div>
+                              <div className="metric">{auditEvidence.reviews?.pending?.length ?? 0}</div>
+                            </div>
+                          </>
+                        )}
+                        {auditDetail.report_type === "agent_run" ? null : auditDetail.report_type === "spec_quality" ? (
                           <div className="card">
                             <div className="label">Efficacy</div>
                             <div className="mono">{auditEvidence.efficacy?.runs?.length ?? 0} runs / lift {auditEvidence.efficacy?.avg_lift ?? 0}</div>

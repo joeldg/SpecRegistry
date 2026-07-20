@@ -253,6 +253,235 @@ function renderSpecQualityAuditMarkdown(evidence: any): string {
   return lines.join("\n");
 }
 
+function renderAgentRunAuditMarkdown(evidence: any): string {
+  const compliance = evidence.compliance.linked_attestation;
+  const lines = [
+    `# Agent Run Audit: ${evidence.session.id}`,
+    "",
+    `Generated: ${evidence.generated_at}`,
+    `Status: ${evidence.status.toUpperCase()}`,
+    "",
+    "## Summary",
+    "",
+    evidence.summary,
+    "",
+    "## Session",
+    "",
+    `- Agent: ${evidence.session.agent_identifier}`,
+    `- Task: ${evidence.session.task}`,
+    `- Repo: ${evidence.session.repo ?? "unreported"}`,
+    `- Project type: ${evidence.session.project_type_name ?? "unreported"}`,
+    `- Model: ${evidence.session.model ?? "unreported"}`,
+    `- MCP server: ${evidence.session.mcp_server ?? "unreported"}`,
+    `- Lifecycle status: ${evidence.session.status}`,
+    `- Started: ${evidence.session.started_at}`,
+    `- Completed: ${evidence.session.completed_at ?? "not completed"}`,
+    "",
+    "## Preflight",
+    "",
+    `- Specs loaded: ${evidence.preflight.spec_count}`,
+    `- Blockers: ${evidence.preflight.blockers.length}`,
+    `- Warnings: ${evidence.preflight.warnings.length}`,
+    "",
+    "## Context And Skills",
+    "",
+    `- Context events: ${evidence.context.events.length}`,
+    `- Delivered sections: ${evidence.context.delivered_sections}`,
+    `- Projected context tokens: ${evidence.context.projected_tokens}`,
+    `- Skills referenced: ${evidence.skills.referenced.length}`,
+    "",
+    "## Token Usage",
+    "",
+    `- Real LLM reports: ${evidence.token_usage.reports}`,
+    `- Prompt tokens: ${evidence.token_usage.prompt_tokens}`,
+    `- Completion tokens: ${evidence.token_usage.completion_tokens}`,
+    `- Total tokens: ${evidence.token_usage.total_tokens}`,
+    "",
+    "## Compliance",
+    "",
+    compliance
+      ? `- Linked verdict: ${compliance.compliant ? "PASS" : "FAIL"} (${compliance.objective_score}/100, attempt ${compliance.iteration})`
+      : "- Linked verdict: not recorded",
+    compliance ? `- Coverage: ${fmtPercent(compliance.coverage_ratio)}` : "- Coverage: not reported",
+    compliance ? `- Drift: ${fmtPercent(compliance.drift_score)}` : "- Drift: not reported",
+    `- Completion evidence: ${evidence.completion.summary ? "present" : "missing"}`,
+    "",
+    "## Halt Assessment",
+    "",
+    `- ${evidence.halt_assessment.verdict}: ${evidence.halt_assessment.reason}`,
+    "",
+    "## Outstanding Actions",
+    "",
+    ...(evidence.outstanding_actions.length ? evidence.outstanding_actions.map((item: string) => `- ${item}`) : ["- None detected by deterministic checks."]),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+function buildAgentRunAudit(app: FastifyInstance, sessionId: string, generatedBy: string) {
+  const session = app.db
+    .prepare(
+      `SELECT s.*, pt.name AS project_type_name
+       FROM agent_sessions s
+       LEFT JOIN project_types pt ON pt.id = s.project_type_id
+       WHERE s.id = ?`
+    )
+    .get(sessionId) as Record<string, unknown> | undefined;
+  if (!session) throw new HttpError(404, `Unknown agent session: ${sessionId}`);
+  const preflight = parseJson<Record<string, unknown>>(session.preflight_summary, {});
+  const completion = parseJson<Record<string, unknown>>(session.completion_summary, {});
+  const specBundle = parseJson<unknown[]>(session.spec_bundle, []);
+  const contextEvents = app.db
+    .prepare(
+      `SELECT id, event_type, source, detail, actor, estimated_tokens, section_count, created_at
+       FROM context_events
+       WHERE agent_session_id = ?
+       ORDER BY created_at`
+    )
+    .all(sessionId) as Array<Record<string, unknown>>;
+  const contextSections = app.db
+    .prepare(
+      `SELECT ces.spec_id, ces.filename, ces.section_title, ces.section_anchor,
+              COUNT(*) AS deliveries,
+              SUM(ces.estimated_tokens) AS projected_tokens,
+              MAX(ces.created_at) AS last_delivered_at
+       FROM context_event_sections ces
+       JOIN context_events ce ON ce.id = ces.context_event_id
+       WHERE ce.agent_session_id = ?
+       GROUP BY ces.spec_id, ces.filename, ces.section_anchor, ces.section_title
+       ORDER BY projected_tokens DESC, deliveries DESC
+       LIMIT 50`
+    )
+    .all(sessionId) as Array<Record<string, unknown>>;
+  const llmUsage = app.db
+    .prepare(
+      `SELECT provider, model, route,
+              COUNT(*) AS reports,
+              SUM(prompt_tokens) AS prompt_tokens,
+              SUM(completion_tokens) AS completion_tokens,
+              SUM(total_tokens) AS total_tokens,
+              SUM(cached_tokens) AS cached_tokens,
+              SUM(COALESCE(total_cost_usd, 0)) AS total_cost_usd,
+              MAX(created_at) AS last_reported_at
+       FROM llm_usage_reports
+       WHERE agent_session_id = ?
+       GROUP BY provider, model, route
+       ORDER BY total_tokens DESC`
+    )
+    .all(sessionId) as Array<Record<string, unknown>>;
+  const linkedAttestation = session.compliance_attestation_id
+    ? (app.db.prepare("SELECT * FROM compliance_attestations WHERE id = ?").get(session.compliance_attestation_id) as Record<string, unknown> | undefined)
+    : undefined;
+  const repoAttempts = session.repo
+    ? (app.db
+        .prepare(
+          `SELECT * FROM compliance_attestations
+           WHERE repo = ? AND created_at >= ?
+           ORDER BY created_at DESC
+           LIMIT 10`
+        )
+        .all(session.repo, session.started_at) as Array<Record<string, unknown>>)
+    : [];
+  const skillRefs = new Set<string>();
+  const addSkillRefs = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) if (typeof item === "string" && item.trim()) skillRefs.add(item.trim());
+    }
+  };
+  addSkillRefs((preflight as any).skills_loaded);
+  addSkillRefs((completion as any).skills_loaded);
+  addSkillRefs((completion as any).skills);
+  const promptTokens = llmUsage.reduce((sum, row) => sum + Number(row.prompt_tokens ?? 0), 0);
+  const completionTokens = llmUsage.reduce((sum, row) => sum + Number(row.completion_tokens ?? 0), 0);
+  const totalTokens = llmUsage.reduce((sum, row) => sum + Number(row.total_tokens ?? 0), 0);
+  const preflightBlockers = Array.isArray(preflight.blockers) ? preflight.blockers : [];
+  const preflightWarnings = Array.isArray(preflight.warnings) ? preflight.warnings : [];
+  const completionOutstanding = Array.isArray(completion.outstanding) ? completion.outstanding : [];
+  let haltAssessment: { verdict: "pass" | "warning" | "fail"; reason: string };
+  if (session.status === "completed" && linkedAttestation && Number(linkedAttestation.compliant) === 1) {
+    haltAssessment = { verdict: "pass", reason: "Session completed with a linked passing objective compliance attestation." };
+  } else if (session.status === "blocked" && Object.keys(completion).length > 0) {
+    haltAssessment = { verdict: "warning", reason: "Session halted in a blocked state and preserved completion/compliance evidence." };
+  } else if (session.status === "active") {
+    haltAssessment = { verdict: "warning", reason: "Session is still active; no terminal completion or blocked halt is recorded." };
+  } else {
+    haltAssessment = { verdict: "fail", reason: "Session terminal state is not backed by passing compliance evidence." };
+  }
+  const outstanding = [
+    ...(session.status === "active" ? ["Session is still active; call finish_task or record a blocked halt before claiming completion."] : []),
+    ...(!Object.keys(completion).length ? ["No completion summary has been recorded for this session."] : []),
+    ...(!linkedAttestation ? ["No linked compliance attestation is recorded for this session."] : []),
+    ...(linkedAttestation && Number(linkedAttestation.compliant) === 0 ? ["Linked compliance attestation failed; the task must not be treated as complete."] : []),
+    ...(!contextEvents.length ? ["No registry context events are recorded for this session."] : []),
+    ...(!llmUsage.length ? ["No real LLM token usage reports are recorded for this session."] : []),
+    ...(preflightBlockers.length ? [`Preflight recorded ${preflightBlockers.length} blocker(s).`] : []),
+  ];
+  const status = haltAssessment.verdict === "fail" ? "fail" : outstanding.length ? "warning" : "pass";
+  const summary =
+    status === "pass"
+      ? "Deterministic checks found a completed agent run with preflight context, token telemetry, and passing compliance evidence."
+      : status === "fail"
+        ? "Deterministic checks found a terminal agent run without acceptable compliance evidence."
+        : "Deterministic checks found agent-run warnings that should be reviewed before relying on the run as governed evidence.";
+  const evidence = {
+    generated_at: now(),
+    generated_by: generatedBy,
+    report_type: "agent_run",
+    subject_type: "agent_session",
+    status,
+    summary,
+    session: {
+      ...session,
+      spec_bundle: specBundle,
+      preflight_summary: preflight,
+      completion_summary: completion,
+    },
+    preflight: {
+      spec_count: Number(session.spec_count ?? specBundle.length),
+      blockers: preflightBlockers,
+      warnings: preflightWarnings,
+      declared_specs_loaded: Array.isArray(preflight.declared_specs_loaded) ? preflight.declared_specs_loaded : [],
+    },
+    context: {
+      events: contextEvents,
+      sections: contextSections,
+      projected_tokens: contextEvents.reduce((sum, row) => sum + Number(row.estimated_tokens ?? 0), 0),
+      delivered_sections: contextEvents.reduce((sum, row) => sum + Number(row.section_count ?? 0), 0),
+    },
+    skills: { referenced: [...skillRefs] },
+    token_usage: {
+      reports: llmUsage.reduce((sum, row) => sum + Number(row.reports ?? 0), 0),
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      by_route: llmUsage,
+    },
+    compliance: {
+      linked_attestation: linkedAttestation ? { ...linkedAttestation, outstanding: parseJson(linkedAttestation.outstanding, []) } : null,
+      attempts: repoAttempts.map((row) => ({ ...row, outstanding: parseJson(row.outstanding, []) })),
+    },
+    completion: {
+      summary: Object.keys(completion).length ? completion : null,
+      outstanding: completionOutstanding,
+    },
+    halt_assessment: haltAssessment,
+    outstanding_actions: outstanding,
+  };
+  return {
+    id: uuid(),
+    report_type: "agent_run",
+    subject_type: "agent_session",
+    subject_id: String(session.id),
+    subject_label: `${session.agent_identifier}: ${String(session.task).slice(0, 80)}`,
+    status,
+    summary,
+    evidence,
+    markdown: renderAgentRunAuditMarkdown(evidence),
+    generated_by: generatedBy,
+    created_at: evidence.generated_at,
+  };
+}
+
 function buildSpecQualityAudit(app: FastifyInstance, specId: string, generatedBy: string) {
   const spec = requireSpec(app.db, specId);
   const projectType = requireProjectType(app.db, spec.project_type_id);
@@ -2071,6 +2300,54 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       target_id: report.id,
       summary: `Spec quality audit generated for ${report.subject_label}`,
       detail: { report_type: report.report_type, status: report.status, spec_id: report.subject_id },
+    });
+    reply.code(201);
+    return {
+      id: report.id,
+      report_type: report.report_type,
+      subject_type: report.subject_type,
+      subject_id: report.subject_id,
+      subject_label: report.subject_label,
+      status: report.status,
+      summary: report.summary,
+      evidence: report.evidence,
+      markdown: report.markdown,
+      generated_by: report.generated_by,
+      created_at: report.created_at,
+    };
+  });
+
+  app.post("/audit-reports/agent-session", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const sessionId = requireString(body, "session_id");
+    const report = buildAgentRunAudit(app, sessionId, actorFrom(req, "admin"));
+    app.db
+      .prepare(
+        `INSERT INTO audit_reports
+          (id, report_type, subject_type, subject_id, subject_label, status, summary,
+           evidence_json, markdown, llm_summary, generated_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+      )
+      .run(
+        report.id,
+        report.report_type,
+        report.subject_type,
+        report.subject_id,
+        report.subject_label,
+        report.status,
+        report.summary,
+        JSON.stringify(report.evidence, null, 2),
+        report.markdown,
+        report.generated_by,
+        report.created_at
+      );
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "audit_report.generated",
+      target_type: "audit_report",
+      target_id: report.id,
+      summary: `Agent run audit generated for ${report.subject_label}`,
+      detail: { report_type: report.report_type, status: report.status, agent_session_id: report.subject_id },
     });
     reply.code(201);
     return {

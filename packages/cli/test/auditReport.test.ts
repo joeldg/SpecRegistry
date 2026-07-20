@@ -125,3 +125,54 @@ test("audit-report can generate agent run reports", async () => {
   assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/agent-session");
   assert.deepEqual(requests[0].body, { session_id: "session-1" });
 });
+
+test("audit-report can generate release PR reports", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: URL; body: any }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return response({
+      ...reportBody(),
+      report_type: "release",
+      subject_type: "release",
+      subject_id: "project-1",
+      subject_label: "PR #12",
+      markdown: "# Release/PR Audit: PR #12\n",
+    }, { status: 201 });
+  }) as typeof fetch;
+  try {
+    await runAuditReport({
+      server: "https://specreg.example.com",
+      project: "github.com/acme/app",
+      release: true,
+      changedFiles: "src/app.ts, src/routes.ts",
+      tests: "npm test",
+      checks: "unit, lint",
+      approvals: "reviewer-approved",
+      commitEvidence: "SpecRegistry-Compliance: PASS",
+      specsLoaded: "API.md, STRUCTURE.md",
+      base: "main",
+      head: "abc123",
+      url: "https://github.com/acme/app/pull/12",
+      label: "PR #12",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/release");
+  assert.deepEqual(requests[0].body, {
+    project: "github.com/acme/app",
+    changed_files: ["src/app.ts", "src/routes.ts"],
+    tests: ["npm test"],
+    checks: ["unit", "lint"],
+    approvals: ["reviewer-approved"],
+    commit_evidence: "SpecRegistry-Compliance: PASS",
+    specs_loaded: ["API.md", "STRUCTURE.md"],
+    base: "main",
+    head: "abc123",
+    url: "https://github.com/acme/app/pull/12",
+    label: "PR #12",
+  });
+});

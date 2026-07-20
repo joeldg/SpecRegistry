@@ -36,7 +36,7 @@ Usage:
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
-  specreg audit-report  Generate deterministic project, spec, or agent-run audit evidence
+  specreg audit-report  Generate deterministic project, spec, agent-run, or release/PR audit evidence
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
   specreg skills list|search|check|sync  List/search skills, verify local skill currency, or refresh them
   specreg skills sources list|add|scan  Manage marketplace skill sources
@@ -88,6 +88,17 @@ Options:
   --project <id>    audit-report: project id or repo slug (default: current git repo)
   --spec <id>       audit-report: generate a spec quality audit for this spec id
   --session <id>    audit-report: generate an agent run audit for this session id
+  --release         audit-report: generate a release/PR audit for the project
+  --changed-files <csv> audit-report release: comma-separated changed files
+  --tests <csv>     audit-report release: comma-separated tests run
+  --checks <csv>    audit-report release: comma-separated CI/check names
+  --approvals <csv> audit-report release: comma-separated approval states
+  --commit-evidence <text> audit-report release: SpecRegistry compliance trailer or finish_task evidence
+  --specs-loaded <csv> audit-report release: comma-separated specs loaded
+  --base <sha>      audit-report release: base commit/ref
+  --head <sha>      audit-report release: head commit/ref
+  --url <url>       audit-report release: PR or release URL
+  --label <text>    audit-report release: display label
   -h, --help        Show this help
 `;
 
@@ -304,6 +315,17 @@ try {
       project: typeof flags.project === "string" ? flags.project : undefined,
       spec: typeof flags.spec === "string" ? flags.spec : undefined,
       session: typeof flags.session === "string" ? flags.session : undefined,
+      release: flags.release === true,
+      changedFiles: typeof flags["changed-files"] === "string" ? flags["changed-files"] : undefined,
+      tests: typeof flags.tests === "string" ? flags.tests : undefined,
+      checks: typeof flags.checks === "string" ? flags.checks : undefined,
+      approvals: typeof flags.approvals === "string" ? flags.approvals : undefined,
+      commitEvidence: typeof flags["commit-evidence"] === "string" ? flags["commit-evidence"] : undefined,
+      specsLoaded: typeof flags["specs-loaded"] === "string" ? flags["specs-loaded"] : undefined,
+      base: typeof flags.base === "string" ? flags.base : undefined,
+      head: typeof flags.head === "string" ? flags.head : undefined,
+      url: typeof flags.url === "string" ? flags.url : undefined,
+      label: typeof flags.label === "string" ? flags.label : undefined,
       out: typeof flags.out === "string" ? flags.out : undefined,
       json: flags.json === true,
     });

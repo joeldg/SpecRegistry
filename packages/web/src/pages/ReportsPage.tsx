@@ -110,10 +110,17 @@ export default function ReportsPage() {
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
   const [auditReports, setAuditReports] = useState<AuditReportSummaryRow[]>([]);
   const [agentSessions, setAgentSessions] = useState<AgentSessionRow[]>([]);
-  const [auditTarget, setAuditTarget] = useState<"project" | "spec" | "session">("project");
+  const [auditTarget, setAuditTarget] = useState<"project" | "spec" | "session" | "release">("project");
   const [selectedAuditProjectId, setSelectedAuditProjectId] = useState("");
   const [selectedAuditSpecId, setSelectedAuditSpecId] = useState("");
   const [selectedAuditSessionId, setSelectedAuditSessionId] = useState("");
+  const [releaseAuditLabel, setReleaseAuditLabel] = useState("");
+  const [releaseAuditChangedFiles, setReleaseAuditChangedFiles] = useState("");
+  const [releaseAuditTests, setReleaseAuditTests] = useState("");
+  const [releaseAuditChecks, setReleaseAuditChecks] = useState("");
+  const [releaseAuditApprovals, setReleaseAuditApprovals] = useState("");
+  const [releaseAuditCommitEvidence, setReleaseAuditCommitEvidence] = useState("");
+  const [releaseAuditSpecsLoaded, setReleaseAuditSpecsLoaded] = useState("");
   const [selectedAuditReportId, setSelectedAuditReportId] = useState("");
   const [auditDetail, setAuditDetail] = useState<AuditReportDetail>();
   const [tokenProjectId, setTokenProjectId] = useState("");
@@ -297,16 +304,28 @@ export default function ReportsPage() {
   }
 
   async function generateProjectAudit() {
-    if (auditTarget === "project" && !selectedAuditProjectId) return;
+    if ((auditTarget === "project" || auditTarget === "release") && !selectedAuditProjectId) return;
     if (auditTarget === "spec" && !selectedAuditSpecId) return;
     if (auditTarget === "session" && !selectedAuditSessionId) return;
     setBusy("audit-report");
     setError(undefined);
     setNotice(undefined);
     try {
-      const generated = auditTarget === "session"
-        ? await api.createAgentRunAuditReport(selectedAuditSessionId)
-        : auditTarget === "spec"
+      const splitList = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
+      const generated = auditTarget === "release"
+        ? await api.createReleaseAuditReport({
+            project: selectedAuditProjectId,
+            label: releaseAuditLabel.trim() || undefined,
+            changed_files: splitList(releaseAuditChangedFiles),
+            tests: splitList(releaseAuditTests),
+            checks: splitList(releaseAuditChecks),
+            approvals: splitList(releaseAuditApprovals),
+            commit_evidence: releaseAuditCommitEvidence.trim() || undefined,
+            specs_loaded: splitList(releaseAuditSpecsLoaded),
+          })
+        : auditTarget === "session"
+          ? await api.createAgentRunAuditReport(selectedAuditSessionId)
+          : auditTarget === "spec"
           ? await api.createSpecAuditReport(selectedAuditSpecId)
           : await api.createProjectAuditReport(selectedAuditProjectId);
       setAuditDetail(generated);
@@ -314,6 +333,8 @@ export default function ReportsPage() {
       setNotice(
         auditTarget === "session"
           ? "Agent run audit generated."
+          : auditTarget === "release"
+            ? "Release/PR audit generated."
           : auditTarget === "spec"
             ? "Spec quality audit generated."
             : "Project governance audit generated."
@@ -391,6 +412,10 @@ export default function ReportsPage() {
     session?: { status?: string; spec_count?: number };
     context?: { events?: unknown[]; projected_tokens?: number; delivered_sections?: number };
     halt_assessment?: { verdict?: string; reason?: string };
+    release?: { changed_files?: unknown[] };
+    changed_file_mapping?: Array<{ file: string; specs: string[]; link_count: number }>;
+    validation?: { tests?: unknown[]; checks?: unknown[]; approvals?: unknown[]; commit_evidence?: string | null };
+    rollout_risk?: { level?: string; reasons?: string[] };
   };
 
   return (
@@ -844,8 +869,9 @@ export default function ReportsPage() {
                 <option value="project">Project Governance</option>
                 <option value="spec">Spec Quality</option>
                 <option value="session">Agent Run</option>
+                <option value="release">Release/PR</option>
               </select>
-              {auditTarget === "project" ? (
+              {auditTarget === "project" || auditTarget === "release" ? (
                 <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
@@ -872,10 +898,16 @@ export default function ReportsPage() {
               )}
               <button
                 className="primary"
-                disabled={(auditTarget === "project" ? !selectedAuditProjectId : auditTarget === "spec" ? !selectedAuditSpecId : !selectedAuditSessionId) || busy === "audit-report"}
+                disabled={(
+                  auditTarget === "project" || auditTarget === "release"
+                    ? !selectedAuditProjectId
+                    : auditTarget === "spec"
+                      ? !selectedAuditSpecId
+                      : !selectedAuditSessionId
+                ) || busy === "audit-report"}
                 onClick={generateProjectAudit}
               >
-                {busy === "audit-report" ? "Generating..." : auditTarget === "session" ? "Generate Agent Audit" : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
+                {busy === "audit-report" ? "Generating..." : auditTarget === "release" ? "Generate Release Audit" : auditTarget === "session" ? "Generate Agent Audit" : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
               </button>
               {auditDetail && (
                 <a className="button-link" href={`/api/v1/audit-reports/${auditDetail.id}/markdown`}>
@@ -883,7 +915,48 @@ export default function ReportsPage() {
                 </a>
               )}
             </div>
+            {auditTarget === "release" && (
+              <div className="report-controls" style={{ marginTop: 8 }}>
+                <input
+                  value={releaseAuditLabel}
+                  onChange={(e) => setReleaseAuditLabel(e.target.value)}
+                  placeholder="Label, e.g. PR #42"
+                />
+                <input
+                  value={releaseAuditChangedFiles}
+                  onChange={(e) => setReleaseAuditChangedFiles(e.target.value)}
+                  placeholder="Changed files, comma-separated"
+                />
+                <input
+                  value={releaseAuditTests}
+                  onChange={(e) => setReleaseAuditTests(e.target.value)}
+                  placeholder="Tests run, comma-separated"
+                />
+                <input
+                  value={releaseAuditChecks}
+                  onChange={(e) => setReleaseAuditChecks(e.target.value)}
+                  placeholder="Checks passed, comma-separated"
+                />
+                <input
+                  value={releaseAuditApprovals}
+                  onChange={(e) => setReleaseAuditApprovals(e.target.value)}
+                  placeholder="Approvals, comma-separated"
+                />
+                <input
+                  value={releaseAuditCommitEvidence}
+                  onChange={(e) => setReleaseAuditCommitEvidence(e.target.value)}
+                  placeholder="Commit compliance trailer"
+                />
+                <input
+                  value={releaseAuditSpecsLoaded}
+                  onChange={(e) => setReleaseAuditSpecsLoaded(e.target.value)}
+                  placeholder="Specs loaded, comma-separated"
+                />
+              </div>
+            )}
             {auditTarget === "project" && projects.length === 0 ? (
+              <div className="empty">No projects have reported manifests yet. Run `specreg init` or `specreg check` from a project first.</div>
+            ) : auditTarget === "release" && projects.length === 0 ? (
               <div className="empty">No projects have reported manifests yet. Run `specreg init` or `specreg check` from a project first.</div>
             ) : auditTarget === "session" && agentSessions.length === 0 ? (
               <div className="empty">No agent sessions have been recorded yet. Agents should call `begin_task` before governed work.</div>
@@ -931,7 +1004,18 @@ export default function ReportsPage() {
                           <div className="label">Status</div>
                           <StatusBadge status={auditDetail.status} />
                         </div>
-                        {auditDetail.report_type === "agent_run" ? (
+                        {auditDetail.report_type === "release" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Changed files</div>
+                              <div className="metric">{auditEvidence.release?.changed_files?.length ?? 0}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Mapped files</div>
+                              <div className="metric">{auditEvidence.changed_file_mapping?.filter((row) => row.specs.length > 0).length ?? 0}</div>
+                            </div>
+                          </>
+                        ) : auditDetail.report_type === "agent_run" ? (
                           <>
                             <div className="card">
                               <div className="label">Session</div>
@@ -985,7 +1069,18 @@ export default function ReportsPage() {
                         </div>
                       )}
                       <div className="cards" style={{ marginBottom: 12 }}>
-                        {auditDetail.report_type === "agent_run" ? (
+                        {auditDetail.report_type === "release" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Validation</div>
+                              <div className="mono">{auditEvidence.validation?.tests?.length ?? 0} tests / {auditEvidence.validation?.checks?.length ?? 0} checks / {auditEvidence.validation?.approvals?.length ?? 0} approvals</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Rollout risk</div>
+                              <StatusBadge status={auditEvidence.rollout_risk?.level ?? "unknown"} />
+                            </div>
+                          </>
+                        ) : auditDetail.report_type === "agent_run" ? (
                           <>
                             <div className="card">
                               <div className="label">Tokens</div>
@@ -1008,7 +1103,7 @@ export default function ReportsPage() {
                             </div>
                           </>
                         )}
-                        {auditDetail.report_type === "agent_run" ? null : auditDetail.report_type === "spec_quality" ? (
+                        {auditDetail.report_type === "agent_run" || auditDetail.report_type === "release" ? null : auditDetail.report_type === "spec_quality" ? (
                           <div className="card">
                             <div className="label">Efficacy</div>
                             <div className="mono">{auditEvidence.efficacy?.runs?.length ?? 0} runs / lift {auditEvidence.efficacy?.avg_lift ?? 0}</div>

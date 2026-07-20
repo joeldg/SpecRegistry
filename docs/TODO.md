@@ -166,7 +166,7 @@ timestamps.
 - [x] Agent Run Audit: session identity, task/model, specs loaded, searches/context events,
   skills loaded, token reports, compliance attempts, finish evidence, and whether the
   agent halted correctly on unavailable/failing gates.
-- [ ] Release/PR Audit: changed files, mapped specs, required specs loaded, tests/checks
+- [x] Release/PR Audit: changed files, mapped specs, required specs loaded, tests/checks
   run, compliance result, approval state, commit evidence trailer, and residual risk.
 - [ ] Registry Operations Audit: server version, public URL posture, auth/admin-password
   posture, API key posture, backup status, LLM provider configuration, source/candidate

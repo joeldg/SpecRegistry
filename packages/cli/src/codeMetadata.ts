@@ -83,6 +83,7 @@ export interface SpecReference {
 
 export interface TraceabilityLink {
   entity_id: string;
+  entity_path: string;
   entity_name: string;
   entity_kind: CodeEntityKind;
   spec_filename: string;
@@ -692,6 +693,7 @@ function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): Tr
         const sectionKnown = !refSection || spec.sections.some((s) => sectionAnchor(s) === refSection.toLowerCase());
         links.push({
           entity_id: entity.id,
+          entity_path: entity.path,
           entity_name: entity.name,
           entity_kind: entity.kind,
           spec_filename: spec.filename,
@@ -721,6 +723,7 @@ function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): Tr
       const confidence = Math.min(0.95, 0.35 + matched.length * 0.12 + (directName ? 0.2 : 0) + (directRoute ? 0.25 : 0));
       links.push({
         entity_id: entity.id,
+        entity_path: entity.path,
         entity_name: entity.name,
         entity_kind: entity.kind,
         spec_filename: spec.filename,

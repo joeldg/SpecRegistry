@@ -91,6 +91,12 @@ function fmtPercent(value: unknown): string {
   return `${Math.round(n * 100)}%`;
 }
 
+function stringArrayValue(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
 function auditStatus(flags: { failingCompliance: boolean; warnings: string[] }): "pass" | "warning" | "fail" {
   if (flags.failingCompliance) return "fail";
   return flags.warnings.length ? "warning" : "pass";
@@ -316,6 +322,245 @@ function renderAgentRunAuditMarkdown(evidence: any): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function renderReleaseAuditMarkdown(evidence: any): string {
+  const latestCompliance = evidence.compliance.latest;
+  const trace = evidence.traceability.latest;
+  const lines = [
+    `# Release/PR Audit: ${evidence.release.label}`,
+    "",
+    `Generated: ${evidence.generated_at}`,
+    `Status: ${evidence.status.toUpperCase()}`,
+    "",
+    "## Summary",
+    "",
+    evidence.summary,
+    "",
+    "## Release",
+    "",
+    `- Project: ${evidence.project.repo}`,
+    `- Project type: ${evidence.project.project_type_name}`,
+    `- Base: ${evidence.release.base ?? "unreported"}`,
+    `- Head: ${evidence.release.head ?? "unreported"}`,
+    `- URL: ${evidence.release.url ?? "unreported"}`,
+    `- Changed files: ${evidence.release.changed_files.length}`,
+    "",
+    "## Changed File Coverage",
+    "",
+    "| File | Mapped specs | Trace links |",
+    "| --- | --- | ---: |",
+    ...evidence.changed_file_mapping.map((row: any) =>
+      `| ${row.file} | ${row.specs.length ? row.specs.join(", ") : "none"} | ${row.link_count} |`
+    ),
+    "",
+    "## Required Specs",
+    "",
+    `- Required/current specs: ${evidence.required_specs.current.length}`,
+    `- Specs declared loaded: ${evidence.required_specs.loaded.length || "none"}`,
+    `- Missing from declared loaded set: ${evidence.required_specs.missing_loaded.length}`,
+    "",
+    "## Checks And Tests",
+    "",
+    `- Tests reported: ${evidence.validation.tests.length}`,
+    `- Checks reported: ${evidence.validation.checks.length}`,
+    `- Approvals reported: ${evidence.validation.approvals.length}`,
+    `- Commit evidence trailer: ${evidence.validation.commit_evidence ? "present" : "missing"}`,
+    "",
+    "## Compliance",
+    "",
+    latestCompliance
+      ? `- Latest verdict: ${latestCompliance.compliant ? "PASS" : "FAIL"} (${latestCompliance.objective_score}/100, attempt ${latestCompliance.iteration})`
+      : "- Latest verdict: not reported",
+    latestCompliance ? `- Coverage: ${fmtPercent(latestCompliance.coverage_ratio)}` : "- Coverage: not reported",
+    latestCompliance ? `- Drift: ${fmtPercent(latestCompliance.drift_score)}` : "- Drift: not reported",
+    trace ? `- Latest trace: ${fmtPercent(trace.coverage_ratio)} coverage, ${fmtPercent(trace.drift_score)} drift (${trace.drift_severity})` : "- Latest trace: not reported",
+    "",
+    "## Rollout Risk",
+    "",
+    `- Risk level: ${evidence.rollout_risk.level}`,
+    ...evidence.rollout_risk.reasons.map((reason: string) => `- ${reason}`),
+    "",
+    "## Outstanding Actions",
+    "",
+    ...(evidence.outstanding_actions.length ? evidence.outstanding_actions.map((item: string) => `- ${item}`) : ["- None detected by deterministic checks."]),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+function buildReleaseAudit(app: FastifyInstance, input: Record<string, unknown>, generatedBy: string) {
+  const project = requireProjectConsumer(app.db, requireString(input, "project"));
+  const projectType = requireProjectType(app.db, project.project_type_id);
+  const changedFiles = stringArrayValue(input.changed_files);
+  const tests = stringArrayValue(input.tests);
+  const checks = stringArrayValue(input.checks);
+  const approvals = stringArrayValue(input.approvals);
+  const loadedSpecs = stringArrayValue(input.specs_loaded);
+  const commitEvidence = typeof input.commit_evidence === "string" && input.commit_evidence.trim() ? input.commit_evidence.trim() : null;
+  const base = typeof input.base === "string" && input.base.trim() ? input.base.trim() : null;
+  const head = typeof input.head === "string" && input.head.trim() ? input.head.trim() : null;
+  const url = typeof input.url === "string" && input.url.trim() ? input.url.trim() : null;
+  const label = typeof input.label === "string" && input.label.trim()
+    ? input.label.trim()
+    : `${project.repo}${head ? ` @ ${head.slice(0, 12)}` : ""}`;
+  const specCurrency = projectSpecCurrency(app.db, project.id, project.project_type_id);
+  const currentSpecs = app.db
+    .prepare(
+      `SELECT s.id, s.filename, s.current_version,
+              CASE WHEN s.project_id IS NOT NULL THEN 'project' ELSE pt.scope END AS scope
+       FROM specs s
+       JOIN project_types pt ON pt.id = s.project_type_id
+       WHERE s.deleted_at IS NULL
+         AND s.status = 'published'
+         AND (pt.scope = 'global' OR s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY CASE scope WHEN 'global' THEN 0 WHEN 'project_type' THEN 1 ELSE 2 END, s.filename`
+    )
+    .all(project.project_type_id, project.id) as Array<Record<string, unknown>>;
+  const latestTrace = app.db
+    .prepare("SELECT * FROM code_trace_reports WHERE consumer_id = ? ORDER BY created_at DESC LIMIT 1")
+    .get(project.id) as Record<string, unknown> | undefined;
+  const traceLinks = latestTrace
+    ? (app.db
+        .prepare(
+          `SELECT entity_path, entity_name, entity_kind, spec_filename, confidence
+           FROM code_trace_links
+           WHERE report_id = ? AND entity_path IS NOT NULL
+           ORDER BY entity_path, spec_filename, confidence DESC`
+        )
+        .all(latestTrace.id) as Array<Record<string, unknown>>)
+    : [];
+  const normalizeFile = (file: string) => file.replace(/\\/g, "/").replace(/^\.\//, "");
+  const mappedSpecs = new Set<string>();
+  const changedFileMapping = changedFiles.map((file) => {
+    const normalized = normalizeFile(file);
+    const links = traceLinks.filter((link) => normalizeFile(String(link.entity_path ?? "")) === normalized);
+    const specs = [...new Set(links.map((link) => String(link.spec_filename)).filter(Boolean))].sort();
+    for (const spec of specs) mappedSpecs.add(spec);
+    return {
+      file: normalized,
+      specs,
+      link_count: links.length,
+      links: links.slice(0, 20),
+    };
+  });
+  const latestCompliance = app.db
+    .prepare("SELECT * FROM compliance_attestations WHERE consumer_id = ? OR repo = ? ORDER BY created_at DESC LIMIT 1")
+    .get(project.id, project.repo) as Record<string, unknown> | undefined;
+  const recentSessions = app.db
+    .prepare("SELECT id, agent_identifier, task, status, completion_summary, compliance_attestation_id, started_at, completed_at FROM agent_sessions WHERE consumer_id = ? OR repo = ? ORDER BY started_at DESC LIMIT 10")
+    .all(project.id, project.repo) as Array<Record<string, unknown>>;
+  const openFeedback = app.db
+    .prepare(
+      `SELECT af.id, af.error_type, af.topic, af.status, af.created_at, s.filename
+       FROM agent_feedback af
+       LEFT JOIN specs s ON s.id = af.spec_id
+       WHERE af.status = 'open'
+         AND (af.project_type_id = ? OR s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY af.created_at DESC
+       LIMIT 25`
+    )
+    .all(project.project_type_id, project.project_type_id, project.id);
+  const pendingReviews = app.db
+    .prepare(
+      `SELECT cr.id, cr.status, cr.summary, cr.created_at, s.filename
+       FROM change_requests cr
+       JOIN specs s ON s.id = cr.spec_id
+       WHERE cr.status = 'pending' AND (s.project_type_id = ? OR s.project_id = ?)
+       ORDER BY cr.created_at DESC
+       LIMIT 25`
+    )
+    .all(project.project_type_id, project.id);
+  const loadedLower = new Set(loadedSpecs.map((spec) => spec.toLowerCase()));
+  const missingLoaded = loadedSpecs.length
+    ? currentSpecs.filter((spec) => !loadedLower.has(String(spec.filename).toLowerCase())).map((spec) => spec.filename)
+    : [];
+  const unmappedChanged = changedFileMapping.filter((row) => row.specs.length === 0);
+  const riskReasons = [
+    ...(latestCompliance && Number(latestCompliance.compliant) === 0 ? ["Latest compliance attestation is failing."] : []),
+    ...(!latestCompliance ? ["No compliance attestation has been recorded for this project."] : []),
+    ...(!latestTrace ? ["No code trace report is available for changed-file mapping."] : []),
+    ...(latestTrace && String(latestTrace.drift_severity) === "high" ? ["Latest code trace drift is high."] : []),
+    ...(unmappedChanged.length ? [`${unmappedChanged.length} changed file(s) have no mapped governing specs.`] : []),
+    ...(specCurrency.outdated_count ? [`${specCurrency.outdated_count} governed spec(s) are out of date in the project manifest.`] : []),
+    ...(!tests.length ? ["No tests were reported for this release/PR evidence."] : []),
+    ...(!checks.length ? ["No CI/check results were reported for this release/PR evidence."] : []),
+    ...(!approvals.length ? ["No approval state was reported for this release/PR evidence."] : []),
+    ...(!commitEvidence ? ["No commit compliance evidence trailer was reported for this release/PR evidence."] : []),
+    ...(pendingReviews.length ? [`${pendingReviews.length} pending review(s) may affect release guidance.`] : []),
+    ...(openFeedback.length ? [`${openFeedback.length} open feedback item(s) need triage.`] : []),
+  ];
+  const rolloutLevel = latestCompliance && Number(latestCompliance.compliant) === 0
+    ? "high"
+    : riskReasons.length >= 4 || unmappedChanged.length > 0
+      ? "medium"
+      : riskReasons.length
+        ? "low"
+        : "low";
+  const outstanding = [
+    ...riskReasons,
+    ...(loadedSpecs.length === 0 ? ["No loaded spec list was provided; agents should include specs_loaded or equivalent context evidence."] : []),
+    ...(missingLoaded.length ? [`${missingLoaded.length} current required spec(s) were not declared in specs_loaded.`] : []),
+  ];
+  const status = auditStatus({
+    failingCompliance: Boolean(latestCompliance && Number(latestCompliance.compliant) === 0),
+    warnings: outstanding,
+  });
+  const summary =
+    status === "pass"
+      ? "Deterministic checks found changed files mapped to governed specs, reported validation, current specs, and passing compliance evidence."
+      : status === "fail"
+        ? "Deterministic checks found failing compliance evidence for this release/PR."
+        : "Deterministic checks found release/PR warnings that should be reviewed before merge or deployment.";
+  const evidence = {
+    generated_at: now(),
+    generated_by: generatedBy,
+    report_type: "release",
+    subject_type: "release",
+    status,
+    summary,
+    project: { ...project, project_type_name: projectType.name },
+    release: { label, base, head, url, changed_files: changedFiles.map(normalizeFile) },
+    changed_file_mapping: changedFileMapping,
+    required_specs: {
+      current: currentSpecs,
+      loaded: loadedSpecs,
+      missing_loaded: missingLoaded,
+      mapped_by_changed_files: [...mappedSpecs].sort(),
+    },
+    validation: { tests, checks, approvals, commit_evidence: commitEvidence },
+    compliance: {
+      latest: latestCompliance ? { ...latestCompliance, outstanding: parseJson(latestCompliance.outstanding, []) } : null,
+    },
+    traceability: {
+      latest: latestTrace ? { ...latestTrace, unlinked_sample: parseJson(latestTrace.unlinked_sample, []) } : null,
+      link_count: traceLinks.length,
+    },
+    spec_currency: specCurrency,
+    reviews: { pending: pendingReviews },
+    feedback: { open: openFeedback },
+    agent_sessions: {
+      recent: recentSessions.map((session) => ({
+        ...session,
+        completion_summary: parseJson(session.completion_summary, null),
+      })),
+    },
+    rollout_risk: { level: rolloutLevel, reasons: riskReasons },
+    outstanding_actions: outstanding,
+  };
+  return {
+    id: uuid(),
+    report_type: "release",
+    subject_type: "release",
+    subject_id: project.id,
+    subject_label: label,
+    status,
+    summary,
+    evidence,
+    markdown: renderReleaseAuditMarkdown(evidence),
+    generated_by: generatedBy,
+    created_at: evidence.generated_at,
+  };
 }
 
 function buildAgentRunAudit(app: FastifyInstance, sessionId: string, generatedBy: string) {
@@ -2348,6 +2593,53 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       target_id: report.id,
       summary: `Agent run audit generated for ${report.subject_label}`,
       detail: { report_type: report.report_type, status: report.status, agent_session_id: report.subject_id },
+    });
+    reply.code(201);
+    return {
+      id: report.id,
+      report_type: report.report_type,
+      subject_type: report.subject_type,
+      subject_id: report.subject_id,
+      subject_label: report.subject_label,
+      status: report.status,
+      summary: report.summary,
+      evidence: report.evidence,
+      markdown: report.markdown,
+      generated_by: report.generated_by,
+      created_at: report.created_at,
+    };
+  });
+
+  app.post("/audit-reports/release", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const report = buildReleaseAudit(app, body, actorFrom(req, "admin"));
+    app.db
+      .prepare(
+        `INSERT INTO audit_reports
+          (id, report_type, subject_type, subject_id, subject_label, status, summary,
+           evidence_json, markdown, llm_summary, generated_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+      )
+      .run(
+        report.id,
+        report.report_type,
+        report.subject_type,
+        report.subject_id,
+        report.subject_label,
+        report.status,
+        report.summary,
+        JSON.stringify(report.evidence, null, 2),
+        report.markdown,
+        report.generated_by,
+        report.created_at
+      );
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "audit_report.generated",
+      target_type: "audit_report",
+      target_id: report.id,
+      summary: `Release/PR audit generated for ${report.subject_label}`,
+      detail: { report_type: report.report_type, status: report.status, project_id: report.subject_id },
     });
     reply.code(201);
     return {

@@ -10,8 +10,23 @@ export interface AuditReportOptions {
   project?: string;
   spec?: string;
   session?: string;
+  release?: boolean;
+  changedFiles?: string;
+  tests?: string;
+  checks?: string;
+  approvals?: string;
+  commitEvidence?: string;
+  specsLoaded?: string;
+  base?: string;
+  head?: string;
+  url?: string;
+  label?: string;
   out?: string;
   json?: boolean;
+}
+
+function splitList(value: string | undefined): string[] {
+  return value?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
 }
 
 function summarize(report: AuditReportSummary): string {
@@ -20,6 +35,8 @@ function summarize(report: AuditReportSummary): string {
       ? "spec quality"
       : report.report_type === "agent_run"
         ? "agent run"
+        : report.report_type === "release"
+          ? "release/PR"
         : "project governance";
   return [
     `Generated ${label} audit for ${report.subject_label}`,
@@ -30,14 +47,30 @@ function summarize(report: AuditReportSummary): string {
 }
 
 export async function runAuditReport(opts: AuditReportOptions): Promise<void> {
-  const explicitTargets = [opts.project, opts.spec, opts.session].filter((value) => typeof value === "string" && value.trim()).length;
-  if (explicitTargets > 1) throw new Error("Use only one of --project, --spec, or --session.");
-  const endpoint = opts.session
+  const explicitTargets = [opts.spec, opts.session, opts.release ? "release" : undefined].filter((value) => typeof value === "string" && value.trim()).length;
+  if (explicitTargets > 1) throw new Error("Use only one of --spec, --session, or --release.");
+  const endpoint = opts.release
+    ? "/api/v1/audit-reports/release"
+    : opts.session
     ? "/api/v1/audit-reports/agent-session"
     : opts.spec
       ? "/api/v1/audit-reports/spec"
       : "/api/v1/audit-reports/project";
-  const body = opts.session
+  const body = opts.release
+    ? {
+        project: opts.project?.trim() || repoIdentity().repo,
+        changed_files: splitList(opts.changedFiles),
+        tests: splitList(opts.tests),
+        checks: splitList(opts.checks),
+        approvals: splitList(opts.approvals),
+        commit_evidence: opts.commitEvidence?.trim() || undefined,
+        specs_loaded: splitList(opts.specsLoaded),
+        base: opts.base?.trim() || undefined,
+        head: opts.head?.trim() || repoIdentity().commit_sha,
+        url: opts.url?.trim() || undefined,
+        label: opts.label?.trim() || undefined,
+      }
+    : opts.session
     ? { session_id: opts.session.trim() }
     : opts.spec
       ? { spec_id: opts.spec.trim() }

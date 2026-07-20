@@ -202,6 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_code_trace_reports_consumer_time ON code_trace_re
 CREATE TABLE IF NOT EXISTS code_trace_links (
   report_id TEXT NOT NULL REFERENCES code_trace_reports(id) ON DELETE CASCADE,
   entity_id TEXT NOT NULL,
+  entity_path TEXT,
   entity_name TEXT NOT NULL,
   entity_kind TEXT NOT NULL,
   spec_filename TEXT NOT NULL,
@@ -1395,6 +1396,13 @@ Project types are reusable baselines; projects are concrete repositories. The pr
       );
       CREATE INDEX IF NOT EXISTS idx_audit_reports_subject ON audit_reports(subject_type, subject_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_audit_reports_type_time ON audit_reports(report_type, created_at);
+    `,
+  },
+  {
+    // Carry file paths on trace links so release/PR audits can map changed files to governing specs.
+    version: 43,
+    sql: `
+      ALTER TABLE code_trace_links ADD COLUMN entity_path TEXT;
     `,
   },
 ];

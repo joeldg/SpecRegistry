@@ -809,6 +809,87 @@ describe("project types & specs", () => {
     expect(report.markdown).not.toContain("undefined");
   });
 
+  it("generates persisted release PR audit reports with changed-file mapping", async () => {
+    const types = await getJson("/api/v1/project-types");
+    const web = types.find((t: any) => t.name === "Web App Standard");
+    const createdProject = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      payload: { repo: "github.com/acme/release-audited-app", project_type_id: web.id },
+    });
+    expect(createdProject.statusCode).toBe(201);
+    const project = createdProject.json();
+
+    const trace = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/code-trace-report",
+      payload: {
+        project_type: "Web App Standard",
+        repo: "github.com/acme/release-audited-app",
+        trace: {
+          schema_version: 1,
+          generated_at: "2026-07-19T12:00:00.000Z",
+          specs_dir: "specs",
+          spec_count: 1,
+          entity_count: 1,
+          links: [{
+            entity_id: "code:route:abc",
+            entity_path: "src/routes.ts",
+            entity_name: "GET /health",
+            entity_kind: "route",
+            spec_filename: "API_ENDPOINTS.md",
+            confidence: 1,
+            reasons: ["explicit @spec annotation"],
+          }],
+          unlinked_entities: [],
+          aliases: [],
+          coverage: { governed_entity_count: 1, linked_entity_count: 1, unlinked_entity_count: 0, coverage_ratio: 1 },
+          drift: { score: 0, severity: "none" },
+        },
+      },
+    });
+    expect(trace.statusCode).toBe(200);
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit-reports/release",
+      payload: {
+        project: project.id,
+        label: "PR #42",
+        base: "main",
+        head: "abc123",
+        url: "https://github.com/acme/release-audited-app/pull/42",
+        changed_files: ["src/routes.ts"],
+        tests: ["npm test"],
+        checks: ["unit"],
+        approvals: ["reviewer-approved"],
+        commit_evidence: "SpecRegistry-Compliance: PASS\nSpecRegistry-Signals: coverage=100 drift=0\nSpecRegistry-Command: specreg comply",
+        specs_loaded: ["API_ENDPOINTS.md"],
+      },
+    });
+    expect(generated.statusCode).toBe(201);
+    const report = generated.json();
+    expect(report).toMatchObject({
+      report_type: "release",
+      subject_type: "release",
+      subject_id: project.id,
+      subject_label: "PR #42",
+      status: "warning",
+    });
+    expect(report.evidence.changed_file_mapping[0]).toMatchObject({
+      file: "src/routes.ts",
+      specs: ["API_ENDPOINTS.md"],
+      link_count: 1,
+    });
+    expect(report.evidence.validation.tests).toEqual(["npm test"]);
+    expect(report.evidence.validation.approvals).toEqual(["reviewer-approved"]);
+    expect(report.evidence.validation.commit_evidence).toContain("SpecRegistry-Compliance");
+    expect(report.evidence.rollout_risk.reasons).toContain("No compliance attestation has been recorded for this project.");
+    expect(report.markdown).toContain("# Release/PR Audit: PR #42");
+    expect(report.markdown).toContain("## Changed File Coverage");
+    expect(report.markdown).not.toContain("undefined");
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

@@ -1080,6 +1080,19 @@ export const api = {
     request<AuditReportDetail>("/api/v1/audit-reports/spec", { method: "POST", body: JSON.stringify({ spec_id: specId }) }),
   createAgentRunAuditReport: (sessionId: string) =>
     request<AuditReportDetail>("/api/v1/audit-reports/agent-session", { method: "POST", body: JSON.stringify({ session_id: sessionId }) }),
+  createReleaseAuditReport: (body: {
+    project: string;
+    label?: string;
+    base?: string;
+    head?: string;
+    url?: string;
+    changed_files?: string[];
+    tests?: string[];
+    checks?: string[];
+    approvals?: string[];
+    commit_evidence?: string;
+    specs_loaded?: string[];
+  }) => request<AuditReportDetail>("/api/v1/audit-reports/release", { method: "POST", body: JSON.stringify(body) }),
   tokenUsageReport: (filters: TokenUsageFilters = {}) => {
     const params = new URLSearchParams();
     params.set("days", String(filters.days ?? 30));

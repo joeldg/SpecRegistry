@@ -368,6 +368,7 @@ specreg audit-report --out .spec/audit/project-governance.md
 specreg audit-report --json --out .spec/audit/project-governance.json
 specreg audit-report --spec <spec-id> --out .spec/audit/spec-quality.md
 specreg audit-report --session <agent-session-id> --out .spec/audit/agent-run.md
+specreg audit-report --release --changed-files "src/app.ts,src/routes.ts" --tests "npm test" --checks "unit,lint" --approvals "reviewer-approved" --commit-evidence "SpecRegistry-Compliance: PASS" --out .spec/audit/release.md
 ```
 
 The command posts the current git repo identity to the registry by default. Use
@@ -375,6 +376,9 @@ The command posts the current git repo identity to the registry by default. Use
 Use `--spec <spec-id>` to generate a Spec Quality Audit for one governed spec.
 Use `--session <agent-session-id>` to audit an agent run's preflight, context, token,
 finish, and compliance evidence.
+Use `--release` to generate a Release/PR Audit that cross-checks changed files,
+mapped specs, declared validation and approvals, commit compliance evidence,
+spec currency, and latest compliance evidence.
 
 Use `specreg trace-check` in CI to fail on insufficient code-to-spec coverage, excessive
 drift, or critical unmapped entity kinds. In GitHub Actions it emits native annotations

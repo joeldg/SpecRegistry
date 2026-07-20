@@ -105,14 +105,15 @@ export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<st
   );
   const insertLink = db.prepare(
     `INSERT OR REPLACE INTO code_trace_links
-     (report_id, entity_id, entity_name, entity_kind, spec_filename, confidence, reasons)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+     (report_id, entity_id, entity_path, entity_name, entity_kind, spec_filename, confidence, reasons)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   for (const link of links) {
     if (typeof link.entity_id !== "string" || typeof link.spec_filename !== "string") continue;
     insertLink.run(
       reportId,
       link.entity_id,
+      typeof link.entity_path === "string" ? link.entity_path : null,
       stringValue(link.entity_name),
       stringValue(link.entity_kind),
       link.spec_filename,

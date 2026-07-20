@@ -9,12 +9,18 @@ export interface AuditReportOptions {
   token?: string;
   project?: string;
   spec?: string;
+  session?: string;
   out?: string;
   json?: boolean;
 }
 
 function summarize(report: AuditReportSummary): string {
-  const label = report.report_type === "spec_quality" ? "spec quality" : "project governance";
+  const label =
+    report.report_type === "spec_quality"
+      ? "spec quality"
+      : report.report_type === "agent_run"
+        ? "agent run"
+        : "project governance";
   return [
     `Generated ${label} audit for ${report.subject_label}`,
     `Status: ${report.status.toUpperCase()}`,
@@ -24,9 +30,18 @@ function summarize(report: AuditReportSummary): string {
 }
 
 export async function runAuditReport(opts: AuditReportOptions): Promise<void> {
-  if (opts.project && opts.spec) throw new Error("Use either --project or --spec, not both.");
-  const endpoint = opts.spec ? "/api/v1/audit-reports/spec" : "/api/v1/audit-reports/project";
-  const body = opts.spec ? { spec_id: opts.spec.trim() } : { project: opts.project?.trim() || repoIdentity().repo };
+  const explicitTargets = [opts.project, opts.spec, opts.session].filter((value) => typeof value === "string" && value.trim()).length;
+  if (explicitTargets > 1) throw new Error("Use only one of --project, --spec, or --session.");
+  const endpoint = opts.session
+    ? "/api/v1/audit-reports/agent-session"
+    : opts.spec
+      ? "/api/v1/audit-reports/spec"
+      : "/api/v1/audit-reports/project";
+  const body = opts.session
+    ? { session_id: opts.session.trim() }
+    : opts.spec
+      ? { spec_id: opts.spec.trim() }
+      : { project: opts.project?.trim() || repoIdentity().repo };
   const report = await fetchJson<AuditReportDetail>(
     `${opts.server}${endpoint}`,
     {

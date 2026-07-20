@@ -100,3 +100,28 @@ test("audit-report can generate spec quality reports", async () => {
   assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/spec");
   assert.deepEqual(requests[0].body, { spec_id: "spec-1" });
 });
+
+test("audit-report can generate agent run reports", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: URL; body: any }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return response({
+      ...reportBody(),
+      report_type: "agent_run",
+      subject_type: "agent_session",
+      subject_id: "session-1",
+      subject_label: "agent: implement feature",
+      markdown: "# Agent Run Audit: session-1\n",
+    }, { status: 201 });
+  }) as typeof fetch;
+  try {
+    await runAuditReport({ server: "https://specreg.example.com", session: "session-1" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/agent-session");
+  assert.deepEqual(requests[0].body, { session_id: "session-1" });
+});

@@ -174,6 +174,28 @@ export interface ProjectRow extends RepoConsumerRow {
   open_feedback_count: number;
   code_trace_reported_at: string | null;
 }
+export interface AgentSessionRow {
+  id: string;
+  agent_identifier: string;
+  project_type_id: string | null;
+  project_type_name: string | null;
+  consumer_id: string | null;
+  repo: string | null;
+  branch: string | null;
+  task: string;
+  model: string | null;
+  mcp_server: string | null;
+  spec_count: number;
+  spec_bundle: unknown[];
+  status: "active" | "completed" | "blocked";
+  plan: string | null;
+  preflight_summary: unknown | null;
+  completion_summary: unknown | null;
+  compliance_attestation_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+  updated_at: string;
+}
 export interface AnalyticsSummary {
   window_days: number;
   events: Record<string, number>;
@@ -1056,6 +1078,8 @@ export const api = {
     request<AuditReportDetail>("/api/v1/audit-reports/project", { method: "POST", body: JSON.stringify({ project }) }),
   createSpecAuditReport: (specId: string) =>
     request<AuditReportDetail>("/api/v1/audit-reports/spec", { method: "POST", body: JSON.stringify({ spec_id: specId }) }),
+  createAgentRunAuditReport: (sessionId: string) =>
+    request<AuditReportDetail>("/api/v1/audit-reports/agent-session", { method: "POST", body: JSON.stringify({ session_id: sessionId }) }),
   tokenUsageReport: (filters: TokenUsageFilters = {}) => {
     const params = new URLSearchParams();
     params.set("days", String(filters.days ?? 30));
@@ -1068,6 +1092,7 @@ export const api = {
   manifestDiagnostics: (body: { manifest?: unknown; project_type?: string; repo?: string; project_id?: string }) =>
     request<ManifestDiagnostics>("/api/v1/cli/manifest-diagnostics", { method: "POST", body: JSON.stringify(body) }),
   dependencyMap: () => request<DependencyMap>("/api/v1/specs/dependency-map"),
+  agentSessions: (limit = 100) => request<AgentSessionRow[]>(`/api/v1/agent-sessions?limit=${limit}`),
   tokenRoi: () => request<{ specs: Array<{ filename: string; approx_tokens: number; roi_score: number; open_feedback: number }> }>(
     "/api/v1/ai/token-roi"
   ),

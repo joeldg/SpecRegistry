@@ -163,7 +163,7 @@ timestamps.
 - [x] Spec Quality Audit: spec version/review history, feedback by section, contradiction
   signals, token cost by section, usage frequency, efficacy lift, stale/unused sections,
   and sections that appear high-token/low-signal.
-- [ ] Agent Run Audit: session identity, task/model, specs loaded, searches/context events,
+- [x] Agent Run Audit: session identity, task/model, specs loaded, searches/context events,
   skills loaded, token reports, compliance attempts, finish evidence, and whether the
   agent halted correctly on unavailable/failing gates.
 - [ ] Release/PR Audit: changed files, mapped specs, required specs loaded, tests/checks

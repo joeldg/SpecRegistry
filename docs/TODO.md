@@ -154,9 +154,9 @@ report must be built from stored evidence: specs, versions, manifests, complianc
 traceability, feedback, agent sessions, token usage, reviews, server posture, and exact
 timestamps.
 
-- [ ] Add persisted `audit_reports` with scope, subject id, generated_by, deterministic
+- [x] Add persisted `audit_reports` with scope, subject id, generated_by, deterministic
   evidence JSON, rendered Markdown, optional LLM summary, and timestamps.
-- [ ] Project Governance Audit: project identity, project type, project-scoped specs,
+- [x] Project Governance Audit: project identity, project type, project-scoped specs,
   manifest/currency state, latest compliance attestation, latest code trace report,
   open feedback, pending reviews, recent agent sessions, projected context tokens, real
   LLM usage, and clear outstanding actions.
@@ -171,12 +171,26 @@ timestamps.
 - [ ] Registry Operations Audit: server version, public URL posture, auth/admin-password
   posture, API key posture, backup status, LLM provider configuration, source/candidate
   skill status, metrics availability, and recent operational errors.
-- [ ] Add audit report UI under Reports with scope filters, generated-at history, drilldown
+- [x] Add audit report UI under Reports with scope filters, generated-at history, drilldown
   evidence, Markdown preview, and JSON/Markdown export.
-- [ ] Add `specreg audit-report` for project/release workflows so agents and CI can attach
+- [x] Add `specreg audit-report` for project/release workflows so agents and CI can attach
   deterministic governance evidence to PRs without scraping the dashboard.
 - [ ] Add optional LLM executive summaries only after the deterministic evidence payload is
   stable; the LLM output should cite evidence keys and never replace raw audit facts.
+
+## Managed Project Attribution
+
+Generated guidance and downstream change artifacts should help readers understand what
+SpecRegistry is without exposing an internal registry host as the product landing page.
+
+- [x] Generated project bootstrap docs identify the repo as a "SpecRegistry managed
+  project" and link to the public product repository: `https://github.com/joeldg/SpecRegistry`.
+- [x] SpecRegistry-generated spec update PR bodies include the same managed-project
+  attribution and public product repository link.
+- [x] SpecRegistry-generated sync commit messages include the managed-project attribution
+  in the commit body.
+- [ ] Add configurable public product/documentation URL if the upstream product repo moves
+  or hosted docs become the preferred landing page.
 
 ## Token Usage Observability
 

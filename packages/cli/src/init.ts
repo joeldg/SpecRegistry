@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import AdmZip from "adm-zip";
-import type { Spec } from "@specregistry/shared";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL, type Spec } from "@specregistry/shared";
 import { fetchBytes, fetchJson, registryToken, selectProjectType } from "./registry.js";
 import { repoIdentity, reportManifest, type Manifest } from "./repo.js";
 import { enrollAgent } from "./credentials.js";
@@ -234,7 +234,7 @@ export function renderAgentsBootstrap(server: string, projectType: string, repo:
 
 # Repository Agent Instructions
 
-This repository is governed by SpecRegistry.
+This is a SpecRegistry managed project. Learn more: ${SPECREGISTRY_PRODUCT_REPOSITORY_URL}
 
 Before editing code, configuration, tests, docs, or generated artifacts:
 
@@ -290,9 +290,9 @@ function writeRegistryGuide(
   }
   fs.writeFileSync(
     guidePath,
-    `# SpecRegistry Repository Guide
+`# SpecRegistry Repository Guide
 
-This repository is governed by SpecRegistry.
+This is a SpecRegistry managed project. Learn more: ${SPECREGISTRY_PRODUCT_REPOSITORY_URL}
 
 ## Active Spec Set
 

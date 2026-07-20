@@ -661,6 +661,7 @@ describe("project types & specs", () => {
     );
     expect(report.markdown).toContain("# Project Governance Audit: github.com/acme/audited-device");
     expect(report.markdown).toContain("## Compliance");
+    expect(report.markdown).not.toContain("undefined");
 
     const list = await app.inject({ method: "GET", url: `/api/v1/audit-reports?subject_id=${encodeURIComponent(project.id)}` });
     expect(list.statusCode).toBe(200);

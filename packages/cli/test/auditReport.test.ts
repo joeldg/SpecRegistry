@@ -1,0 +1,77 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { runAuditReport } from "../src/auditReport.js";
+
+function response(body: unknown, init: ResponseInit = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+}
+
+function reportBody() {
+  return {
+    id: "audit-1",
+    report_type: "project_governance",
+    subject_type: "project",
+    subject_id: "project-1",
+    subject_label: "github.com/acme/app",
+    status: "warning",
+    summary: "Warnings need review.",
+    generated_by: "cli",
+    created_at: "2026-07-19T12:00:00.000Z",
+    llm_summary: null,
+    evidence: { outstanding_actions: ["Run specreg comply."] },
+    markdown: "# Project Governance Audit: github.com/acme/app\n\n## Outstanding Actions\n\n- Run specreg comply.\n",
+  };
+}
+
+test("audit-report posts the selected project and prints markdown", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLog = console.log;
+  const logs: string[] = [];
+  const requests: Array<{ url: URL; body: any }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return response(reportBody(), { status: 201 });
+  }) as typeof fetch;
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+  try {
+    await runAuditReport({ server: "https://specreg.example.com", project: "github.com/acme/app" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+  }
+
+  assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/project");
+  assert.deepEqual(requests[0].body, { project: "github.com/acme/app" });
+  assert.match(logs.join("\n"), /# Project Governance Audit: github\.com\/acme\/app/);
+});
+
+test("audit-report writes full JSON evidence when requested", async () => {
+  const originalFetch = globalThis.fetch;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-audit-report-"));
+  const originalCwd = process.cwd();
+  globalThis.fetch = (async () => response(reportBody(), { status: 201 })) as typeof fetch;
+  try {
+    process.chdir(root);
+    await runAuditReport({
+      server: "https://specreg.example.com",
+      project: "project-1",
+      out: ".spec/audit/project.json",
+      json: true,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.chdir(originalCwd);
+  }
+
+  const written = JSON.parse(fs.readFileSync(path.join(root, ".spec/audit/project.json"), "utf8"));
+  assert.equal(written.id, "audit-1");
+  assert.equal(written.evidence.outstanding_actions[0], "Run specreg comply.");
+});

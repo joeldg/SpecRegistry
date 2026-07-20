@@ -361,6 +361,16 @@ Agents should include that trailer, or equivalent `finish_task` evidence with ve
 objective score, and session id, in the commit message body. If compliance cannot run or
 does not pass, halt and show the exact output instead of committing.
 
+Generate deterministic project governance evidence for PRs or release notes:
+
+```sh
+specreg audit-report --out .spec/audit/project-governance.md
+specreg audit-report --json --out .spec/audit/project-governance.json
+```
+
+The command posts the current git repo identity to the registry by default. Use
+`--project <repo-or-project-id>` when CI needs to audit a different reported project.
+
 Use `specreg trace-check` in CI to fail on insufficient code-to-spec coverage, excessive
 drift, or critical unmapped entity kinds. In GitHub Actions it emits native annotations
 that point at unmapped files/lines from `.spec/code-trace.json`.

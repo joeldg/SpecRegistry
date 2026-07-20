@@ -9,6 +9,7 @@ import { runSync } from "./sync.js";
 import { runCompile, COMPILE_TARGETS, type CompileTarget } from "./compile.js";
 import { runVerify } from "./verify.js";
 import { runAudit } from "./audit.js";
+import { runAuditReport } from "./auditReport.js";
 import { runStyleguideList, runStyleguideAdd } from "./styleguides.js";
 import { runSkillsCommand, type SkillSource } from "./skills.js";
 import { readStoredCredentials } from "./credentials.js";
@@ -35,6 +36,7 @@ Usage:
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
+  specreg audit-report  Generate a deterministic project governance audit report
   specreg styleguide list|add  List the styleguide catalog, or pull one by id/language on demand
   specreg skills list|search|check|sync  List/search skills, verify local skill currency, or refresh them
   specreg skills sources list|add|scan  Manage marketplace skill sources
@@ -60,6 +62,7 @@ Options:
   --source-id <id>  skills candidates list: filter by source id
   --status <s>      skills candidates list: filter by status
   --out <path>      generate: prompt output directory (default: .spec/prompts)
+                    audit-report: Markdown/JSON output path (default: stdout)
                     code-map: metadata output file (default: .spec/code-map.json)
   --trace-out <p>   code-map: traceability report file (default: .spec/code-trace.json)
   --trace <path>    trace-check: report file (default: .spec/code-trace.json)
@@ -80,7 +83,9 @@ Options:
   --score <n>       comply: your honest 0-100 self-assessed compliance score
   --apply           migrate: upload diffs for review + stamp the manifest (default: dry run)
   --json            scan: print the machine-readable report instead of the summary
+                    audit-report: print/write the full JSON evidence payload
   --html <path>     scan: also write a self-contained, shareable HTML report
+  --project <id>    audit-report: project id or repo slug (default: current git repo)
   -h, --help        Show this help
 `;
 
@@ -289,6 +294,14 @@ try {
       type: typeof flags.type === "string" ? flags.type : undefined,
       dir: typeof flags.dir === "string" ? flags.dir : "specs",
       ci: flags.ci === true,
+    });
+  } else if (command === "audit-report") {
+    await runAuditReport({
+      server: requireServer(),
+      token,
+      project: typeof flags.project === "string" ? flags.project : undefined,
+      out: typeof flags.out === "string" ? flags.out : undefined,
+      json: flags.json === true,
     });
   } else if (command === "comply") {
     const specsDir = typeof flags.dir === "string" ? flags.dir : "specs";

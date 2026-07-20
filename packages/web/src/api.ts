@@ -1,5 +1,7 @@
 import type {
   AgentFeedback,
+  AuditReportDetail,
+  AuditReportSummary,
   ChangeRequest,
   ProjectType,
   RepoSubscription,
@@ -354,26 +356,7 @@ export type TokenUsageFilters = {
   spec_id?: string;
   section?: string;
 };
-export type AuditReportStatus = "pass" | "warning" | "fail" | "unknown";
-export type AuditReportType = "project_governance" | "spec_quality" | "agent_run" | "release" | "registry_operations";
-export type AuditReportSubjectType = "project" | "spec" | "agent_session" | "release" | "registry";
-export interface AuditReportSummaryRow {
-  id: string;
-  report_type: AuditReportType;
-  subject_type: AuditReportSubjectType;
-  subject_id: string | null;
-  subject_label: string;
-  status: AuditReportStatus;
-  summary: string;
-  generated_by: string;
-  created_at: string;
-}
-export interface AuditReportDetail extends AuditReportSummaryRow {
-  evidence_json: string;
-  markdown: string;
-  llm_summary: string | null;
-  evidence: unknown;
-}
+export type AuditReportSummaryRow = AuditReportSummary;
 export interface DependencyMap {
   specs: Array<{ id: string; filename: string; project_type_name: string; project_name?: string | null }>;
   edges: Array<{ from_spec_id: string; from_filename: string; to_spec_id: string | null; to_filename: string; relation: string }>;

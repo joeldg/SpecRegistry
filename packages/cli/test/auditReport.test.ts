@@ -176,3 +176,28 @@ test("audit-report can generate release PR reports", async () => {
     label: "PR #12",
   });
 });
+
+test("audit-report can generate registry operations reports", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: URL; body: any }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    requests.push({ url, body: JSON.parse(String(init?.body)) });
+    return response({
+      ...reportBody(),
+      report_type: "registry_operations",
+      subject_type: "registry",
+      subject_id: "registry",
+      subject_label: "SpecRegistry",
+      markdown: "# Registry Operations Audit\n",
+    }, { status: 201 });
+  }) as typeof fetch;
+  try {
+    await runAuditReport({ server: "https://specreg.example.com", registry: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests[0].url.pathname, "/api/v1/audit-reports/registry-operations");
+  assert.deepEqual(requests[0].body, {});
+});

@@ -44,7 +44,7 @@ Telemetry is tied to model usage, duration, and agent id.
 | Architecture boundary violations | Count of times an agent violated a specification boundary. |
 | Spec error attribution | Regressions traced back to a vague or contradictory specification node. |
 
-## Compact Traceability & Token Efficiency
+## Compact Traceability and Token Efficiency
 
 To ensure sidecar metadata artifacts and context injections remain economically viable and token-aware under large codebases:
 

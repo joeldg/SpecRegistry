@@ -181,6 +181,7 @@ try {
 
   if (flags.help || command === undefined || command === "help") {
     console.log(HELP);
+  // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "scan") {
     runScan({
       root: process.cwd(),
@@ -197,6 +198,7 @@ try {
       author: typeof flags.author === "string" ? flags.author : process.env.USER || "cli",
       force: flags.force === true,
     });
+  // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "init") {
     await runInit({
       server: requireServer(),
@@ -209,6 +211,7 @@ try {
       skills: typeof flags.skills === "string" ? flags.skills : undefined,
       skillDir: typeof flags["skill-dir"] === "string" ? flags["skill-dir"] : ".spec/skills",
     });
+  // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "generate") {
     await runGenerate({
       server: requireServer(),
@@ -234,6 +237,7 @@ try {
       publish: flags.publish === true,
       force: flags.force === true,
     });
+  // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "code-map") {
     const out = typeof flags.out === "string" ? flags.out : ".spec/code-map.json";
     const specsDir = typeof flags.dir === "string" ? flags.dir : "specs";
@@ -254,6 +258,7 @@ try {
       const uploaded = await reportCodeTrace(requireServer(), token, projectType, inventory.trace, specsDir);
       console.log(`Reported code trace coverage to registry: ${Math.round(uploaded.coverage_ratio * 100)}% coverage, drift ${uploaded.drift_severity} (${uploaded.drift_score}).`);
     }
+  // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "trace-check") {
     const ok = runTraceCheck({
       tracePath: typeof flags.trace === "string" ? flags.trace : ".spec/code-trace.json",

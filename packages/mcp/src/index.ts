@@ -78,6 +78,7 @@ function text(value: unknown) {
 
 const server = new McpServer({ name: "specregistry", version: "0.1.0" });
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "begin_task",
   "Call this BEFORE non-trivial implementation work. It registers the agent session, records the task/model/repo, returns the governed spec bundle for this project, and tells you whether preflight is ready or blocked. Use the returned session_id when calling finish_task.",
@@ -116,6 +117,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "finish_task",
   "Call this instead of directly claiming done or committing. It records completion evidence, runs the objective compliance gate, updates the agent session, and blocks completion until compliance passes. Failed compliance must be remediated with targeted spec evidence only; do not add speculative or blanket @spec annotations, and halt with the exact output after repeated failures. Include the finish_task verdict, objective score, and session id in the commit message body when using this instead of the specreg comply trailer.",
@@ -211,6 +213,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "get_specs",
   "Fetch the latest governed specification documents (global + project type + project-specific overrides) with full markdown content. Always consult these before generating code for the project.",
@@ -232,6 +235,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "search_specs",
   "Search governed specification documents and get back matching sections only. Supports fts, semantic, and hybrid modes. Includes project-scoped specs when repo/project_id is provided or SPECREG_REPO is set.",
@@ -253,6 +257,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "list_assigned_skills",
   "List active governed skills assigned to the current project type/repo scope. Use this to discover approved procedures without loading every SKILL.md into context.",
@@ -337,6 +342,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "check_compliance",
   "Call this BEFORE declaring a task complete or committing. It returns an objective compliance verdict for this repo (traceability coverage, drift, and unmapped entities vs the project's policy) plus a directive. If it is NOT compliant, remediate only with truthful, entity-specific spec evidence: add @spec[FILE#section] annotations only when the exact section governs the entity, or report/propose missing guidance. Do not blanket-map to PROJECT_PROFILE.md or broad requirements just to raise coverage. If repeated attempts fail, halt and show the user the exact output. Run `specreg code-map --report` first (or use `specreg comply`) so the verdict reflects your latest code. Put the compact compliance trailer from `specreg comply`, or equivalent finish_task evidence, in the commit message body. Pass your honest self_assessed_score; over-claims are flagged.",
@@ -363,6 +369,7 @@ server.tool(
   }
 );
 
+// @spec[DESIGN.md#44-model-context-protocol-adapter-packagesmcp]
 server.tool(
   "report_spec_feedback",
   "Report an ambiguity, contradiction, or outdated guidance you found in a specification while executing a task. This flags the spec for human review — use it instead of guessing.",

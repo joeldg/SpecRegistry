@@ -33,7 +33,7 @@ SDDManager/
 | `packages/shared` | Library | Zero-dependency baseline schemas, types, validations, and helper utilities shared across the monorepo workspace. |
 | `packages/web` | React SPA | Visual interface for browsing registered systems, monitoring sync histories, analyzing metrics, and viewing style violations. |
 
-### Sidecar & Metadata Artifacts (`.spec/`)
+### Sidecar and Metadata Artifacts (.spec/)
 
 | Artifact Path | Format | Purpose |
 | :--- | :--- | :--- |

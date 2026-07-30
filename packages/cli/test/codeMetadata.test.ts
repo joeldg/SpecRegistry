@@ -3,7 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildCodeInventory, writeCodeInventory } from "../src/codeMetadata.js";
+import {
+  buildCodeInventory,
+  writeCodeInventory,
+  encodeCodeInventoryV2,
+  decodeCodeInventoryV2,
+  encodeCodeTraceV2,
+  decodeCodeTraceV2,
+  formatTraceAsDsl,
+} from "../src/codeMetadata.js";
 import { evaluateTrace } from "../src/traceCheck.js";
 
 function makeProject(): string {
@@ -169,4 +177,32 @@ test("trace check fails low coverage, high drift, and unmapped critical entity k
   assert.equal(findings.some((finding) => finding.title === "Code-to-spec coverage below threshold"), true);
   assert.equal(findings.some((finding) => finding.title === "Code drift above threshold"), true);
   assert.equal(findings.some((finding) => finding.title.startsWith("Unmapped")), true);
+});
+
+test("schema V2 dictionary encoding and decoding performs lossless round-trip and reduces payload size", () => {
+  const root = makeProject();
+  const inventory = buildCodeInventory(root);
+
+  const dictInv = encodeCodeInventoryV2(inventory);
+  assert.equal(dictInv.schema_version, 2);
+  assert.ok(dictInv.dict.paths.length > 0);
+  assert.ok(dictInv.dict.kinds.length > 0);
+
+  const decodedInv = decodeCodeInventoryV2(dictInv);
+  assert.equal(decodedInv.entity_count, inventory.entity_count);
+  assert.equal(decodedInv.entities.length, inventory.entities.length);
+  assert.equal(decodedInv.entities[0].id, inventory.entities[0].id);
+
+  const dictTrace = encodeCodeTraceV2(inventory.trace);
+  assert.equal(dictTrace.schema_version, 2);
+  assert.ok(dictTrace.dict.specs.length > 0);
+
+  const decodedTrace = decodeCodeTraceV2(dictTrace);
+  assert.equal(decodedTrace.links.length, inventory.trace.links.length);
+  assert.equal(decodedTrace.unlinked_entities.length, inventory.trace.unlinked_entities.length);
+  assert.equal(decodedTrace.links[0]?.entity_name, inventory.trace.links[0]?.entity_name);
+
+  const dsl = formatTraceAsDsl(decodedTrace);
+  assert.ok(dsl.includes("[TRACE]"));
+  assert.ok(dsl.includes("entities:"));
 });

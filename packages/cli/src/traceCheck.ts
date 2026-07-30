@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { CodeEntityKind, CodeTraceReport } from "./codeMetadata.js";
+import { decodeCodeTraceV2, type CodeEntityKind, type CodeTraceReport } from "./codeMetadata.js";
 
 export interface TraceCheckOptions {
   tracePath: string;
@@ -36,12 +36,14 @@ export function traceKinds(value: string | boolean | undefined, fallback: CodeEn
   return value.split(",").map((item) => item.trim()).filter(Boolean) as CodeEntityKind[];
 }
 
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
 function readTrace(tracePath: string): CodeTraceReport {
   const resolved = path.resolve(process.cwd(), tracePath);
   if (!fs.existsSync(resolved)) {
     throw new Error(`No code trace report at ${tracePath}. Run \`specreg code-map\` first.`);
   }
-  return JSON.parse(fs.readFileSync(resolved, "utf8")) as CodeTraceReport;
+  const raw = JSON.parse(fs.readFileSync(resolved, "utf8"));
+  return decodeCodeTraceV2(raw);
 }
 
 function esc(value: string): string {

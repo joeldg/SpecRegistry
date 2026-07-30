@@ -63,6 +63,57 @@ export function ensureConsumer(app: FastifyInstance, input: Record<string, unkno
   return id;
 }
 
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+function normalizeTracePayload(raw: Record<string, unknown>): CodeTracePayload {
+  if (raw && raw.schema_version === 2 && raw.dict && typeof raw.dict === "object") {
+    const dict = raw.dict as { paths?: string[]; kinds?: string[]; specs?: string[]; signatures?: string[] };
+    const paths = dict.paths || [];
+    const kinds = dict.kinds || [];
+    const specs = dict.specs || [];
+    const signatures = dict.signatures || [];
+
+    const rawLinks = Array.isArray(raw.links) ? raw.links : [];
+    const links = rawLinks.map((tuple: any) => {
+      if (Array.isArray(tuple)) {
+        const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons] = tuple;
+        return {
+          entity_id,
+          entity_path: paths[pathIdx] || "",
+          entity_name,
+          entity_kind: kinds[kindIdx],
+          spec_filename: specs[specIdx] || "",
+          confidence,
+          reasons: reasons || [],
+        };
+      }
+      return tuple;
+    });
+
+    const rawUnlinked = Array.isArray(raw.unlinked_entities) ? raw.unlinked_entities : [];
+    const unlinked_entities = rawUnlinked.map((tuple: any) => {
+      if (Array.isArray(tuple)) {
+        const [id, kindIdx, pathIdx, name, sigIdx, start_line] = tuple;
+        return {
+          id,
+          kind: kinds[kindIdx],
+          path: paths[pathIdx] || "",
+          name,
+          signature: signatures[sigIdx] || "",
+          start_line,
+        };
+      }
+      return tuple;
+    });
+
+    return {
+      ...raw,
+      links,
+      unlinked_entities,
+    } as CodeTracePayload;
+  }
+  return raw as CodeTracePayload;
+}
+
 /**
  * Persist a code-trace report (and its links) as the consumer's latest stored
  * signals. Shared by the explicit `code-map --report` upload and the compliance
@@ -71,8 +122,9 @@ export function ensureConsumer(app: FastifyInstance, input: Record<string, unkno
  * so the two gates can no longer contradict each other. The caller owns the
  * surrounding transaction.
  */
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
 export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<string, unknown>): { reportId: string; createdAt: string } {
-  const trace = rawTrace as CodeTracePayload;
+  const trace = normalizeTracePayload(rawTrace);
   const links = Array.isArray(trace.links) ? (trace.links.slice(0, 500) as Array<Record<string, unknown>>) : [];
   const unlinked = Array.isArray(trace.unlinked_entities) ? trace.unlinked_entities.slice(0, 50) : [];
   const aliases = Array.isArray(trace.aliases) ? trace.aliases : [];

@@ -71,6 +71,7 @@ export interface CodeMapOptions {
   force: boolean;
   specsDir?: string;
   traceOut?: string;
+  format?: "v1" | "v2";
 }
 
 export interface SpecReference {
@@ -131,6 +132,317 @@ export interface CodeTraceReport {
   };
 }
 
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export interface DictCodeInventoryV2 {
+  schema_version: 2;
+  generated_at: string;
+  root: string;
+  entity_count: number;
+  languages: string[];
+  dict: {
+    paths: string[];
+    kinds: CodeEntityKind[];
+    signatures: string[];
+  };
+  entities: Array<[number, number, string, number, number, number, number, string, number?, Record<string, MetadataValue>?]>;
+  coverage?: CodeCoverageSummary;
+  drift?: CodeDriftSummary;
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export interface DictCodeTraceReportV2 {
+  schema_version: 2;
+  generated_at: string;
+  root: string;
+  specs_dir: string;
+  spec_count: number;
+  entity_count: number;
+  dict: {
+    paths: string[];
+    kinds: CodeEntityKind[];
+    specs: string[];
+    signatures: string[];
+  };
+  links: Array<[string, number, string, number, number, number, string[]?]>;
+  unlinked_entities: Array<[string, number, number, string, number, number]>;
+  aliases: CodeAlias[];
+  coverage: CodeCoverageSummary;
+  drift: CodeDriftSummary;
+  embedding_profile?: {
+    default_scope: string[];
+    recommended_fields: string[];
+    notes: string;
+  };
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export function encodeCodeInventoryV2(inventory: CodeInventory): DictCodeInventoryV2 {
+  const paths: string[] = [];
+  const kinds: CodeEntityKind[] = [];
+  const signatures: string[] = [];
+
+  const pathMap = new Map<string, number>();
+  const kindMap = new Map<CodeEntityKind, number>();
+  const sigMap = new Map<string, number>();
+
+  function getIdx<T>(value: T, list: T[], map: Map<T, number>): number {
+    let idx = map.get(value);
+    if (idx === undefined) {
+      idx = list.length;
+      list.push(value);
+      map.set(value, idx);
+    }
+    return idx;
+  }
+
+  const idToIdxMap = new Map<string, number>();
+  inventory.entities.forEach((entity, idx) => idToIdxMap.set(entity.id, idx));
+
+  const tupleEntities: DictCodeInventoryV2["entities"] = inventory.entities.map((entity) => {
+    const kindIdx = getIdx(entity.kind, kinds, kindMap);
+    const pathIdx = getIdx(entity.path, paths, pathMap);
+    const sigIdx = getIdx(entity.signature, signatures, sigMap);
+    const parentIdx = entity.parent_id !== undefined ? idToIdxMap.get(entity.parent_id) : undefined;
+
+    const tuple: DictCodeInventoryV2["entities"][number] = [
+      kindIdx,
+      pathIdx,
+      entity.name,
+      sigIdx,
+      entity.start_line,
+      entity.start_column,
+      entity.end_line,
+      entity.hash,
+    ];
+    if (parentIdx !== undefined || entity.metadata !== undefined) {
+      tuple.push(parentIdx ?? -1);
+    }
+    if (entity.metadata !== undefined) {
+      tuple.push(entity.metadata);
+    }
+    return tuple;
+  });
+
+  return {
+    schema_version: 2,
+    generated_at: inventory.generated_at,
+    root: inventory.root,
+    entity_count: inventory.entity_count,
+    languages: inventory.languages,
+    dict: { paths, kinds, signatures },
+    entities: tupleEntities,
+    coverage: inventory.coverage,
+    drift: inventory.drift,
+  };
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export function decodeCodeInventoryV2(raw: DictCodeInventoryV2 | CodeInventory | any): CodeInventory {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid code inventory object");
+  if (raw.schema_version === 1 || !raw.dict) {
+    return raw as CodeInventory;
+  }
+  const v2 = raw as DictCodeInventoryV2;
+  const { paths, kinds, signatures } = v2.dict;
+
+  const entities: CodeEntity[] = v2.entities.map((tuple) => {
+    const [kindIdx, pathIdx, name, sigIdx, start_line, start_column, end_line, hash, parentIdxVal, metadata] = tuple;
+    const kind = kinds[kindIdx];
+    const path = paths[pathIdx];
+    const signature = signatures[sigIdx];
+
+    const parent_id = parentIdxVal !== undefined && parentIdxVal >= 0 && v2.entities[parentIdxVal]
+      ? makeId({
+          language: languageFor(paths[v2.entities[parentIdxVal][1]]),
+          kind: kinds[v2.entities[parentIdxVal][0]],
+          relativePath: paths[v2.entities[parentIdxVal][1]],
+          name: v2.entities[parentIdxVal][2],
+          signature: signatures[v2.entities[parentIdxVal][3]],
+        })
+      : undefined;
+
+    const lang = languageFor(path);
+    const id = makeId({
+      language: lang,
+      kind,
+      relativePath: path,
+      name,
+      signature,
+      parentId: parent_id,
+    });
+
+    return {
+      id,
+      kind,
+      language: lang,
+      path,
+      name,
+      signature,
+      start_line,
+      start_column,
+      end_line,
+      hash,
+      ...(parent_id ? { parent_id } : {}),
+      ...(metadata ? { metadata } : {}),
+    };
+  });
+
+  return {
+    schema_version: 1,
+    generated_at: v2.generated_at,
+    root: v2.root,
+    entity_count: v2.entity_count,
+    languages: v2.languages,
+    entities,
+    coverage: v2.coverage,
+    drift: v2.drift,
+  };
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2 {
+  const paths: string[] = [];
+  const kinds: CodeEntityKind[] = [];
+  const specs: string[] = [];
+  const signatures: string[] = [];
+
+  const pathMap = new Map<string, number>();
+  const kindMap = new Map<CodeEntityKind, number>();
+  const specMap = new Map<string, number>();
+  const sigMap = new Map<string, number>();
+
+  function getIdx<T>(value: T, list: T[], map: Map<T, number>): number {
+    let idx = map.get(value);
+    if (idx === undefined) {
+      idx = list.length;
+      list.push(value);
+      map.set(value, idx);
+    }
+    return idx;
+  }
+
+  const links: DictCodeTraceReportV2["links"] = trace.links.map((link) => {
+    const pathIdx = getIdx(link.entity_path, paths, pathMap);
+    const kindIdx = getIdx(link.entity_kind, kinds, kindMap);
+    const specIdx = getIdx(link.spec_filename, specs, specMap);
+    const tuple: DictCodeTraceReportV2["links"][number] = [
+      link.entity_id,
+      pathIdx,
+      link.entity_name,
+      kindIdx,
+      specIdx,
+      link.confidence,
+    ];
+    if (link.reasons && link.reasons.length > 0) {
+      tuple.push(link.reasons);
+    }
+    return tuple;
+  });
+
+  const unlinked_entities: DictCodeTraceReportV2["unlinked_entities"] = trace.unlinked_entities.map((entity) => {
+    const kindIdx = getIdx(entity.kind, kinds, kindMap);
+    const pathIdx = getIdx(entity.path, paths, pathMap);
+    const sigIdx = getIdx(entity.signature, signatures, sigMap);
+    return [entity.id, kindIdx, pathIdx, entity.name, sigIdx, entity.start_line];
+  });
+
+  return {
+    schema_version: 2,
+    generated_at: trace.generated_at,
+    root: trace.root,
+    specs_dir: trace.specs_dir,
+    spec_count: trace.spec_count,
+    entity_count: trace.entity_count,
+    dict: { paths, kinds, specs, signatures },
+    links,
+    unlinked_entities,
+    aliases: trace.aliases,
+    coverage: trace.coverage,
+    drift: trace.drift,
+    embedding_profile: trace.embedding_profile,
+  };
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export function decodeCodeTraceV2(raw: DictCodeTraceReportV2 | CodeTraceReport | any): CodeTraceReport {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid code trace report object");
+  if (raw.schema_version === 1 || !raw.dict) {
+    return raw as CodeTraceReport;
+  }
+  const v2 = raw as DictCodeTraceReportV2;
+  const { paths, kinds, specs, signatures } = v2.dict;
+
+  const links: TraceabilityLink[] = (v2.links || []).map((tuple) => {
+    const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons] = tuple;
+    return {
+      entity_id,
+      entity_path: paths[pathIdx] || "",
+      entity_name,
+      entity_kind: kinds[kindIdx],
+      spec_filename: specs[specIdx] || "",
+      confidence,
+      reasons: reasons || [],
+    };
+  });
+
+  const unlinked_entities = (v2.unlinked_entities || []).map((tuple) => {
+    const [id, kindIdx, pathIdx, name, sigIdx, start_line] = tuple;
+    return {
+      id,
+      kind: kinds[kindIdx],
+      path: paths[pathIdx] || "",
+      name,
+      signature: signatures[sigIdx] || "",
+      start_line,
+    };
+  });
+
+  return {
+    schema_version: 1,
+    generated_at: v2.generated_at,
+    root: v2.root,
+    specs_dir: v2.specs_dir,
+    spec_count: v2.spec_count,
+    entity_count: v2.entity_count,
+    links,
+    unlinked_entities,
+    aliases: v2.aliases || [],
+    coverage: v2.coverage,
+    drift: v2.drift,
+    embedding_profile: v2.embedding_profile || {
+      default_scope: ["route", "schema", "command", "config", "class", "function", "method"],
+      recommended_fields: ["kind", "path", "name", "signature", "metadata", "linked spec filename", "linked spec sections"],
+      notes: "Embed concise structural summaries for code entities separately from full spec-text embeddings.",
+    },
+  };
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+export function formatTraceAsDsl(trace: CodeTraceReport): string {
+  const lines: string[] = [];
+  const covPct = Math.round((trace.coverage?.coverage_ratio ?? 0) * 100);
+  lines.push(`[TRACE] specs:${trace.spec_count} entities:${trace.entity_count} gov:${trace.coverage?.governed_entity_count ?? 0} cov:${covPct}% drift:${trace.drift?.score ?? 0}(${trace.drift?.severity ?? "none"})`);
+
+  if (trace.unlinked_entities && trace.unlinked_entities.length > 0) {
+    const critical = trace.unlinked_entities.filter((u) => u.kind === "route" || u.kind === "schema");
+    const sample = critical.length > 0 ? critical.slice(0, 10) : trace.unlinked_entities.slice(0, 10);
+    lines.push(`[UNMAPPED] (${trace.unlinked_entities.length} total)`);
+    for (const u of sample) {
+      lines.push(`- ${u.kind} | ${u.path}:${u.start_line} | ${u.name}`);
+    }
+  }
+
+  if (trace.links && trace.links.length > 0) {
+    const sampleLinks = trace.links.slice(0, 5);
+    lines.push(`[LINKS SAMPLE] (Top ${sampleLinks.length} of ${trace.links.length})`);
+    for (const l of sampleLinks) {
+      lines.push(`- ${l.entity_kind}:${l.entity_name} -> ${l.spec_filename} (conf:${l.confidence})`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 interface AddEntityInput {
   kind: CodeEntityKind;
   language: string;
@@ -186,7 +498,7 @@ function signatureFromNode(source: ts.SourceFile, node: ts.Node): string {
   return cleanSignature(node.getText(source).split(/\r?\n/)[0] ?? "");
 }
 
-function makeId(input: Omit<AddEntityInput, "body" | "metadata">): string {
+function makeId(input: { language: string; kind: CodeEntityKind; relativePath: string; name: string; signature: string; parentId?: string }): string {
   const stable = [
     input.language,
     input.kind,
@@ -775,7 +1087,8 @@ function loadPreviousInventory(root: string, out: string): CodeInventory | undef
   const target = path.resolve(root, out);
   if (!fs.existsSync(target)) return undefined;
   try {
-    return JSON.parse(fs.readFileSync(target, "utf8")) as CodeInventory;
+    const raw = JSON.parse(fs.readFileSync(target, "utf8"));
+    return decodeCodeInventoryV2(raw);
   } catch {
     return undefined;
   }
@@ -864,6 +1177,70 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
   return { ...inventory, trace };
 }
 
+// @spec[STRUCTURE.md#sidecar--metadata-artifacts-spec]
+function writeCodeMapSqlite(opts: CodeMapOptions, inventory: CodeInventory, trace: CodeTraceReport): void {
+  const dbPath = path.resolve(opts.root, opts.out.replace(/\.json$/, ".sqlite"));
+  try {
+    let DatabaseModule: any;
+    try {
+      // @ts-ignore
+      DatabaseModule = require("node:sqlite").DatabaseSync;
+    } catch {
+      try {
+        DatabaseModule = require("better-sqlite3");
+      } catch {
+        return;
+      }
+    }
+    const db = new DatabaseModule(dbPath);
+    if (typeof db.exec === "function") {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS entities (
+          id TEXT PRIMARY KEY,
+          kind TEXT,
+          language TEXT,
+          path TEXT,
+          name TEXT,
+          signature TEXT,
+          start_line INTEGER,
+          end_line INTEGER,
+          hash TEXT,
+          parent_id TEXT
+        );
+        CREATE TABLE IF NOT EXISTS links (
+          entity_id TEXT PRIMARY KEY,
+          entity_path TEXT,
+          entity_name TEXT,
+          entity_kind TEXT,
+          spec_filename TEXT,
+          confidence REAL
+        );
+        CREATE TABLE IF NOT EXISTS summary (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `);
+      db.exec("DELETE FROM entities; DELETE FROM links; DELETE FROM summary;");
+      const insertEntity = db.prepare("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      for (const e of inventory.entities) {
+        insertEntity.run(e.id, e.kind, e.language, e.path, e.name, e.signature, e.start_line, e.end_line, e.hash, e.parent_id ?? null);
+      }
+      const insertLink = db.prepare("INSERT INTO links VALUES (?, ?, ?, ?, ?, ?)");
+      for (const l of trace.links) {
+        insertLink.run(l.entity_id, l.entity_path, l.entity_name, l.entity_kind, l.spec_filename, l.confidence);
+      }
+      const insertSummary = db.prepare("INSERT INTO summary VALUES (?, ?)");
+      insertSummary.run("coverage_ratio", String(trace.coverage?.coverage_ratio ?? 0));
+      insertSummary.run("drift_score", String(trace.drift?.score ?? 0));
+      insertSummary.run("drift_severity", trace.drift?.severity ?? "none");
+      if (typeof db.close === "function") db.close();
+    }
+  } catch {
+    // Graceful fallback
+  }
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
 export function writeCodeInventory(opts: CodeMapOptions): CodeInventory & { trace: CodeTraceReport } {
   const inventory = buildCodeInventory(opts.root, opts.specsDir ?? "specs", loadPreviousInventory(opts.root, opts.out));
   const target = path.resolve(opts.root, opts.out);
@@ -876,8 +1253,16 @@ export function writeCodeInventory(opts: CodeMapOptions): CodeInventory & { trac
   }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const { trace, ...sidecar } = inventory;
-  fs.writeFileSync(target, JSON.stringify(sidecar, null, 2) + "\n", "utf8");
+
+  const v2Format = opts.format !== "v1";
+  const sidecarOutput = v2Format ? encodeCodeInventoryV2(sidecar) : sidecar;
+  const traceOutput = v2Format ? encodeCodeTraceV2(trace) : trace;
+
+  fs.writeFileSync(target, JSON.stringify(sidecarOutput, null, 2) + "\n", "utf8");
   fs.mkdirSync(path.dirname(traceTarget), { recursive: true });
-  fs.writeFileSync(traceTarget, JSON.stringify(trace, null, 2) + "\n", "utf8");
+  fs.writeFileSync(traceTarget, JSON.stringify(traceOutput, null, 2) + "\n", "utf8");
+
+  writeCodeMapSqlite(opts, sidecar, trace);
+
   return inventory;
 }

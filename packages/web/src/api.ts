@@ -1093,6 +1093,8 @@ export const api = {
     commit_evidence?: string;
     specs_loaded?: string[];
   }) => request<AuditReportDetail>("/api/v1/audit-reports/release", { method: "POST", body: JSON.stringify(body) }),
+  createRegistryOperationsAuditReport: () =>
+    request<AuditReportDetail>("/api/v1/audit-reports/registry-operations", { method: "POST", body: JSON.stringify({}) }),
   tokenUsageReport: (filters: TokenUsageFilters = {}) => {
     const params = new URLSearchParams();
     params.set("days", String(filters.days ?? 30));

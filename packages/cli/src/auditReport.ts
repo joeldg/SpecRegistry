@@ -11,6 +11,7 @@ export interface AuditReportOptions {
   spec?: string;
   session?: string;
   release?: boolean;
+  registry?: boolean;
   changedFiles?: string;
   tests?: string;
   checks?: string;
@@ -35,9 +36,11 @@ function summarize(report: AuditReportSummary): string {
       ? "spec quality"
       : report.report_type === "agent_run"
         ? "agent run"
-        : report.report_type === "release"
-          ? "release/PR"
-        : "project governance";
+      : report.report_type === "release"
+        ? "release/PR"
+        : report.report_type === "registry_operations"
+          ? "registry operations"
+          : "project governance";
   return [
     `Generated ${label} audit for ${report.subject_label}`,
     `Status: ${report.status.toUpperCase()}`,
@@ -47,34 +50,38 @@ function summarize(report: AuditReportSummary): string {
 }
 
 export async function runAuditReport(opts: AuditReportOptions): Promise<void> {
-  const explicitTargets = [opts.spec, opts.session, opts.release ? "release" : undefined].filter((value) => typeof value === "string" && value.trim()).length;
-  if (explicitTargets > 1) throw new Error("Use only one of --spec, --session, or --release.");
-  const endpoint = opts.release
-    ? "/api/v1/audit-reports/release"
-    : opts.session
-    ? "/api/v1/audit-reports/agent-session"
-    : opts.spec
-      ? "/api/v1/audit-reports/spec"
-      : "/api/v1/audit-reports/project";
-  const body = opts.release
-    ? {
-        project: opts.project?.trim() || repoIdentity().repo,
-        changed_files: splitList(opts.changedFiles),
-        tests: splitList(opts.tests),
-        checks: splitList(opts.checks),
-        approvals: splitList(opts.approvals),
-        commit_evidence: opts.commitEvidence?.trim() || undefined,
-        specs_loaded: splitList(opts.specsLoaded),
-        base: opts.base?.trim() || undefined,
-        head: opts.head?.trim() || repoIdentity().commit_sha,
-        url: opts.url?.trim() || undefined,
-        label: opts.label?.trim() || undefined,
-      }
-    : opts.session
-    ? { session_id: opts.session.trim() }
-    : opts.spec
-      ? { spec_id: opts.spec.trim() }
-      : { project: opts.project?.trim() || repoIdentity().repo };
+  const explicitTargets = [opts.spec, opts.session, opts.release ? "release" : undefined, opts.registry ? "registry" : undefined].filter((value) => typeof value === "string" && value.trim()).length;
+  if (explicitTargets > 1) throw new Error("Use only one of --spec, --session, --release, or --registry.");
+  const endpoint = opts.registry
+    ? "/api/v1/audit-reports/registry-operations"
+    : opts.release
+      ? "/api/v1/audit-reports/release"
+      : opts.session
+        ? "/api/v1/audit-reports/agent-session"
+        : opts.spec
+          ? "/api/v1/audit-reports/spec"
+          : "/api/v1/audit-reports/project";
+  const body = opts.registry
+    ? {}
+    : opts.release
+      ? {
+          project: opts.project?.trim() || repoIdentity().repo,
+          changed_files: splitList(opts.changedFiles),
+          tests: splitList(opts.tests),
+          checks: splitList(opts.checks),
+          approvals: splitList(opts.approvals),
+          commit_evidence: opts.commitEvidence?.trim() || undefined,
+          specs_loaded: splitList(opts.specsLoaded),
+          base: opts.base?.trim() || undefined,
+          head: opts.head?.trim() || repoIdentity().commit_sha,
+          url: opts.url?.trim() || undefined,
+          label: opts.label?.trim() || undefined,
+        }
+      : opts.session
+        ? { session_id: opts.session.trim() }
+        : opts.spec
+          ? { spec_id: opts.spec.trim() }
+          : { project: opts.project?.trim() || repoIdentity().repo };
   const report = await fetchJson<AuditReportDetail>(
     `${opts.server}${endpoint}`,
     {

@@ -168,7 +168,7 @@ timestamps.
   agent halted correctly on unavailable/failing gates.
 - [x] Release/PR Audit: changed files, mapped specs, required specs loaded, tests/checks
   run, compliance result, approval state, commit evidence trailer, and residual risk.
-- [ ] Registry Operations Audit: server version, public URL posture, auth/admin-password
+- [x] Registry Operations Audit: server version, public URL posture, auth/admin-password
   posture, API key posture, backup status, LLM provider configuration, source/candidate
   skill status, metrics availability, and recent operational errors.
 - [x] Add audit report UI under Reports with scope filters, generated-at history, drilldown

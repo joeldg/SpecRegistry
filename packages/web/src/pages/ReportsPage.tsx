@@ -110,7 +110,7 @@ export default function ReportsPage() {
   const [projectTokenUsage, setProjectTokenUsage] = useState<TokenUsageReport>();
   const [auditReports, setAuditReports] = useState<AuditReportSummaryRow[]>([]);
   const [agentSessions, setAgentSessions] = useState<AgentSessionRow[]>([]);
-  const [auditTarget, setAuditTarget] = useState<"project" | "spec" | "session" | "release">("project");
+  const [auditTarget, setAuditTarget] = useState<"project" | "spec" | "session" | "release" | "registry">("project");
   const [selectedAuditProjectId, setSelectedAuditProjectId] = useState("");
   const [selectedAuditSpecId, setSelectedAuditSpecId] = useState("");
   const [selectedAuditSessionId, setSelectedAuditSessionId] = useState("");
@@ -312,7 +312,9 @@ export default function ReportsPage() {
     setNotice(undefined);
     try {
       const splitList = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
-      const generated = auditTarget === "release"
+      const generated = auditTarget === "registry"
+        ? await api.createRegistryOperationsAuditReport()
+        : auditTarget === "release"
         ? await api.createReleaseAuditReport({
             project: selectedAuditProjectId,
             label: releaseAuditLabel.trim() || undefined,
@@ -333,6 +335,8 @@ export default function ReportsPage() {
       setNotice(
         auditTarget === "session"
           ? "Agent run audit generated."
+          : auditTarget === "registry"
+            ? "Registry operations audit generated."
           : auditTarget === "release"
             ? "Release/PR audit generated."
           : auditTarget === "spec"
@@ -416,6 +420,12 @@ export default function ReportsPage() {
     changed_file_mapping?: Array<{ file: string; specs: string[]; link_count: number }>;
     validation?: { tests?: unknown[]; checks?: unknown[]; approvals?: unknown[]; commit_evidence?: string | null };
     rollout_risk?: { level?: string; reasons?: string[] };
+    version?: { package_version?: string; git_sha_short?: string | null; is_dirty?: boolean | null };
+    public_url?: { effective_public_url?: string; source?: string };
+    security?: { auth_required?: boolean; tokens?: { total?: number } };
+    llm?: { providers_with_keys?: number; providers?: unknown[] };
+    backups?: { configured?: boolean; count?: number; latest?: { created_at?: string } | null };
+    audit_log?: { warning_count?: number; recent_count?: number };
   };
 
   return (
@@ -870,6 +880,7 @@ export default function ReportsPage() {
                 <option value="spec">Spec Quality</option>
                 <option value="session">Agent Run</option>
                 <option value="release">Release/PR</option>
+                <option value="registry">Registry Operations</option>
               </select>
               {auditTarget === "project" || auditTarget === "release" ? (
                 <select value={selectedAuditProjectId} onChange={(e) => setSelectedAuditProjectId(e.target.value)}>
@@ -887,7 +898,7 @@ export default function ReportsPage() {
                     </option>
                   ))}
                 </select>
-              ) : (
+              ) : auditTarget === "session" ? (
                 <select value={selectedAuditSessionId} onChange={(e) => setSelectedAuditSessionId(e.target.value)}>
                   {agentSessions.map((session) => (
                     <option key={session.id} value={session.id}>
@@ -895,11 +906,13 @@ export default function ReportsPage() {
                     </option>
                   ))}
                 </select>
-              )}
+              ) : null}
               <button
                 className="primary"
                 disabled={(
-                  auditTarget === "project" || auditTarget === "release"
+                  auditTarget === "registry"
+                    ? false
+                    : auditTarget === "project" || auditTarget === "release"
                     ? !selectedAuditProjectId
                     : auditTarget === "spec"
                       ? !selectedAuditSpecId
@@ -907,7 +920,7 @@ export default function ReportsPage() {
                 ) || busy === "audit-report"}
                 onClick={generateProjectAudit}
               >
-                {busy === "audit-report" ? "Generating..." : auditTarget === "release" ? "Generate Release Audit" : auditTarget === "session" ? "Generate Agent Audit" : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
+                {busy === "audit-report" ? "Generating..." : auditTarget === "registry" ? "Generate Registry Audit" : auditTarget === "release" ? "Generate Release Audit" : auditTarget === "session" ? "Generate Agent Audit" : auditTarget === "spec" ? "Generate Spec Audit" : "Generate Project Audit"}
               </button>
               {auditDetail && (
                 <a className="button-link" href={`/api/v1/audit-reports/${auditDetail.id}/markdown`}>
@@ -1004,7 +1017,18 @@ export default function ReportsPage() {
                           <div className="label">Status</div>
                           <StatusBadge status={auditDetail.status} />
                         </div>
-                        {auditDetail.report_type === "release" ? (
+                        {auditDetail.report_type === "registry_operations" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">Auth</div>
+                              <StatusBadge status={auditEvidence.security?.auth_required ? "pass" : "warning"} />
+                            </div>
+                            <div className="card">
+                              <div className="label">Backups</div>
+                              <div className="metric">{auditEvidence.backups?.count ?? 0}</div>
+                            </div>
+                          </>
+                        ) : auditDetail.report_type === "release" ? (
                           <>
                             <div className="card">
                               <div className="label">Changed files</div>
@@ -1069,7 +1093,18 @@ export default function ReportsPage() {
                         </div>
                       )}
                       <div className="cards" style={{ marginBottom: 12 }}>
-                        {auditDetail.report_type === "release" ? (
+                        {auditDetail.report_type === "registry_operations" ? (
+                          <>
+                            <div className="card">
+                              <div className="label">LLM keys</div>
+                              <div className="metric">{auditEvidence.llm?.providers_with_keys ?? 0}</div>
+                            </div>
+                            <div className="card">
+                              <div className="label">Ops warnings</div>
+                              <div className="metric">{auditEvidence.audit_log?.warning_count ?? 0}</div>
+                            </div>
+                          </>
+                        ) : auditDetail.report_type === "release" ? (
                           <>
                             <div className="card">
                               <div className="label">Validation</div>
@@ -1103,7 +1138,7 @@ export default function ReportsPage() {
                             </div>
                           </>
                         )}
-                        {auditDetail.report_type === "agent_run" || auditDetail.report_type === "release" ? null : auditDetail.report_type === "spec_quality" ? (
+                        {auditDetail.report_type === "agent_run" || auditDetail.report_type === "release" || auditDetail.report_type === "registry_operations" ? null : auditDetail.report_type === "spec_quality" ? (
                           <div className="card">
                             <div className="label">Efficacy</div>
                             <div className="mono">{auditEvidence.efficacy?.runs?.length ?? 0} runs / lift {auditEvidence.efficacy?.avg_lift ?? 0}</div>

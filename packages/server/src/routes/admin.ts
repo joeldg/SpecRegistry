@@ -34,7 +34,7 @@ import {
   type LlmTier,
 } from "../lib/llm.js";
 import { getAppKeyConfig, publicAppKeyConfig, saveAppKeyConfig, type AppKeyConfig } from "../lib/appKeys.js";
-import { pullAndRebuild, selfUpdateEnabled } from "../lib/versionInfo.js";
+import { checkGithubVersion, getLocalVersionInfo, pullAndRebuild, selfUpdateEnabled } from "../lib/versionInfo.js";
 import {
   publicEmbeddingConfig,
   reindexSemanticAll,
@@ -387,6 +387,242 @@ function renderReleaseAuditMarkdown(evidence: any): string {
     "",
   ];
   return lines.join("\n");
+}
+
+function renderRegistryOperationsAuditMarkdown(evidence: any): string {
+  const lines = [
+    "# Registry Operations Audit",
+    "",
+    `Generated: ${evidence.generated_at}`,
+    `Status: ${evidence.status.toUpperCase()}`,
+    "",
+    "## Summary",
+    "",
+    evidence.summary,
+    "",
+    "## Runtime",
+    "",
+    `- Package version: ${evidence.version.package_version}`,
+    `- Git checkout: ${evidence.version.is_git_checkout ? "yes" : "no"}`,
+    `- Git SHA: ${evidence.version.git_sha_short ?? "unknown"}`,
+    `- Git branch: ${evidence.version.git_branch ?? "unknown"}`,
+    `- Dirty tree: ${evidence.version.is_dirty === null ? "unknown" : evidence.version.is_dirty ? "yes" : "no"}`,
+    `- GitHub status: ${evidence.github.status}`,
+    `- Self-update enabled: ${evidence.version.self_update_enabled ? "yes" : "no"}`,
+    "",
+    "## Reachability",
+    "",
+    `- Effective public URL: ${evidence.public_url.effective_public_url}`,
+    `- Source: ${evidence.public_url.source}`,
+    `- Detected IP: ${evidence.public_url.detected_ip}`,
+    "",
+    "## Security Posture",
+    "",
+    `- Auth required: ${evidence.security.auth_required ? "yes" : "no"}`,
+    `- Local users: ${evidence.security.users.total}`,
+    `- Agent users: ${evidence.security.users.agent}`,
+    `- API tokens: ${evidence.security.tokens.total}`,
+    `- LDAP enabled: ${evidence.security.ldap.enabled ? "yes" : "no"}`,
+    "",
+    "## Integrations",
+    "",
+    `- GitHub token configured: ${evidence.integrations.app_keys.has_github_token ? "yes" : "no"}`,
+    `- GitHub webhook secret configured: ${evidence.integrations.app_keys.has_github_webhook_secret ? "yes" : "no"}`,
+    `- Slack signing secret configured: ${evidence.integrations.app_keys.has_slack_signing_secret ? "yes" : "no"}`,
+    "",
+    "## LLM Providers",
+    "",
+    `- Default provider: ${evidence.llm.default.provider}`,
+    `- Default model: ${evidence.llm.default.model}`,
+    `- Default API key configured: ${evidence.llm.default.has_api_key ? "yes" : "no"}`,
+    `- Providers with keys: ${evidence.llm.providers_with_keys}/${evidence.llm.providers.length}`,
+    "",
+    "## Backups",
+    "",
+    `- Configured: ${evidence.backups.configured ? "yes" : "no"}`,
+    `- Scheduled interval: ${evidence.backups.interval_seconds}s`,
+    `- Retention: ${evidence.backups.keep}`,
+    `- Stored backups: ${evidence.backups.count}`,
+    `- Latest backup: ${evidence.backups.latest?.created_at ?? "none"}`,
+    "",
+    "## Skills Marketplace",
+    "",
+    `- Sources: ${evidence.skills.sources.total}`,
+    `- Unreviewed sources: ${evidence.skills.sources.unreviewed}`,
+    `- Candidates: ${evidence.skills.candidates.total}`,
+    `- Candidates needing review: ${evidence.skills.candidates.review}`,
+    `- Blocked candidates: ${evidence.skills.candidates.block}`,
+    "",
+    "## Signals",
+    "",
+    `- Metrics endpoint: ${evidence.metrics.available ? "available" : "unavailable"}`,
+    `- Recent audit log entries: ${evidence.audit_log.recent_count}`,
+    `- Recent operational warnings/errors: ${evidence.audit_log.warning_count}`,
+    `- Pending spec reviews: ${evidence.governance.pending_reviews}`,
+    "",
+    "## Outstanding Actions",
+    "",
+    ...(evidence.outstanding_actions.length ? evidence.outstanding_actions.map((item: string) => `- ${item}`) : ["- None detected by deterministic checks."]),
+    "",
+  ];
+  return lines.join("\n");
+}
+
+async function buildRegistryOperationsAudit(app: FastifyInstance, generatedBy: string) {
+  const local = getLocalVersionInfo();
+  const github = await checkGithubVersion(local, getAppKeyConfig(app.db).github_token || undefined);
+  const publicUrl = getPublicUrlConfig(app.db);
+  const appKeys = publicAppKeyConfig(app.db);
+  const llmDefault = publicLlmConfig(app.db);
+  const llmProviders = publicLlmProvidersConfig(app.db);
+  const llmTiering = publicLlmTieringConfig(app.db);
+  const ldap = publicLdapConfig(app.db);
+  const backupConfig = readBackupConfig();
+  const backups = backupConfig.dir ? listBackups(backupConfig.dir) : [];
+  const userCounts = app.db
+    .prepare("SELECT role, COUNT(*) AS n FROM users GROUP BY role")
+    .all() as Array<{ role: string; n: number }>;
+  const usersByRole = Object.fromEntries(userCounts.map((row) => [row.role, row.n]));
+  const tokenStats = app.db
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <= ? THEN 1 ELSE 0 END) AS expired,
+              SUM(CASE WHEN last_used_at IS NOT NULL THEN 1 ELSE 0 END) AS used
+       FROM tokens`
+    )
+    .get(now()) as { total: number; expired: number | null; used: number | null };
+  const sourceStats = app.db
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+              SUM(CASE WHEN trust_decision = 'unreviewed' THEN 1 ELSE 0 END) AS unreviewed,
+              SUM(CASE WHEN trust_decision = 'blocked' THEN 1 ELSE 0 END) AS blocked
+       FROM skill_sources`
+    )
+    .get() as { total: number; active: number | null; unreviewed: number | null; blocked: number | null };
+  const candidateStats = app.db
+    .prepare(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN gate_status = 'review' THEN 1 ELSE 0 END) AS review,
+              SUM(CASE WHEN gate_status = 'block' THEN 1 ELSE 0 END) AS block,
+              SUM(CASE WHEN status = 'candidate' THEN 1 ELSE 0 END) AS candidate
+       FROM skill_candidates`
+    )
+    .get() as { total: number; review: number | null; block: number | null; candidate: number | null };
+  const recentSince = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const recentAudit = app.db
+    .prepare("SELECT action, summary, created_at FROM audit_log WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50")
+    .all(recentSince) as Array<Record<string, unknown>>;
+  const operationalWarnings = recentAudit.filter((row) => /fail|error|blocked|reject/i.test(`${row.action} ${row.summary}`));
+  const pendingReviews = (app.db.prepare("SELECT COUNT(*) AS n FROM change_requests WHERE status = 'pending'").get() as { n: number }).n;
+  const outstanding = [
+    ...(!app.authRequired ? ["Authentication is optional; set SPECREG_AUTH=required for secured deployments."] : []),
+    ...(publicUrl.source === "detected_ip" ? ["Public URL is auto-detected; set a stable public hostname for agent and Docker deployments."] : []),
+    ...(publicUrl.effective_public_url.includes("localhost") || publicUrl.effective_public_url.includes("127.0.0.1")
+      ? ["Effective public URL uses loopback; remote agents may be unable to reach this registry."]
+      : []),
+    ...(local.is_git_checkout && local.is_dirty ? ["Server checkout has uncommitted local changes."] : []),
+    ...(github.status === "behind" || github.status === "diverged" ? [`Server checkout is ${github.status} GitHub (${github.behind_by ?? 0} commit(s) behind).`] : []),
+    ...(!backupConfig.dir ? ["Backups are not configured; set SPECREG_BACKUP_DIR."] : []),
+    ...(backupConfig.dir && backupConfig.intervalSeconds <= 0 ? ["Backup directory is configured but scheduled backups are disabled."] : []),
+    ...(backupConfig.dir && backups.length === 0 ? ["No registry backups are present in the configured backup directory."] : []),
+    ...(!llmDefault.has_api_key && llmProviders.some((provider) => provider.id === llmDefault.provider && provider.requires_api_key)
+      ? [`Default LLM provider ${llmDefault.provider} is missing an API key.`]
+      : []),
+    ...(!appKeys.has_github_token ? ["GitHub token is not configured; sync jobs and version checks may be limited."] : []),
+    ...(!appKeys.has_github_webhook_secret ? ["GitHub webhook secret is not configured."] : []),
+    ...(Number(sourceStats.unreviewed ?? 0) > 0 ? [`${sourceStats.unreviewed} skill source(s) are still unreviewed.`] : []),
+    ...(Number(candidateStats.review ?? 0) > 0 ? [`${candidateStats.review} skill candidate(s) require review.`] : []),
+    ...(Number(candidateStats.block ?? 0) > 0 ? [`${candidateStats.block} skill candidate(s) are blocked by quality gates.`] : []),
+    ...(operationalWarnings.length ? [`${operationalWarnings.length} recent audit log entry/entries look like operational warnings or errors.`] : []),
+    ...(pendingReviews ? [`${pendingReviews} spec review(s) are pending.`] : []),
+  ];
+  const failing = Boolean(github.status === "diverged" || (app.authRequired && !tokenStats.total));
+  const status = auditStatus({ failingCompliance: failing, warnings: outstanding });
+  const summary =
+    status === "pass"
+      ? "Deterministic checks found a configured registry with stable reachability, security posture, backup evidence, and no operational warnings."
+      : status === "fail"
+        ? "Deterministic checks found registry operations blockers that should be addressed before relying on this deployment."
+        : "Deterministic checks found registry operations warnings that should be reviewed by an administrator.";
+  const evidence = {
+    generated_at: now(),
+    generated_by: generatedBy,
+    report_type: "registry_operations",
+    subject_type: "registry",
+    status,
+    summary,
+    version: { ...local, self_update_enabled: selfUpdateEnabled(app.authRequired) },
+    github,
+    public_url: publicUrl,
+    security: {
+      auth_required: app.authRequired,
+      ldap,
+      users: {
+        total: Object.values(usersByRole).reduce((sum, value) => sum + Number(value ?? 0), 0),
+        admin: Number(usersByRole.admin ?? 0),
+        reviewer: Number(usersByRole.reviewer ?? 0),
+        author: Number(usersByRole.author ?? 0),
+        agent: Number(usersByRole.agent ?? 0),
+      },
+      tokens: {
+        total: Number(tokenStats.total ?? 0),
+        expired: Number(tokenStats.expired ?? 0),
+        used: Number(tokenStats.used ?? 0),
+      },
+    },
+    integrations: { app_keys: appKeys },
+    llm: {
+      default: llmDefault,
+      providers: llmProviders,
+      providers_with_keys: llmProviders.filter((provider) => provider.has_api_key).length,
+      tiering: llmTiering,
+    },
+    backups: {
+      configured: Boolean(backupConfig.dir),
+      dir: backupConfig.dir || null,
+      interval_seconds: backupConfig.intervalSeconds,
+      keep: backupConfig.keep,
+      count: backups.length,
+      latest: backups[0] ?? null,
+    },
+    skills: {
+      sources: {
+        total: Number(sourceStats.total ?? 0),
+        active: Number(sourceStats.active ?? 0),
+        unreviewed: Number(sourceStats.unreviewed ?? 0),
+        blocked: Number(sourceStats.blocked ?? 0),
+      },
+      candidates: {
+        total: Number(candidateStats.total ?? 0),
+        review: Number(candidateStats.review ?? 0),
+        block: Number(candidateStats.block ?? 0),
+        candidate: Number(candidateStats.candidate ?? 0),
+      },
+    },
+    metrics: { available: true, endpoint: "/metrics" },
+    audit_log: {
+      window_days: 7,
+      recent_count: recentAudit.length,
+      warning_count: operationalWarnings.length,
+      warnings: operationalWarnings.slice(0, 10),
+    },
+    governance: { pending_reviews: pendingReviews },
+    outstanding_actions: outstanding,
+  };
+  return {
+    id: uuid(),
+    report_type: "registry_operations",
+    subject_type: "registry",
+    subject_id: "registry",
+    subject_label: "SpecRegistry",
+    status,
+    summary,
+    evidence,
+    markdown: renderRegistryOperationsAuditMarkdown(evidence),
+    generated_by: generatedBy,
+    created_at: evidence.generated_at,
+  };
 }
 
 function buildReleaseAudit(app: FastifyInstance, input: Record<string, unknown>, generatedBy: string) {
@@ -2640,6 +2876,52 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       target_id: report.id,
       summary: `Release/PR audit generated for ${report.subject_label}`,
       detail: { report_type: report.report_type, status: report.status, project_id: report.subject_id },
+    });
+    reply.code(201);
+    return {
+      id: report.id,
+      report_type: report.report_type,
+      subject_type: report.subject_type,
+      subject_id: report.subject_id,
+      subject_label: report.subject_label,
+      status: report.status,
+      summary: report.summary,
+      evidence: report.evidence,
+      markdown: report.markdown,
+      generated_by: report.generated_by,
+      created_at: report.created_at,
+    };
+  });
+
+  app.post("/audit-reports/registry-operations", async (req, reply) => {
+    const report = await buildRegistryOperationsAudit(app, actorFrom(req, "admin"));
+    app.db
+      .prepare(
+        `INSERT INTO audit_reports
+          (id, report_type, subject_type, subject_id, subject_label, status, summary,
+           evidence_json, markdown, llm_summary, generated_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+      )
+      .run(
+        report.id,
+        report.report_type,
+        report.subject_type,
+        report.subject_id,
+        report.subject_label,
+        report.status,
+        report.summary,
+        JSON.stringify(report.evidence, null, 2),
+        report.markdown,
+        report.generated_by,
+        report.created_at
+      );
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "audit_report.generated",
+      target_type: "audit_report",
+      target_id: report.id,
+      summary: "Registry operations audit generated",
+      detail: { report_type: report.report_type, status: report.status },
     });
     reply.code(201);
     return {

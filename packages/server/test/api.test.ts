@@ -890,6 +890,41 @@ describe("project types & specs", () => {
     expect(report.markdown).not.toContain("undefined");
   });
 
+  it("generates persisted registry operations audit reports with secret-safe posture evidence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      status: "identical",
+      ahead_by: 0,
+      behind_by: 0,
+      commits: [],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/v1/audit-reports/registry-operations",
+      payload: {},
+    });
+    expect(generated.statusCode).toBe(201);
+    const report = generated.json();
+    expect(report).toMatchObject({
+      report_type: "registry_operations",
+      subject_type: "registry",
+      subject_id: "registry",
+      subject_label: "SpecRegistry",
+      status: "warning",
+    });
+    expect(report.evidence.version).toHaveProperty("package_version");
+    expect(report.evidence.public_url.effective_public_url).toMatch(/^http/);
+    expect(report.evidence.security).toMatchObject({ auth_required: false });
+    expect(report.evidence.integrations.app_keys).toHaveProperty("has_github_token");
+    expect(report.evidence.llm.default).not.toHaveProperty("api_key");
+    expect(report.evidence.backups).toMatchObject({ configured: false });
+    expect(report.evidence.metrics).toMatchObject({ available: true, endpoint: "/metrics" });
+    expect(report.evidence.outstanding_actions).toContain("Authentication is optional; set SPECREG_AUTH=required for secured deployments.");
+    expect(report.markdown).toContain("# Registry Operations Audit");
+    expect(report.markdown).toContain("## Security Posture");
+    expect(report.markdown).not.toContain("undefined");
+  });
+
   it("rejects duplicate filenames within a project type", async () => {
     const types = await getJson("/api/v1/project-types");
     const edge = types.find((t: any) => t.name === "Acme Edge Device");

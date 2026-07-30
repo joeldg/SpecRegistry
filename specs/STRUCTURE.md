@@ -33,6 +33,14 @@ SDDManager/
 | `packages/shared` | Library | Zero-dependency baseline schemas, types, validations, and helper utilities shared across the monorepo workspace. |
 | `packages/web` | React SPA | Visual interface for browsing registered systems, monitoring sync histories, analyzing metrics, and viewing style violations. |
 
+### Sidecar & Metadata Artifacts (`.spec/`)
+
+| Artifact Path | Format | Purpose |
+| :--- | :--- | :--- |
+| `.spec/code-map.json` | Schema V2 Dictionary JSON | Sidecar AST/code entity inventory with deduplicated string tables and compact tuples. |
+| `.spec/code-trace.json` | Schema V2 Dictionary JSON | Traceability graph linking code entities to Markdown specs, coverage, and drift metrics. |
+| `.spec/code-map.sqlite` | SQLite Database | Local zero-token indexed database sidecar for instant CLI lookups and compliance checks. |
+
 ---
 
 ## 2. Entry Points & Configurations

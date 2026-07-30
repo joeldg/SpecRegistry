@@ -26,6 +26,7 @@ function withWorkspace(opts: { recordedKey?: string; projectContent?: string }):
   fs.mkdirSync(specsDir, { recursive: true });
   const manifest = {
     project_type: PROJECT_TYPE,
+    project: "github.com/acme/renamed-repo",
     ...(opts.recordedKey ? { registry: { url: "http://old-registry:4000", public_key: opts.recordedKey } } : {}),
     specs: [
       { filename: "GLOBAL.md", version: "1.0.0", project_type: "Global" },
@@ -51,7 +52,13 @@ const baseHandler = (targetKey: string, targetSpecs: unknown[]) => (url: URL) =>
   if (url.pathname === "/api/v1/meta/public-key") return response({ algorithm: "ed25519", public_key: targetKey });
   if (url.pathname === "/api/v1/project-types") return response([TYPE_ROW]);
   if (url.pathname === "/api/v1/cli/manifest-report") return response({ project_id: "p1" });
-  if (url.pathname === "/api/v1/specs" && url.search.includes("project_id=p1")) return response(targetSpecs);
+  if (url.pathname === "/api/v1/specs" && url.search.includes("project_id=p1")) {
+    return response([
+      { id: "global-1", filename: "GLOBAL.md", effective_scope: "global", status: "published" },
+      { id: "type-1", filename: "CLI.md", effective_scope: "project_type", status: "published" },
+      ...targetSpecs,
+    ]);
+  }
   throw new Error(`Unexpected request: ${url.pathname}${url.search}`);
 };
 
@@ -136,6 +143,57 @@ test("--apply opens a change request when a published target spec differs", asyn
     await runMigrate({ toServer: "http://new:4000", dir: "specs", apply: true, author: "alice", force: false });
     assert.equal(reviewOpened, true, "a differing published spec should open a change request");
     assert.match(logs.join("\n"), /change request cr1/);
+  } finally {
+    restore();
+    restoreFetch();
+    restoreCwd();
+  }
+});
+
+test("migrate reports the canonical project from the manifest instead of a stale git remote", async () => {
+  const restoreCwd = withWorkspace({ recordedKey: "OLDKEY" });
+  let reportedRepo: string | undefined;
+  const restoreFetch = withMockedFetch((url, init) => {
+    if (url.pathname === "/api/v1/cli/manifest-report") {
+      reportedRepo = JSON.parse(String(init?.body)).repo;
+      return response({ project_id: "p1" });
+    }
+    return baseHandler("NEWKEY", [])(url);
+  });
+  const { restore } = captureLogs();
+  try {
+    await runMigrate({ toServer: "http://new:4000", dir: "specs", apply: false, author: "alice", force: false });
+    assert.equal(reportedRepo, "github.com/acme/renamed-repo");
+  } finally {
+    restore();
+    restoreFetch();
+    restoreCwd();
+  }
+});
+
+test("--apply refuses to re-stamp while inherited org specs are missing on the target", async () => {
+  const restoreCwd = withWorkspace({ recordedKey: "OLDKEY" });
+  let uploads = 0;
+  const restoreFetch = withMockedFetch((url, init) => {
+    if (url.pathname === "/api/v1/meta/public-key") return response({ algorithm: "ed25519", public_key: "NEWKEY" });
+    if (url.pathname === "/api/v1/project-types") return response([TYPE_ROW]);
+    if (url.pathname === "/api/v1/cli/manifest-report") return response({ project_id: "p1" });
+    if (url.pathname === "/api/v1/specs" && url.search.includes("project_id=p1")) return response([]);
+    if (url.pathname === "/api/v1/specs" && init?.method === "POST") {
+      uploads++;
+      return response({ id: "s1", status: "draft" }, { status: 201 });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}${url.search}`);
+  });
+  const { restore } = captureLogs();
+  try {
+    await assert.rejects(
+      runMigrate({ toServer: "http://new:4000", dir: "specs", apply: true, author: "alice", force: false }),
+      /Migration remains incomplete: 2 org-owned spec\(s\) are missing/
+    );
+    assert.equal(uploads, 0, "migration must not partially upload before inherited org guidance is reconciled");
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "specs", ".specregistry.json"), "utf8"));
+    assert.equal(manifest.registry.public_key, "OLDKEY");
   } finally {
     restore();
     restoreFetch();

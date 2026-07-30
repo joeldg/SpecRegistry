@@ -78,10 +78,14 @@ export async function runSync(opts: SyncOptions): Promise<void> {
     return;
   }
   const identity = repoIdentity();
+  const canonicalRepo =
+    typeof manifest.project === "string" && manifest.project.trim()
+      ? manifest.project.trim()
+      : identity.repo;
   const result = await fetchJson<SyncCheckResponse>(`${opts.server}/api/v1/cli/sync-check`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ project_type: manifest.project_type, specs: manifest.specs, repo: identity.repo }),
+    body: JSON.stringify({ project_type: manifest.project_type, specs: manifest.specs, repo: canonicalRepo }),
   }, opts.token);
   try {
     await reportManifest(opts.server, opts.token, manifest, opts.dir, opts.mode);

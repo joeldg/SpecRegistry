@@ -228,6 +228,11 @@ or was not previously managed by the manifest, the CLI refuses to overwrite it u
 `--force` is passed. Repo-specific generated drafts should stay outside `specs/` until
 they are submitted through the registry review workflow.
 
+On sync, files that were managed by the previous manifest but are absent from the newly
+approved bundle are removed as retired guidance. Locally modified retired files are
+protected by the same check and require `--force`; files that were never manifest-managed
+are left alone.
+
 Generate repo-specific draft specs from local code into `.spec/drafts`, then submit them:
 
 ```sh
@@ -272,7 +277,8 @@ you intend to restore the approved registry bundle over local changes.
 `specreg init`, `specreg check`, `specreg sync`, and `specreg submit-drafts` report the
 local manifest back to the registry. The Settings page shows these projects so admins can
 see which repositories are using which project type, manifest path, spec count, and outdated
-spec count.
+spec count. Once a manifest contains a canonical `project` identity, these commands keep
+using it even if the local Git remote is renamed.
 
 ### Migrating a repo to a different registry
 
@@ -299,8 +305,12 @@ What it does:
 - With `--apply`, uploads new and changed specs **as review drafts / change requests**
   (never auto-published — the human approval gate still applies) and re-stamps the manifest
   with the new registry's URL and key.
-- Global and project-type specs are org-owned; `migrate` reports any missing on the target
-  but never pushes them, since defining org-wide specs is a registry admin's responsibility.
+- Global and project-type specs are org-owned. `migrate` never pushes them, since defining
+  org-wide specs is a registry admin's responsibility. If any inherited org-owned spec is
+  absent from the target, apply stops before uploads or re-stamping; an admin must add it
+  before the repository can migrate.
+- After a repository has a registry identity stamp, `init` and `sync` reject a different
+  registry key and direct the operator through `specreg migrate`.
 
 Compile governed specs into agent context files:
 

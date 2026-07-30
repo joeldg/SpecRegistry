@@ -48,8 +48,8 @@ async function fetchPublicKey(server: string, token?: string): Promise<string | 
  * differ (a genuinely different registry) it diffs the repo's project-scoped specs
  * against the target and, with --apply, uploads the missing/conflicting ones as
  * review drafts (never auto-published) and re-stamps the manifest. Org-owned specs
- * (global and project-type templates) are reported, never pushed — they are the
- * registry admins' to define, not the repo's.
+ * (global and project-type templates) are never pushed — they are the registry
+ * admins' to define, not the repo's — and missing ones block the re-stamp.
  */
 export async function runMigrate(opts: MigrateOptions): Promise<void> {
   const workspace = resolveRegistryWorkspace(opts.dir);
@@ -69,8 +69,10 @@ export async function runMigrate(opts: MigrateOptions): Promise<void> {
     return;
   }
   console.log(
-    recordedKey
+    recordedKey && recordedKey !== targetKey
       ? `Migrating from registry ${manifest.registry?.url ?? "(unknown url)"} to ${opts.toServer} (different identity key).`
+      : recordedKey
+        ? `Reconciling with ${opts.toServer} (matching registry key).`
       : `Migrating to ${opts.toServer} (no prior registry key recorded in the manifest).`
   );
 
@@ -79,7 +81,7 @@ export async function runMigrate(opts: MigrateOptions): Promise<void> {
   const project = await reportManifest(
     opts.toServer,
     opts.token,
-    { project_type: projectType.name, specs: [] },
+    { project_type: projectType.name, project: manifest.project, specs: [] },
     opts.dir,
     "migrate"
   );
@@ -135,6 +137,13 @@ export async function runMigrate(opts: MigrateOptions): Promise<void> {
     return;
   }
 
+  if (missingOrgSpecs.length > 0) {
+    throw new Error(
+      `Migration remains incomplete: ${missingOrgSpecs.length} org-owned spec(s) are missing on the target registry. ` +
+        "A registry admin must add them before this repository can be re-stamped."
+    );
+  }
+
   // Apply: upload missing/conflicting repo-owned specs as review drafts / change requests.
   const uploaded: string[] = [];
   for (const plan of toUpload) {
@@ -175,7 +184,8 @@ export async function runMigrate(opts: MigrateOptions): Promise<void> {
     }
   }
 
-  // Re-stamp the manifest with the new registry identity.
+  // Re-stamp the manifest with the new registry identity only after all inherited
+  // organization guidance is available on the target.
   const registry: ManifestRegistry = { url: opts.toServer, public_key: targetKey, stamped_at: new Date().toISOString() };
   const nextManifest: Manifest = { ...manifest, registry };
   fs.writeFileSync(workspace.manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");

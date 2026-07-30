@@ -24,10 +24,16 @@ export interface InitOptions {
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
+  const outDir = path.resolve(process.cwd(), opts.dir);
+  const previousManifest = readExistingManifest(outDir);
   const identity = repoIdentity();
-  const token = opts.token ?? (opts.type ? await enrollAgent(opts.server, identity.repo, opts.type) : undefined);
+  const requestedRepo =
+    typeof previousManifest?.project === "string" && previousManifest.project.trim()
+      ? previousManifest.project.trim()
+      : identity.repo;
+  const token = opts.token ?? (opts.type ? await enrollAgent(opts.server, requestedRepo, opts.type) : undefined);
   if (token && !opts.token) {
-    console.log(`Enrolled agent identity for ${identity.repo}; token stored in .spec/credentials.json (gitignored).`);
+    console.log(`Enrolled agent identity for ${requestedRepo}; token stored in .spec/credentials.json (gitignored).`);
   }
   const setup = opts.type
     ? {
@@ -40,17 +46,36 @@ export async function runInit(opts: InitOptions): Promise<void> {
   if (profile) assertProjectProfileTargetsAvailable(profile, opts.force === true);
   console.log(`\nFetching latest approved specs for "${projectType.name}"...`);
 
-  const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.id)}/download?repo=${encodeURIComponent(identity.repo)}`;
+  const url = `${opts.server}/api/v1/specs/${encodeURIComponent(projectType.id)}/download?repo=${encodeURIComponent(requestedRepo)}`;
   const zip = new AdmZip(await fetchBytes(url, undefined, token));
 
-  const outDir = path.resolve(process.cwd(), opts.dir);
   fs.mkdirSync(outDir, { recursive: true });
   const manifestEntry = zip.getEntry(".specregistry.json");
   if (!manifestEntry) throw new Error("Downloaded bundle did not include .specregistry.json");
   const nextManifest = JSON.parse(manifestEntry.getData().toString("utf8")) as Manifest;
-  validateSafeExtraction(zip, outDir, opts.force === true);
+  const { public_key: publicKey } = await fetchJson<{ public_key: string }>(
+    `${opts.server}/api/v1/meta/public-key`,
+    undefined,
+    token
+  );
+  if (!publicKey?.trim()) throw new Error("Registry did not return an Ed25519 public key");
+  if (
+    previousManifest?.registry?.public_key &&
+    previousManifest.registry.public_key.trim() !== publicKey.trim()
+  ) {
+    throw new Error(
+      "Registry identity changed. Run `specreg migrate --server <target>` before syncing or re-initializing this governed repository."
+    );
+  }
+  nextManifest.registry = {
+    url: opts.server,
+    public_key: publicKey.trim(),
+    stamped_at: new Date().toISOString(),
+  };
+  validateSafeExtraction(zip, outDir, opts.force === true, previousManifest, nextManifest);
+  const removed = removeSupersededGovernedFiles(outDir, previousManifest, nextManifest, opts.force === true);
   for (const entry of zip.getEntries()) {
-    if (entry.isDirectory) continue;
+    if (entry.isDirectory || entry.entryName === ".specregistry.json") continue;
     const target = path.resolve(outDir, entry.entryName);
     if (!target.startsWith(outDir + path.sep) && target !== outDir) {
       throw new Error(`Refusing to extract suspicious bundle path: ${entry.entryName}`);
@@ -58,11 +83,16 @@ export async function runInit(opts: InitOptions): Promise<void> {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, entry.getData());
   }
+  fs.writeFileSync(path.join(outDir, ".specregistry.json"), `${JSON.stringify(nextManifest, null, 2)}\n`, "utf8");
 
   const entries = zip.getEntries().filter((e) => e.entryName !== ".specregistry.json");
   console.log(`\nWrote ${entries.length} spec file(s) to ${path.relative(process.cwd(), outDir) || "."}/:`);
   for (const entry of entries) {
     console.log(`  - ${entry.entryName}`);
+  }
+  if (removed.length > 0) {
+    console.log(`\nRemoved ${removed.length} superseded governed spec file(s):`);
+    for (const filename of removed) console.log(`  - ${filename}`);
   }
   console.log(`\nManifest saved as ${opts.dir}/.specregistry.json (records versions for future syncs).`);
 
@@ -79,9 +109,13 @@ export async function runInit(opts: InitOptions): Promise<void> {
   }
   installAgentSkills(skills, opts.skillDir, opts.force === true);
 
-  writeMcpConfig(opts.server, projectType.name, identity.repo, registryToken(token));
-  writeRegistryGuide(opts.server, projectType.name, identity.repo, opts.dir, registryToken(token), styleGuides, opts.styleguideDir, skills, opts.skillDir);
-  writeAgentsBootstrap(opts.server, projectType.name, identity.repo, opts.dir, opts.skillDir);
+  const canonicalRepo =
+    typeof nextManifest.project === "string" && nextManifest.project.trim()
+      ? nextManifest.project.trim()
+      : requestedRepo;
+  writeMcpConfig(opts.server, projectType.name, canonicalRepo, registryToken(token));
+  writeRegistryGuide(opts.server, projectType.name, canonicalRepo, opts.dir, registryToken(token), styleGuides, opts.styleguideDir, skills, opts.skillDir);
+  writeAgentsBootstrap(opts.server, projectType.name, canonicalRepo, opts.dir, opts.skillDir);
   let projectId: string | undefined;
   try {
     const reported = await reportManifest(opts.server, token, nextManifest, opts.dir, "init");
@@ -155,13 +189,22 @@ async function submitProjectProfile(
   }
 }
 
-function validateSafeExtraction(zip: AdmZip, outDir: string, force: boolean): void {
+function readExistingManifest(outDir: string): Manifest | undefined {
+  const manifestPath = path.join(outDir, ".specregistry.json");
+  if (!fs.existsSync(manifestPath)) return undefined;
+  return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
+}
+
+function validateSafeExtraction(
+  zip: AdmZip,
+  outDir: string,
+  force: boolean,
+  previous: Manifest | undefined,
+  next: Manifest
+): void {
   if (force) return;
-  const existingManifestPath = path.join(outDir, ".specregistry.json");
-  const previous = fs.existsSync(existingManifestPath)
-    ? (JSON.parse(fs.readFileSync(existingManifestPath, "utf8")) as Manifest)
-    : undefined;
   const previousByName = new Map(previous?.specs.map((spec) => [spec.filename, spec.sha256]) ?? []);
+  const nextNames = new Set(next.specs.map((spec) => spec.filename));
   const conflicts: string[] = [];
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory || entry.entryName === ".specregistry.json") continue;
@@ -171,12 +214,48 @@ function validateSafeExtraction(zip: AdmZip, outDir: string, force: boolean): vo
     const previousHash = previousByName.get(entry.entryName);
     if (!previousHash || previousHash !== currentHash) conflicts.push(entry.entryName);
   }
+  for (const [filename, previousHash] of previousByName) {
+    if (nextNames.has(filename)) continue;
+    const target = governedSpecTarget(outDir, filename);
+    if (!fs.existsSync(target)) continue;
+    const currentHash = sha256(fs.readFileSync(target));
+    if (!previousHash || previousHash !== currentHash) conflicts.push(filename);
+  }
   if (conflicts.length > 0) {
     throw new Error(
       `Refusing to overwrite locally modified or unmanaged governed spec files: ${conflicts.join(", ")}. ` +
         "Move repo-specific drafts outside the governed specs directory or re-run with --force."
     );
   }
+}
+
+function removeSupersededGovernedFiles(
+  outDir: string,
+  previous: Manifest | undefined,
+  next: Manifest,
+  force: boolean
+): string[] {
+  if (!previous) return [];
+  const nextNames = new Set(next.specs.map((spec) => spec.filename));
+  const removed: string[] = [];
+  for (const spec of previous.specs) {
+    if (nextNames.has(spec.filename)) continue;
+    const target = governedSpecTarget(outDir, spec.filename);
+    if (!fs.existsSync(target)) continue;
+    const unchanged = Boolean(spec.sha256) && sha256(fs.readFileSync(target)) === spec.sha256;
+    if (!force && !unchanged) continue;
+    fs.unlinkSync(target);
+    removed.push(spec.filename);
+  }
+  return removed;
+}
+
+function governedSpecTarget(outDir: string, filename: string): string {
+  const target = path.resolve(outDir, filename);
+  if (!target.startsWith(outDir + path.sep)) {
+    throw new Error(`Refusing unsafe governed spec path from manifest: ${filename}`);
+  }
+  return target;
 }
 
 function sha256(data: Buffer): string {

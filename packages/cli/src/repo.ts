@@ -22,6 +22,8 @@ export interface ManifestRegistry {
 
 export interface Manifest {
   project_type: string;
+  /** Canonical concrete repository identity recorded by the registry bundle. */
+  project?: string | null;
   specs: ManifestSpec[];
   /** identity of the governing registry, used to detect a migration to a different one */
   registry?: ManifestRegistry;
@@ -67,11 +69,16 @@ export async function reportManifest(
   source: string
 ): Promise<{ project_id: string }> {
   const identity = repoIdentity();
+  const canonicalRepo =
+    typeof manifest.project === "string" && manifest.project.trim()
+      ? manifest.project.trim()
+      : identity.repo;
   return await fetchJson<{ project_id: string }>(`${server}/api/v1/cli/manifest-report`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       ...identity,
+      repo: canonicalRepo,
       project_type: manifest.project_type,
       specs: manifest.specs,
       specs_path: dir,

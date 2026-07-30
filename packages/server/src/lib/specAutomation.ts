@@ -1,3 +1,4 @@
+// @spec[DESIGN.md#42-server-packagesserver]
 export interface SpecPurposeTemplate {
   id: string;
   filename: string;

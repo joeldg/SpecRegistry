@@ -1,4 +1,5 @@
 import fs from "node:fs";
+// @spec[DESIGN.md#41-cli-packagescli]
 import path from "node:path";
 import type { StubPromptResponse } from "@specregistry/shared";
 import { fetchJson, selectProjectType } from "./registry.js";

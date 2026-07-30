@@ -1,4 +1,5 @@
 import type { Db } from "../db.js";
+// @spec[TOKENOMICS.md#tokenomics-and-prompt-budget-governance]
 import { now, uuid } from "../db.js";
 import { sectionAnchor, splitSections } from "./sections.js";
 import type { SearchResult } from "./search.js";

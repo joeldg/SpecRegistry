@@ -1,4 +1,5 @@
 import path from "node:path";
+// @spec[DESIGN.md#41-cli-packagescli]
 import readline from "node:readline/promises";
 import type { ProjectType } from "@specregistry/shared";
 import { SPECREGISTRY_PRODUCT_REPOSITORY_URL } from "./product.js";

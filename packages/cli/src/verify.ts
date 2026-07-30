@@ -40,6 +40,32 @@ export function verifyLocalSpecFiles(dir: string, manifest: SignedManifest): str
 }
 
 /**
+ * Verify only the payload emitted and signed by the registry download endpoint.
+ * `compile_targets` and `registry` are local metadata appended after download, so
+ * including either field would make an otherwise valid registry signature fail.
+ */
+export function verifyManifestSignature(publicKey: string, manifest: SignedManifest): boolean {
+  const {
+    signature,
+    signature_alg: _alg,
+    compile_targets: _localCompileTargets,
+    registry: _localRegistryStamp,
+    ...payload
+  } = manifest;
+  if (typeof signature !== "string") return false;
+  try {
+    return crypto.verify(
+      null,
+      Buffer.from(JSON.stringify(payload), "utf8"),
+      crypto.createPublicKey(publicKey),
+      Buffer.from(signature, "base64")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify local spec provenance: every file hash must match the manifest, and the
  * manifest signature must verify against the registry's ed25519 public key.
  */
@@ -56,19 +82,12 @@ export async function runVerify(opts: VerifyOptions): Promise<boolean> {
   if (!manifest.signature) {
     problems.push("manifest is unsigned (re-run specreg sync against a current server)");
   } else {
-    // compile_targets is appended locally by `specreg compile` and is not part of the signed payload.
-    const { signature, signature_alg: _alg, compile_targets: _local, ...payload } = manifest;
     const { public_key } = await fetchJson<{ public_key: string }>(
       `${opts.server}/api/v1/meta/public-key`,
       undefined,
       opts.token
     );
-    const ok = crypto.verify(
-      null,
-      Buffer.from(JSON.stringify(payload), "utf8"),
-      crypto.createPublicKey(public_key),
-      Buffer.from(signature, "base64")
-    );
+    const ok = verifyManifestSignature(public_key, manifest);
     if (!ok) problems.push("manifest signature does not verify against the registry public key");
   }
 

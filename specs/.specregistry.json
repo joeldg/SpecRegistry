@@ -1,0 +1,83 @@
+{
+  "project_type": "Web App Standard",
+  "project": "github.com/joeldg/SpecRepository",
+  "channel": "stable",
+  "fetched_at": "2026-06-17T21:30:38.557Z",
+  "specs": [
+    {
+      "filename": "AI_AGENT_OPERATING_RULES.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "ebe91205bd45c0e539b902718117612fb321c324ff9bf67c3b2cade1a37039ad"
+    },
+    {
+      "filename": "CODE_DEVELOPMENT_STANDARDS.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "02718a69f83562bac56c0d51dfef5e43ac99a979eabc015670cf98d844484fa4"
+    },
+    {
+      "filename": "CODING_STANDARDS.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "df5ab4efb98c790338ed1a5ecde725a52dc0189be6743fde3d5eef6e576622b9"
+    },
+    {
+      "filename": "DOCUMENTATION_STANDARDS.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "524e63c0a3799ee41b5466d126c1b1c8c391cc4874a79e1b00173e3d71dd850f"
+    },
+    {
+      "filename": "GIT_FLOW.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "27c232763d9b6a1934675c4d84ad61ddd097766fd52d0524f265ebf2a9cfa7a8"
+    },
+    {
+      "filename": "GLOBAL_SECURITY.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "390746940cf191408d995478a82a0a8da86053f64b2d4a4e2ce07502626e5212"
+    },
+    {
+      "filename": "OBSERVABILITY_AND_TRACEABILITY.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "97496a9b3eb5416be2362859556d0a77e79d4f05d8f37e135f07d7b4e151b54e"
+    },
+    {
+      "filename": "TICKET_WORKFLOW.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "c93b3c26d131d6c4cf77b9ade272674e7bda6995853776774cdd371a2090f4b2"
+    },
+    {
+      "filename": "DESIGN.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRepository",
+      "scope": "project",
+      "sha256": "8c9bddbfcfe029f406c5888e42a83744d7301f1c4234769c28bfc91b6cee0c62"
+    },
+    {
+      "filename": "STRUCTURE.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRepository",
+      "scope": "project",
+      "sha256": "67b2f198d94e86d7d7be45d3fd12326f6453c2c950a14d64992f4afbb1ff74a6"
+    }
+  ],
+  "signature": "TtynsION0Zr2xbnuKDqTk2QIGo2ufm29MUnoSNAtOqCAlNzGmuR7UaEB6VICJCuxBakvoaNa91lSFiIAqTEGDA==",
+  "signature_alg": "ed25519",
+  "compile_targets": [
+    "claude"
+  ]
+}

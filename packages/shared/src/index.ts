@@ -1,4 +1,5 @@
 /** Shared domain types for SpecRegistry (server, CLI, and web UI). */
+// @spec[DESIGN.md#22-contract-first-shared-core-pattern-packagesshared]
 
 export const SPECREGISTRY_PRODUCT_REPOSITORY_URL = "https://github.com/joeldg/SpecRegistry";
 

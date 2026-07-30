@@ -1,3 +1,4 @@
+// @spec[DESIGN.md#43-web-client-packagesweb]
 import type {
   AgentFeedback,
   AuditReportDetail,

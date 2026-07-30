@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+// @spec[DESIGN.md#42-server-packagesserver]
 import type { Db } from "../db.js";
 import { HttpError } from "../helpers.js";
 import { decryptSecret, encryptSecret } from "./secretCrypto.js";

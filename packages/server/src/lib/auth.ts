@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+// @spec[GLOBAL_SECURITY.md#1-purpose]
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Db } from "../db.js";
 import { now, uuid } from "../db.js";

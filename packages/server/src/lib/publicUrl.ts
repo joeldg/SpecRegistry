@@ -1,4 +1,5 @@
 import os from "node:os";
+// @spec[DESIGN.md#42-server-packagesserver]
 import type { FastifyRequest } from "fastify";
 import type { Db } from "../db.js";
 import { HttpError } from "../helpers.js";

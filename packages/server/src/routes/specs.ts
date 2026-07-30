@@ -480,6 +480,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Admin-only: soft-delete a spec (retained for 14 days before purge).
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/specs/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as Record<string, unknown>;

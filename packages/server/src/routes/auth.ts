@@ -224,6 +224,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { token, username: user.username, role: user.role, expires_at: expiresAt };
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/auth/users/:id/tokens", async (req) => {
     const { id } = req.params as { id: string };
     const user = app.db.prepare("SELECT * FROM users WHERE id = ?").get(id) as Record<string, unknown> | undefined;
@@ -239,6 +240,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { revoked: result.changes };
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/auth/api-keys/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const result = app.db.prepare("DELETE FROM tokens WHERE id = ?").run(id);

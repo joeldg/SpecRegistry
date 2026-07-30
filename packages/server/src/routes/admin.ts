@@ -2128,6 +2128,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM approval_policies WHERE id = ?").get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/approval-policies/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const result = app.db.prepare("DELETE FROM approval_policies WHERE id = ?").run(id);
@@ -2246,6 +2247,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM spec_templates WHERE id = ?").get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/templates/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const result = app.db.prepare("DELETE FROM spec_templates WHERE id = ?").run(id);
@@ -2287,6 +2289,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM webhooks WHERE id = ?").get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/webhooks/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const result = app.db.prepare("DELETE FROM webhooks WHERE id = ?").run(id);
@@ -2348,6 +2351,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM repo_subscriptions WHERE id = ?").get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/subscriptions/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     app.db.prepare("DELETE FROM sync_jobs WHERE subscription_id = ?").run(id);

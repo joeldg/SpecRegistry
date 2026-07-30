@@ -527,6 +527,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare("SELECT * FROM skill_assignments WHERE id = ?").get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/skills/assignments/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = app.db.prepare("SELECT * FROM skill_assignments WHERE id = ?").get(id) as { skill_id: string; scope: string } | undefined;
@@ -600,6 +601,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
       .get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/skills/spec-links/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = app.db.prepare("SELECT * FROM skill_spec_links WHERE id = ?").get(id) as { skill_id: string; spec_id: string; relation: string } | undefined;
@@ -656,6 +658,7 @@ export async function skillRoutes(app: FastifyInstance): Promise<void> {
     return app.db.prepare(skillSelectWithVersion("WHERE ask.id = ?")).get(id);
   });
 
+  // @spec[DESIGN.md#42-server-packagesserver]
   app.delete("/skills/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = app.db.prepare("SELECT * FROM agent_skills WHERE id = ?").get(id) as { name: string; built_in: number } | undefined;

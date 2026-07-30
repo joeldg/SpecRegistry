@@ -357,6 +357,21 @@ describe("auth & roles", () => {
       });
       expect(blockedUserList.statusCode).toBe(403);
 
+      const blockedAuditList = await secured.inject({
+        method: "GET",
+        url: "/api/v1/audit-reports",
+        headers: aliceHeaders,
+      });
+      expect(blockedAuditList.statusCode).toBe(403);
+
+      const blockedRegistryAudit = await secured.inject({
+        method: "POST",
+        url: "/api/v1/audit-reports/registry-operations",
+        headers: aliceHeaders,
+        payload: {},
+      });
+      expect(blockedRegistryAudit.statusCode).toBe(403);
+
       const listedUsers = await secured.inject({
         method: "GET",
         url: "/api/v1/auth/users",

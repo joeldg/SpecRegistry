@@ -102,6 +102,11 @@ function auditStatus(flags: { failingCompliance: boolean; warnings: string[] }):
   return flags.warnings.length ? "warning" : "pass";
 }
 
+const OPERATIONAL_WARNING_ACTIONS = new Set([
+  "server.update_blocked",
+  "server.update_failed",
+]);
+
 function markdownAnchor(title: string): string {
   return title
     .trim()
@@ -513,7 +518,9 @@ async function buildRegistryOperationsAudit(app: FastifyInstance, generatedBy: s
   const recentAudit = app.db
     .prepare("SELECT action, summary, created_at FROM audit_log WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50")
     .all(recentSince) as Array<Record<string, unknown>>;
-  const operationalWarnings = recentAudit.filter((row) => /fail|error|blocked|reject/i.test(`${row.action} ${row.summary}`));
+  const operationalWarnings = recentAudit.filter(
+    (row) => typeof row.action === "string" && OPERATIONAL_WARNING_ACTIONS.has(row.action)
+  );
   const pendingReviews = (app.db.prepare("SELECT COUNT(*) AS n FROM change_requests WHERE status = 'pending'").get() as { n: number }).n;
   const outstanding = [
     ...(!app.authRequired ? ["Authentication is optional; set SPECREG_AUTH=required for secured deployments."] : []),

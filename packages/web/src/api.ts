@@ -289,6 +289,43 @@ export interface ReportsOverview {
     efficacy_improved: number;
   }>;
 }
+
+export interface ProjectSectionEvidenceReport {
+  project: {
+    id: string;
+    repo: string;
+    project_type_id: string;
+  };
+  trace_report: {
+    id: string;
+    generated_at: string;
+    created_at: string;
+  } | null;
+  summary: {
+    total_sections: number;
+    linked_sections: number;
+    unlinked_sections: number;
+    observed_sections: number;
+    unobserved_sections: number;
+  };
+  sections: Array<{
+    spec_id: string;
+    filename: string;
+    version: string;
+    scope: "global" | "project_type" | "project";
+    section_title: string;
+    section_anchor: string;
+    approx_tokens: number;
+    implementation_links: number;
+    linked_entities: string[];
+    implementation_status: "linked" | "unlinked";
+    implementation_reported_at: string | null;
+    context_events: number;
+    deliveries: number;
+    retrieval_status: "observed" | "unobserved";
+    last_delivered_at: string | null;
+  }>;
+}
 export interface TokenUsageReport {
   generated_at: string;
   window_days: number;
@@ -1067,6 +1104,8 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>("/api/v1/analytics/summary"),
   reports: () => request<ReportsOverview>("/api/v1/reports/overview"),
+  projectSectionEvidence: (projectId: string) =>
+    request<ProjectSectionEvidenceReport>(`/api/v1/reports/projects/${encodeURIComponent(projectId)}/spec-sections`),
   auditReports: (filters: { report_type?: string; subject_type?: string; subject_id?: string } = {}) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {

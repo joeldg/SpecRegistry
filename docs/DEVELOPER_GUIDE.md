@@ -356,7 +356,11 @@ spec when no exact governing section exists.
 Use `specreg code-map --report` to upload the traceability report to the registry. The CLI
 uses `--type` or the local `specs/.specregistry.json` manifest to identify the project type.
 Uploaded reports appear on the Reports page as code-to-spec coverage, drift severity, and
-unmapped implementation counts.
+unmapped implementation counts. Reports → Projects also combines exact
+`FILE#section-anchor` implementation links from the latest trace with observed context
+deliveries for every section in the project's effective bundle. A section with neither
+signal is a review candidate, not proof that the section should be removed: it may be
+process-only, missing an annotation, stale guidance, or an unimplemented requirement.
 
 Use `specreg comply` before committing governed implementation work. It prints a compact
 commit evidence trailer:

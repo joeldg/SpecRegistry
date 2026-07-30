@@ -41,6 +41,15 @@ export class UserService {
 export function registerRoutes(app: ReturnType<typeof fastify>) {
   app.get("/users/:id", async (req) => ({ ok: true }));
 }
+
+function normalizeInternalId(id: string) {
+  return id.trim();
+}
+
+// @spec[API.md#data]
+function normalizeGovernedId(id: string) {
+  return id.toLowerCase();
+}
 `,
     "utf8"
   );
@@ -83,6 +92,9 @@ test("code inventory extracts AST metadata and stable IDs across supported langu
   assert.ok(entities.find((entity) => entity.kind === "class" && entity.name === "UserService"));
   assert.ok(entities.find((entity) => entity.kind === "interface" && entity.name === "UserDto"));
   assert.ok(entities.find((entity) => entity.kind === "function" && entity.name === "registerRoutes"));
+  assert.equal(entities.find((entity) => entity.name === "registerRoutes")?.metadata?.exported, true);
+  assert.equal(entities.find((entity) => entity.name === "normalizeInternalId")?.metadata?.exported, false);
+  assert.equal(entities.find((entity) => entity.name === "normalizeGovernedId")?.metadata?.spec_ref, "API.md#data");
   assert.ok(entities.find((entity) => entity.kind === "route" && entity.name === "GET /users/:id"));
   assert.ok(entities.find((entity) => entity.kind === "route" && entity.name === "POST /sessions"));
   assert.ok(entities.find((entity) => entity.kind === "schema" && entity.name === "users"));
@@ -99,6 +111,16 @@ test("code inventory extracts AST metadata and stable IDs across supported langu
   assert.equal(inventory.trace.spec_count, 1);
   assert.equal(inventory.trace.links.some((link) => link.entity_id === route.id && link.spec_filename === "API.md"), true);
   assert.equal(inventory.trace.coverage.linked_entity_count > 0, true);
+  assert.equal(
+    inventory.trace.unlinked_entities.some((entity) => entity.name === "normalizeInternalId"),
+    false,
+    "an unannotated internal helper remains inventoried but is outside the governed denominator"
+  );
+  assert.equal(
+    inventory.trace.links.some((link) => link.entity_name === "normalizeGovernedId" && link.spec_section === "data"),
+    true,
+    "an explicit section annotation brings an internal helper into the governed denominator"
+  );
   assert.equal(typeof inventory.trace.drift.score, "number");
   assert.equal(inventory.trace.unlinked_entities.every((entity) => typeof entity.start_line === "number"), true);
 
@@ -138,12 +160,20 @@ export function registerRoutes(app: ReturnType<typeof fastify>) {
   assert.ok(getRoute);
   assert.equal(getRoute!.confidence, 1);
   assert.equal(getRoute!.spec_filename, "API.md");
+  assert.equal(getRoute!.spec_section, "routes");
   assert.ok(getRoute!.reasons.includes("explicit @spec annotation"));
   assert.ok(getRoute!.reasons.some((r) => r.includes("section: routes")));
+  const encoded = encodeCodeTraceV2(trace);
+  assert.deepEqual(encoded.dict.sections, ["routes"]);
+  assert.equal(
+    decodeCodeTraceV2(encoded).links.find((link) => link.entity_name === "GET /users/:id")?.spec_section,
+    "routes"
+  );
 
   const deleteRoute = trace.links.find((link) => link.entity_name === "DELETE /users/:id");
   assert.ok(deleteRoute);
   assert.equal(deleteRoute!.confidence, 0.9);
+  assert.equal(deleteRoute!.spec_section, undefined);
   assert.ok(deleteRoute!.reasons.some((r) => r.includes('section "nonexistent-section" not found')));
 
   // An annotation pointing at a spec file that doesn't exist falls back to fuzzy
@@ -201,6 +231,10 @@ test("schema V2 dictionary encoding and decoding performs lossless round-trip an
   assert.equal(decodedTrace.links.length, inventory.trace.links.length);
   assert.equal(decodedTrace.unlinked_entities.length, inventory.trace.unlinked_entities.length);
   assert.equal(decodedTrace.links[0]?.entity_name, inventory.trace.links[0]?.entity_name);
+  assert.deepEqual(
+    decodedTrace.links.map((link) => link.spec_section),
+    inventory.trace.links.map((link) => link.spec_section)
+  );
 
   const dsl = formatTraceAsDsl(decodedTrace);
   assert.ok(dsl.includes("[TRACE]"));

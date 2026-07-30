@@ -2,7 +2,7 @@
   "project_type": "Web App Standard",
   "project": "github.com/joeldg/SpecRegistry",
   "channel": "stable",
-  "fetched_at": "2026-07-30T22:19:57.507Z",
+  "fetched_at": "2026-07-30T23:18:13.342Z",
   "specs": [
     {
       "filename": "AGENT_OPERATING_RULES.md",
@@ -101,16 +101,51 @@
       "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
       "sha256": "0188d4a8bedb1eebbaf10bfeeb5326219a073ee45056b521fbef981c79191689"
+    },
+    {
+      "filename": "CODE_TRACE_SCOPE.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "cc68359eb1f81bc91b98003780356541d6e290f3b1e7cf6e3ec3b8a6f72d645a"
+    },
+    {
+      "filename": "DOCUMENTATION_STANDARDS.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "11f21e4bdec7a2cbdcb235f4e8404d258fb697bfb24edd78df7758462f6ab277"
+    },
+    {
+      "filename": "GIT_FLOW.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "0bbeced8b07620bc2a0377ac6f5389d2e31ade2e81b8ea6db8bf6c6645f51968"
+    },
+    {
+      "filename": "SPEC_SECTION_EVIDENCE.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "57251137699ab892aec52c5736e29b0771c80cefe9b0b8e3e3960d969873a826"
+    },
+    {
+      "filename": "TICKET_WORKFLOW.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "eb8b212257e532322e34ee5aa4fe2c5bbc809ca042dc4b18eea826d0092ba32c"
     }
   ],
-  "signature": "qc5Xpy1begnyiNiFGQ7QRauZDLjSgTACznJ9uw319BZUtjsF0wNDXdEP1qOMBoMZLEL5DrYI36Bs+7n4DqV6AA==",
+  "signature": "APYSi+TlT2n7OM+lEXG74gzUbqAkg/gf2T3fP5eQgHoGTlEUx2TOAYMfjwmORIVeQBJBVvv17/ZnAl/yIIHRAg==",
   "signature_alg": "ed25519",
-  "compile_targets": [
-    "claude"
-  ],
   "registry": {
     "url": "http://127.0.0.1:4000",
     "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAZExslRlV2RRhtEEYMUqcQRCfmh1jBxP3s305dmi4o7Q=\n-----END PUBLIC KEY-----",
-    "stamped_at": "2026-07-30T22:21:30.655Z"
-  }
+    "stamped_at": "2026-07-30T23:18:13.359Z"
+  },
+  "compile_targets": [
+    "claude"
+  ]
 }

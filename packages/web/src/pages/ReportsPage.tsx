@@ -8,6 +8,7 @@ import {
   type DependencyMap,
   type EfficacyRun,
   type ManifestDiagnostics,
+  type ProjectSectionEvidenceReport,
   type ProjectRow,
   type ProjectTypeWithCount,
   type ReportsOverview,
@@ -98,6 +99,7 @@ function DonutChart({ data }: { data: ChartDatum[] }) {
   );
 }
 
+// @spec[SPEC_SECTION_EVIDENCE.md#dashboard]
 export default function ReportsPage() {
   const [reportTab, setReportTab] = useState<ReportTab>("overview");
   const [report, setReport] = useState<ReportsOverview>();
@@ -143,6 +145,9 @@ export default function ReportsPage() {
   const [manifestText, setManifestText] = useState("");
   const [manifestRepo, setManifestRepo] = useState("");
   const [manifestResult, setManifestResult] = useState<ManifestDiagnostics>();
+  const [sectionEvidenceProjectId, setSectionEvidenceProjectId] = useState("");
+  const [sectionEvidence, setSectionEvidence] = useState<ProjectSectionEvidenceReport>();
+  const [onlyUnlinkedSections, setOnlyUnlinkedSections] = useState(true);
   const [busy, setBusy] = useState<string>();
 
   function reload() {
@@ -175,6 +180,7 @@ export default function ReportsPage() {
         setSelectedAuditSessionId((current) => current || nextAgentSessions[0]?.id || "");
         setProjectType((current) => current || nextTypes.find((t) => t.scope === "project_type")?.name || "");
         setSelectedAuditProjectId((current) => current || nextProjects[0]?.id || "");
+        setSectionEvidenceProjectId((current) => current || nextProjects[0]?.id || "");
         setSelectedAuditReportId((current) => current || nextAuditReports[0]?.id || "");
       })
       .catch((e) => setError(e.message));
@@ -231,6 +237,16 @@ export default function ReportsPage() {
       .then(setAuditDetail)
       .catch((e) => setError(e.message));
   }, [selectedAuditReportId]);
+
+  useEffect(() => {
+    if (!sectionEvidenceProjectId) {
+      setSectionEvidence(undefined);
+      return;
+    }
+    api.projectSectionEvidence(sectionEvidenceProjectId)
+      .then(setSectionEvidence)
+      .catch((e) => setError(e.message));
+  }, [sectionEvidenceProjectId]);
 
   const tokenReportForFilters = projectTokenUsage ?? tokenUsage;
   const tokenEventTypes = useMemo(() => [...new Set((tokenUsage?.by_event_type ?? []).map((row) => row.event_type).filter(Boolean))].sort(), [tokenUsage]);
@@ -1246,6 +1262,102 @@ export default function ReportsPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          <div className="section">
+            <div className="page-head" style={{ marginBottom: 12 }}>
+              <div>
+                <h2>Project Spec Section Evidence</h2>
+                <span className="sub">
+                  Exact implementation links and observed context delivery are separate signals; an unlinked section still requires human review.
+                </span>
+              </div>
+              <div className="form-row">
+                <select
+                  value={sectionEvidenceProjectId}
+                  onChange={(event) => setSectionEvidenceProjectId(event.target.value)}
+                  aria-label="Section evidence project"
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.repo}</option>
+                  ))}
+                </select>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={onlyUnlinkedSections}
+                    onChange={(event) => setOnlyUnlinkedSections(event.target.checked)}
+                  />{" "}
+                  Only without implementation evidence
+                </label>
+              </div>
+            </div>
+            {!sectionEvidence ? (
+              <div className="empty">Select a project to inspect section evidence.</div>
+            ) : (
+              <>
+                <div className="cards" style={{ marginBottom: 12 }}>
+                  <div className="card">
+                    <div className="metric">{sectionEvidence.summary.total_sections}</div>
+                    <div className="label">Effective sections</div>
+                  </div>
+                  <div className="card">
+                    <div className="metric">{sectionEvidence.summary.linked_sections}</div>
+                    <div className="label">With implementation links</div>
+                  </div>
+                  <div className={`card${sectionEvidence.summary.unlinked_sections ? " alert" : ""}`}>
+                    <div className="metric">{sectionEvidence.summary.unlinked_sections}</div>
+                    <div className="label">Without implementation links</div>
+                  </div>
+                  <div className={`card${sectionEvidence.summary.unobserved_sections ? " alert" : ""}`}>
+                    <div className="metric">{sectionEvidence.summary.unobserved_sections}</div>
+                    <div className="label">Never delivered</div>
+                  </div>
+                </div>
+                <div className="notice-banner" style={{ marginBottom: 12 }}>
+                  “No implementation evidence” can mean process-only guidance, a missing annotation, stale guidance, or missing implementation. It is a review queue, not an automatic deletion recommendation.
+                </div>
+                <table className="grid">
+                  <thead>
+                    <tr>
+                      <th>Spec</th>
+                      <th>Section</th>
+                      <th>Scope</th>
+                      <th>Implementation</th>
+                      <th>Retrieval</th>
+                      <th>Tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sectionEvidence.sections
+                      .filter((section) => !onlyUnlinkedSections || section.implementation_status === "unlinked")
+                      .map((section) => (
+                        <tr key={`${section.spec_id}-${section.section_anchor}`}>
+                          <td className="mono">{section.filename}@{section.version}</td>
+                          <td>
+                            <div>{section.section_title}</div>
+                            <div className="faint mono">#{section.section_anchor}</div>
+                          </td>
+                          <td><StatusBadge status={section.scope} /></td>
+                          <td>
+                            <StatusBadge status={section.implementation_status === "linked" ? "approved" : "pending"} />{" "}
+                            <span className="mono">{section.implementation_links} links</span>
+                            {section.linked_entities.length > 0 && (
+                              <div className="faint">{section.linked_entities.slice(0, 3).join(", ")}</div>
+                            )}
+                          </td>
+                          <td>
+                            <StatusBadge status={section.retrieval_status === "observed" ? "approved" : "pending"} />{" "}
+                            <span className="mono">{section.deliveries} deliveries</span>
+                            {section.last_delivered_at && <div className="faint">{timeAgo(section.last_delivered_at)}</div>}
+                          </td>
+                          <td className="mono">{section.approx_tokens}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </>
             )}
           </div>
             </>

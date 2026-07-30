@@ -4,7 +4,7 @@
 
 This file is compiled from the organization's governed specification registry for the project type **Web App Standard**. Treat every section as authoritative guidance. If you find a contradiction or ambiguity while working, report it through the SpecRegistry feedback channel (MCP tool `report_spec_feedback` or POST /api/v1/ai/feedback) instead of guessing.
 
-_Compiled 2026-07-30T22:19:57.574Z · AGENT_OPERATING_RULES.md@2.0.0 · CODING_STANDARDS.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · API.md@1.0.0 · DESIGN.md@2.0.0 · STRUCTURE.md@2.0.0_
+_Compiled 2026-07-30T23:18:13.447Z · AGENT_OPERATING_RULES.md@2.0.0 · CODING_STANDARDS.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · API.md@1.0.0 · DESIGN.md@2.0.0 · STRUCTURE.md@2.0.0 · CODE_TRACE_SCOPE.md@1.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · SPEC_SECTION_EVIDENCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0_
 
 ## SpecRegistry Operating Rules
 
@@ -917,3 +917,271 @@ above. Before adding a new helper or route, search the owning package for an exi
 implementation. Do not move database access into clients, duplicate authorization in the
 dashboard, or create undocumented authentication variables. When repository structure
 changes, update this specification in the same reviewed change.
+
+---
+
+<!-- CODE_TRACE_SCOPE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Code Trace Scope
+
+## Governed Entity Denominator
+
+Code inventory records all supported entities, but coverage and drift measure only
+implementation surfaces that can reasonably assert a governing contract:
+
+- routes, commands, configuration, schemas, migrations, indexes, and classes;
+- exported functions, interfaces, and types;
+- class methods whose exported class forms a public implementation surface; and
+- any internal entity carrying an explicit `@spec[FILENAME.md#section-anchor]` annotation.
+
+Private helpers, local callbacks, and internal data-shape aliases remain searchable in the
+inventory but do not count as uncovered governance by default. This prevents compliance
+scores from rewarding blanket annotations on implementation details that no specification
+actually governs.
+
+## Evidence Semantics
+
+An entity in the denominator is linked when an explicit annotation or a supported trace
+matcher identifies a governing specification. Exact section evidence is claimed only by a
+valid explicit annotation. Waivers remain available for exceptional public surfaces and
+must include a reviewable rationale.
+
+## Acceptance Evidence
+
+- Extraction tests distinguish exported declarations from internal helpers.
+- Coverage tests prove internal helpers remain in the inventory but outside the governed
+  denominator unless explicitly annotated.
+- Routes and other runtime boundary entities remain governed regardless of export syntax.
+- Existing schema V1 and V2 inventories remain readable when export metadata is absent.
+
+## AI Agent Directives
+
+Do not export code or add annotations solely to improve coverage. Treat an unlinked public
+surface as missing implementation evidence and an uncounted internal helper as inventory,
+not proof of governance.
+
+---
+
+<!-- DOCUMENTATION_STANDARDS.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Documentation Standards
+
+## Scope
+
+This specification governs repository README files, architecture and developer guides, API
+and CLI documentation, deployment and operational procedures, troubleshooting guidance,
+and user-facing documentation.
+
+## Source of Truth
+
+Governed specifications define required behavior. Documentation explains how to use,
+develop, operate, and verify that behavior. When documentation and a current spec conflict,
+report the conflict and correct the appropriate source through review rather than silently
+choosing one.
+
+## Accuracy and Coverage
+
+1. Documentation reflects current code, configuration, APIs, schemas, commands, generated
+   artifacts, and deployment behavior.
+2. Critical build, test, authentication, deployment, troubleshooting, recovery, and
+   rollback workflows are documented where they exist.
+3. Stale, contradictory, duplicated, and misleading content is corrected or explicitly
+   retired.
+4. Examples use supported commands and configuration names and do not expose secrets.
+5. Instructions identify prerequisites and distinguish required behavior from optional
+   recommendations.
+
+## Change Rules
+
+Update documentation in the same pull request when a public interface, command,
+configuration option, schema contract, deployment procedure, or governed workflow changes.
+Internal refactors require a documentation change only when they invalidate existing
+guidance.
+
+## Review
+
+Documentation changes use the repository's normal pull-request review. Governed spec
+changes additionally use SpecRegistry review and versioning. A repository may maintain
+document owners, templates, or review gates, but those are required only when the
+repository actually defines them.
+
+## Acceptance Evidence
+
+- Commands and examples are verified against the current repository where practical.
+- Public behavior changes include the corresponding documentation diff.
+- Broken or missing guidance is tracked as feedback or follow-up work.
+
+## AI Agent Directives
+
+Do not preserve known-false documentation for compatibility. When changing a documented
+surface, update the relevant guide in the same change and report any unresolved
+specification conflict.
+
+---
+
+<!-- GIT_FLOW.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Git Flow
+
+## Scope
+
+This specification defines the minimum governed branch, pull-request, verification, merge,
+and rollback flow. A repository may document stricter naming and protection rules.
+
+## Branches
+
+1. Start work from the current default branch unless a reviewed release or hotfix process
+   specifies another base.
+2. Use the repository's configured branch prefix and naming convention. Agent-created
+   branches use the host-required prefix, such as `codex/`, when one is configured.
+3. Keep a branch focused on one reviewable objective. A ticket may be linked when the work
+   originates from an issue tracker, but a ticket is not required when an authorized user
+   request or governed task session is the source of work.
+4. Do not push implementation commits directly to a protected default or release branch.
+
+## Pull Requests
+
+- Changes reach protected branches through pull requests.
+- Open a ready PR when the change is complete and verified; use draft status only while
+  work is intentionally incomplete or awaiting a blocking decision.
+- The PR describes the objective, affected specs or exact sections, verification actually
+  run, skipped or failed checks, compatibility risk, and residual work.
+- Required repository checks and human approvals control merge eligibility.
+- Agents may prepare and update PRs but do not approve or merge their own governed changes.
+
+## Merge and History
+
+Use the merge method allowed by repository settings and maintainers. Do not claim that
+rebase, squash, or merge commits are universally required when the repository does not
+enforce that policy. Keep commits and PR scope coherent enough to review and revert.
+
+## Releases
+
+When a repository publishes versioned releases, follow its release specification and
+Semantic Versioning policy. Release notes link the change and available validation evidence.
+
+## Rollback
+
+Every merged change should be recoverable through a reviewed revert, compensating migration,
+feature disablement, or documented operational rollback. High-risk changes state the
+rollback path before merge. A rollback is itself recorded and reviewed.
+
+## AI Agent Directives
+
+Create a scoped branch from the current base, open a truthful PR, and leave approval and
+merge to authorized humans. Do not invent a ticket, approval, check result, merge policy,
+or release requirement.
+
+---
+
+<!-- SPEC_SECTION_EVIDENCE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Project Spec Section Evidence
+
+## Scope
+
+This project-specific specification governs section-level evidence in code trace reports,
+the SpecRegistry API, and the Reports dashboard for the concrete
+`github.com/joeldg/SpecRegistry` repository.
+
+## Trace Payload
+
+1. An explicit `@spec[FILENAME.md#section-anchor]` annotation links the next governable
+   code entity to both the named specification and the exact normalized section anchor.
+2. Trace schema V1 links carry the optional `spec_section` field.
+3. Trace schema V2 dictionary encoding carries section anchors without breaking readers of
+   older tuples that do not contain a section value.
+4. Fuzzy links that identify only a specification do not claim section-level evidence.
+
+## Persistence
+
+The registry stores the optional section anchor with each persisted code-trace link.
+Database evolution is append-only and existing trace rows remain valid with a null section.
+
+## Project Section Evidence Report
+
+For a selected project, the API reports every section in its current effective governed
+bundle and combines two independent signals:
+
+- implementation evidence: explicit code-entity links to that exact section in the
+  project's latest code trace report;
+- retrieval usage: recorded project context deliveries for that section.
+
+The report identifies sections with no implementation evidence and sections with no
+retrieval observations. Absence is a review signal, not proof that guidance is obsolete:
+process, security, documentation, governance, and operational sections may legitimately
+have no direct code entity.
+
+## Dashboard
+
+The Reports → Projects view lets an operator select a project and inspect section evidence.
+It shows the specification, section, implementation-link count, retrieval-delivery count,
+and latest evidence timestamps. Sections lacking implementation evidence are visibly
+highlighted and accompanied by the caution that reviewers must decide whether the section
+is process-only, missing annotations, stale guidance, or missing implementation.
+
+## Acceptance Evidence
+
+- CLI tests prove exact section anchors survive V1 and V2 trace generation.
+- Server tests prove section anchors are persisted and the project report distinguishes
+  implementation links from context deliveries.
+- Web build/tests verify the dashboard consumes the typed report.
+- Existing trace payloads and database rows without section anchors remain readable.
+
+## AI Agent Directives
+
+Add section annotations only where the exact section governs the entity. Never manufacture
+links to improve a percentage. Treat an unlinked section as a prompt for review and record
+missing guidance, intentional process-only scope, or implementation drift explicitly.
+
+---
+
+<!-- TICKET_WORKFLOW.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Work Item and Ticket Workflow
+
+## Scope
+
+This specification governs issues, tickets, and equivalent work items when a team uses
+them. An authorized user request or governed agent task session may also initiate work
+without inventing a ticket.
+
+## Useful Work Item Content
+
+For work that benefits from a tracked ticket, record:
+
+- the desired outcome and why it matters;
+- affected repository, subsystem, API, schema, configuration, or operational area;
+- applicable specifications and exact sections when known;
+- acceptance and verification criteria;
+- compatibility and risk considerations;
+- rollback or mitigation expectations for material risk;
+- required evidence; and
+- unresolved questions and assumptions.
+
+The amount of detail is proportional to risk and ambiguity. Small, authorized maintenance
+does not require ceremonial fields that add no decision value.
+
+## Readiness
+
+Before implementation, confirm that the objective, scope, authority, and done conditions
+are clear enough to act safely. If a required decision would materially change the result,
+request clarification. Missing guidance is reported through SpecRegistry rather than
+guessed or replaced by a fabricated ticket.
+
+## Relationship to Pull Requests
+
+Link a PR to its ticket when one exists. The PR remains responsible for describing the
+actual diff, spec mapping, verification outcomes, and residual risk; a ticket link does not
+replace that evidence.
+
+## Review and Escalation
+
+Repository protection and approval policies determine review and merge. Repeated rejection,
+unresolved specification conflict, or unclear authority is escalated to a human owner.
+
+## AI Agent Directives
+
+Do not invent ticket IDs or claim approval that did not occur. Work from an authorized user
+request, governed task session, or real ticket, and preserve enough evidence for reviewers
+to understand what changed and why.

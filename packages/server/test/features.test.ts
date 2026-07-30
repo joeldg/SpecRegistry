@@ -211,6 +211,7 @@ describe("sync-check (CLI drift detection)", () => {
               entity_name: "GET /users/:id",
               entity_kind: "route",
               spec_filename: "API.md",
+              spec_section: "resources",
               confidence: 0.9,
               reasons: ["route path appears in spec"],
             },
@@ -240,6 +241,30 @@ describe("sync-check (CLI drift detection)", () => {
       code_coverage_ratio: 0.5,
       code_drift_score: 0.5,
       code_drift_severity: "medium",
+    });
+
+    const download = await app.inject({
+      method: "GET",
+      url: "/api/v1/specs/Acme%20Edge%20Device/download?repo=github.com%2Facme%2Ftraceable",
+    });
+    expect(download.statusCode).toBe(200);
+    const sectionEvidence = await getJson(
+      `/api/v1/reports/projects/${encodeURIComponent(report.json().project_id)}/spec-sections`
+    );
+    expect(sectionEvidence.summary.total_sections).toBeGreaterThan(0);
+    expect(sectionEvidence.summary.linked_sections).toBe(1);
+    expect(sectionEvidence.sections.find((section: any) =>
+      section.filename === "API.md" && section.section_anchor === "resources"
+    )).toMatchObject({
+      implementation_status: "linked",
+      implementation_links: 1,
+      retrieval_status: "observed",
+    });
+    expect(sectionEvidence.sections.find((section: any) =>
+      section.filename === "API.md" && section.section_anchor === "transport"
+    )).toMatchObject({
+      implementation_status: "unlinked",
+      retrieval_status: "observed",
     });
   });
 

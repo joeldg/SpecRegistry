@@ -1,0 +1,116 @@
+{
+  "source": "specregistry",
+  "installed_at": "2026-07-30T18:23:56.498Z",
+  "skills": [
+    {
+      "id": "builtin-collect-delivery-evidence",
+      "slug": "collect-delivery-evidence",
+      "name": "Collect delivery evidence",
+      "description": "Record the tests, checks, and operational evidence that support a completed change.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-collect-delivery-evidence-1-0-0",
+      "content_hash": "64f14ca887756cc2e6f6cd27479e3ce4d3b79770819af5161b475069fbe3ef5f"
+    },
+    {
+      "id": "builtin-evaluate-quality-model",
+      "slug": "evaluate-quality-model",
+      "name": "Evaluate the quality model",
+      "description": "Run the external QUALITY.md evaluation loop against this project's governed quality rubric, if one exists.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-evaluate-quality-model-1-0-0",
+      "content_hash": "a55c8bdf800d03ecd83475778f7cf37902179cffebc2389f91f8ba0bdf39020d"
+    },
+    {
+      "id": "builtin-load-governed-specs",
+      "slug": "load-governed-specs",
+      "name": "Load governed specs",
+      "description": "Load the current global, project-type, and project-scoped specifications before implementation work.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-load-governed-specs-1-0-0",
+      "content_hash": "15f302d61e53aa064c61e81912483ca75ae998abf8b8f8bb9f5952f80eef2b41"
+    },
+    {
+      "id": "builtin-plan-from-specs",
+      "slug": "plan-from-specs",
+      "name": "Plan from specs",
+      "description": "Turn governed requirements into an implementation plan and acceptance evidence.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-plan-from-specs-1-0-0",
+      "content_hash": "23a29cabd9009687f766891136d7a9363d283345347e88d40b4acf2340f1ce92"
+    },
+    {
+      "id": "builtin-propose-not-publish",
+      "slug": "propose-not-publish",
+      "name": "Propose, do not self-approve",
+      "description": "Propose changes to governed specs through review; never approve or publish your own change.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-propose-not-publish-1-0-0",
+      "content_hash": "25393d741e8488f96158f25d1ec234a53b3c79c060d534ac48f44c5798b86a4b"
+    },
+    {
+      "id": "builtin-register-task-session",
+      "slug": "register-task-session",
+      "name": "Register the task session",
+      "description": "Open a governed agent session with begin_task before doing non-trivial implementation work.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-register-task-session-1-0-0",
+      "content_hash": "51b0107d5f8742442c2ba9b47861ac87f7c68b87bf8fb5b1858c67bdc16f6d15"
+    },
+    {
+      "id": "builtin-report-spec-problems",
+      "slug": "report-spec-problems",
+      "name": "Report spec problems",
+      "description": "Report ambiguity, contradiction, or outdated guidance instead of guessing around it.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-report-spec-problems-1-0-0",
+      "content_hash": "dc0168049283469825ad50762bd6db22556100a4c258693948a4b83547601108"
+    },
+    {
+      "id": "builtin-resolve-uncovered-guidance",
+      "slug": "resolve-uncovered-guidance",
+      "name": "Resolve uncovered guidance",
+      "description": "Pull governed guidance before writing in a language or domain the loaded specs do not cover.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-resolve-uncovered-guidance-1-0-0",
+      "content_hash": "75edc8341771caf24dcec9d0288652149253d5fe5bb6c3ee42be1d022efd06c3"
+    },
+    {
+      "id": "builtin-run-compliance-loop",
+      "slug": "run-compliance-loop",
+      "name": "Run the compliance loop",
+      "description": "Confirm objective compliance before claiming a task is complete, and keep working until it passes.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-run-compliance-loop-1-0-0",
+      "content_hash": "74873ac45ada6a73cd0c6d21eb68e654a1f0cb7670c5f1ca6c3f911c3a3c356d"
+    },
+    {
+      "id": "builtin-search-spec-context",
+      "slug": "search-spec-context",
+      "name": "Search spec context",
+      "description": "Find focused governing sections without injecting the entire spec set into context.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-search-spec-context-1-0-0",
+      "content_hash": "7f6f3083c298f87371a6385e461ba63c68999b8b00c4dda6e54555b0a0d25a60"
+    },
+    {
+      "id": "builtin-verify-conformance",
+      "slug": "verify-conformance",
+      "name": "Verify conformance",
+      "description": "Check implementation results against the current governed specification set.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "version-builtin-verify-conformance-1-0-0",
+      "content_hash": "46a0fd26c41ef4ddfc59b6972db0b97b6f45b4984c2493b4438a1a260568c014"
+    }
+  ]
+}

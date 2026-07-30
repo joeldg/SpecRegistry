@@ -1,9 +1,16 @@
 {
   "project_type": "Web App Standard",
-  "project": "github.com/joeldg/SpecRepository",
+  "project": "github.com/joeldg/SpecRegistry",
   "channel": "stable",
-  "fetched_at": "2026-06-17T21:30:38.557Z",
+  "fetched_at": "2026-07-30T18:23:56.464Z",
   "specs": [
+    {
+      "filename": "AGENT_OPERATING_RULES.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "6ffc0e6d3bd6ab0436af0af71bc67d401fd3cd4ebcccdd33a50fca4c306d18dc"
+    },
     {
       "filename": "AI_AGENT_OPERATING_RULES.md",
       "version": "1.0.0",
@@ -47,11 +54,53 @@
       "sha256": "390746940cf191408d995478a82a0a8da86053f64b2d4a4e2ce07502626e5212"
     },
     {
+      "filename": "IMPLEMENTATION_EVIDENCE.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "a2459c93f52ebf392832dd949ed5a820c0235c543c85cf868ff02455638e50ee"
+    },
+    {
       "filename": "OBSERVABILITY_AND_TRACEABILITY.md",
       "version": "1.0.0",
       "project_type": "Global",
       "scope": "global",
       "sha256": "97496a9b3eb5416be2362859556d0a77e79d4f05d8f37e135f07d7b4e151b54e"
+    },
+    {
+      "filename": "PROJECT_PROFILE.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "ad8fbcde18de12e03ab09c78e1862ed3a5126f64f9e63a6a4cc977d98ef001b0"
+    },
+    {
+      "filename": "SDD_OPERATING_MODEL.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "30296740dcb41bd91f4a22390c799d91bd7dac032d9b889683615648e838e20d"
+    },
+    {
+      "filename": "SECURITY_AND_SECRETS.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "e825a19516f227ccf86b631c26eba3e3d1c50e2e8c22c003806a9018ce0cd470"
+    },
+    {
+      "filename": "SPEC_AUTHORING_STANDARD.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "ec7cf6f8e49b85d7ac246bc07ae7eb3664d11aed82c3372d8f49d27c646e9585"
+    },
+    {
+      "filename": "SPEC_GOVERNANCE.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "dfdb68f322be27396d30321acc251acda002beefad997075db049128d231e5b7"
     },
     {
       "filename": "TICKET_WORKFLOW.md",
@@ -61,28 +110,37 @@
       "sha256": "c93b3c26d131d6c4cf77b9ade272674e7bda6995853776774cdd371a2090f4b2"
     },
     {
+      "filename": "TOKENOMICS.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "783e0da8d0c5ded729a6d43318e218cae48bd245b3c6813fd74a4b1977a8379e"
+    },
+    {
+      "filename": "TRACEABILITY_AND_OBSERVABILITY.md",
+      "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "f616c339ba94f0b7bc54f8c7c75ec26a22cb6e31ca79789a2e06b3010539130c"
+    },
+    {
       "filename": "DESIGN.md",
       "version": "1.0.0",
-      "project_type": "github.com/joeldg/SpecRepository",
+      "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
       "sha256": "8c9bddbfcfe029f406c5888e42a83744d7301f1c4234769c28bfc91b6cee0c62"
     },
     {
       "filename": "STRUCTURE.md",
       "version": "1.0.0",
-      "project_type": "github.com/joeldg/SpecRepository",
+      "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
-      "sha256": "67b2f198d94e86d7d7be45d3fd12326f6453c2c950a14d64992f4afbb1ff74a6"
+      "sha256": "9454eff699f14c1f28e5e7e445c56a5d473e0e0cd875bfa9ad11036da84121ec"
     }
   ],
-  "signature": "TtynsION0Zr2xbnuKDqTk2QIGo2ufm29MUnoSNAtOqCAlNzGmuR7UaEB6VICJCuxBakvoaNa91lSFiIAqTEGDA==",
+  "signature": "JEZymP/YDG0UNF15HWgvctYlAM5CaGoq/MnT7F03elUFoSMffk+0WCsLaPQ54sk9rYMe2kXE2BYvR6ZbbDyQDA==",
   "signature_alg": "ed25519",
   "compile_targets": [
     "claude"
-  ],
-  "registry": {
-    "url": "http://localhost:4000",
-    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAkJ7JaI+SuvG/Dqrmg7TPDtZyBIsPG8Ja18/11uWhrpg=\n-----END PUBLIC KEY-----",
-    "stamped_at": "2026-07-30T18:17:49.710Z"
-  }
+  ]
 }

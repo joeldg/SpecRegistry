@@ -4,7 +4,7 @@
 
 This file is compiled from the organization's governed specification registry for the project type **Web App Standard**. Treat every section as authoritative guidance. If you find a contradiction or ambiguity while working, report it through the SpecRegistry feedback channel (MCP tool `report_spec_feedback` or POST /api/v1/ai/feedback) instead of guessing.
 
-_Compiled 2026-07-30T18:13:12.076Z · AGENT_OPERATING_RULES.md@1.0.0 · AI_AGENT_OPERATING_RULES.md@1.0.0 · CODE_DEVELOPMENT_STANDARDS.md@1.0.0 · CODING_STANDARDS.md@1.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · OBSERVABILITY_AND_TRACEABILITY.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · DESIGN.md@1.0.0 · STRUCTURE.md@1.0.0_
+_Compiled 2026-07-30T18:23:56.538Z · AGENT_OPERATING_RULES.md@1.0.0 · AI_AGENT_OPERATING_RULES.md@1.0.0 · CODE_DEVELOPMENT_STANDARDS.md@1.0.0 · CODING_STANDARDS.md@1.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · OBSERVABILITY_AND_TRACEABILITY.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · DESIGN.md@1.0.0 · STRUCTURE.md@1.0.0_
 
 ## SpecRegistry Operating Rules
 
@@ -798,34 +798,474 @@ When work changes code structure, APIs, schemas, commands, or config, prefer gen
 
 ---
 
-<!-- DESIGN.md v1.0.0 (Web App Standard) -->
+<!-- DESIGN.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
 
-# Web App Standard — Design Specification
+# System Architecture and Design Specification (DESIGN.md)
 
-## System Architecture
-Single-page React frontend, REST backend, relational store. Server-rendered
-pages only where SEO requires it.
-
-## Design Patterns
-- API handlers are thin; domain logic lives in service modules.
-- Frontend state: server state via fetch hooks, UI state local to components.
-
-## Data Flow
-All mutations go through the API layer; the frontend never writes to storage directly.
+This document provides a comprehensive technical design specification for the **SDDManager (Software Design Document Manager)**. SDDManager is an enterprise-grade platform built to manage, compile, verify, and query structured Software Design Documents (SDDs). It enables a GitOps-driven workflow where software architecture documentation is treated as code, compiled into structured JSON schemas, audited for style and completeness, and exposed to both human developers and AI coding agents via a Model Context Protocol (MCP) server.
 
 ---
 
-<!-- STRUCTURE.md v1.0.0 (Web App Standard) -->
+## 1. System Architecture Overview
 
-# Web App Standard — Repository Structure
+The SDDManager is structured as a monorepo consisting of five decoupled packages that interact over defined protocol boundaries. The system utilizes a centralized SQLite repository, standardizes communication via a `shared` types library, and offers CLI, Web, and MCP interfaces.
 
-| Path | Purpose |
-| --- | --- |
-| `src/api/` | Route handlers and request validation |
-| `src/services/` | Domain logic |
-| `src/web/` | React application |
-| `test/` | Unit and integration tests |
+### 1.1 High-Level Block Diagram
 
-## Entry Points
-- `src/index.ts` — server entry
-- `src/web/main.tsx` — frontend entry
+```mermaid
+graph TD
+    subgraph Local Developer Environment / CI-CD
+        CLI[packages/cli]
+        LocalGit[(Git Repo / MD Files)]
+    end
+
+    subgraph SDD Platform Services
+        SRV[packages/server]
+        DB[(SQLite: specregistry.db)]
+        Web[packages/web]
+    end
+
+    subgraph AI Assistant Ecosystem
+        MCP[packages/mcp]
+        LLM[AI Coding Agent / IDE]
+    end
+
+    %% Interactions
+    LocalGit -->|Reads MD| CLI
+    CLI -->|Parses & Verifies| CLI
+    CLI -->|Push Compile Artifacts / HTTPS REST| SRV
+    SRV <-->|Read / Write| DB
+    Web <-->|Fetch SDD State & Metrics| SRV
+    LLM <-->|JSON-RPC Protocol| MCP
+    MCP <-->|Internal API / DB Query| SRV
+```
+
+### 1.2 Component Breakdown
+
+| Package / Directory | Type | Runtime / Tech | Responsibility |
+| :--- | :--- | :--- | :--- |
+| `packages/cli` | Node CLI Tool | TypeScript, Node.js | Scans directory trees for Markdown files, validates schemas and frontmatter, executes linter/style checks, and compiles documents into single-file AST bundles to sync with the central server. |
+| `packages/server` | Back-end API Server | Express, Better-SQLite3 | Exposes REST APIs for document registry, manages historical versions, tracks style-guide conformance scores, handles JWT-based client auth, and serves compiled artifacts. |
+| `packages/web` | Front-end SPA | React, Vite, Tailwind | Provides a graphical portal for reading compiled SDDs, tracking audit trails, monitoring team adherence to documentation rules, and visualizing system dependency graphs. |
+| `packages/mcp` | Model Context Protocol | TypeScript, MCP SDK | Exposes a standardized Model Context Protocol interface. Enables AI assistants (e.g., Claude, Cursor) to dynamically query, search, and validate software design documents. |
+| `packages/shared` | Types & Utilities | TypeScript | Defines system-wide data interfaces, compilation schemas, validation rules, and endpoint specs used by both CLI, Web, and Server. |
+| `config/alloy` | Formal Modeling | Alloy Analyzer | Holds formal specification models (`config.alloy`) used to mathematically verify core architectural invariants (e.g., draft submission and revision rules). |
+
+---
+
+## 2. High-Level Design Patterns
+
+To ensure modularity, high performance, and reliability, the SDDManager implements several core design patterns:
+
+### 2.1 Compiler and AST Pattern (packages/cli)
+Instead of treating Markdown files as raw text blocks, the CLI compiles them into an Abstract Syntax Tree (AST).
+* **Parser:** Reads markdown frontmatter (YAML) and divides headers into hierarchical sections.
+* **Semantic Analyzer:** Verifies document cross-references (e.g., an API contract in `API.md` linking to a schema in `DATABASE_SCHEMA.md`).
+* **Code Generator:** Produces a single `sdd-bundle.json` containing the AST, schema classifications, and checksums for atomic delivery to the registry.
+
+### 2.2 Contract-First Shared Core Pattern (packages/shared)
+To prevent drift across boundaries:
+* All network payloads, database entity interfaces, validation errors, and metadata schemas are declared inside `packages/shared`.
+* Both `packages/cli` (the producer) and `packages/server` (the consumer) import compile-time contracts from `shared`, enforcing strong end-to-end type safety.
+
+### 2.3 Command/Handler & Registry Sync Pattern
+The CLI uses a command pattern organized as explicit actions: `init`, `scan`, `verify`, `compile`, and `sync` (submit drafts).
+* Local state changes are buffered in a temporary schema folder.
+* Synchronizing with the database utilizes an optimistic concurrency control protocol. The CLI submits the document hash along with parent commit references. If the remote history has diverged, the server rejects the synchronization, requiring a local re-scan and pull.
+
+### 2.4 Model Context Protocol (MCP) Wrapper
+To integrate natively with Large Language Models (LLMs), the `packages/mcp` module acts as an adapter layer over the system's registry. It translates context requests from LLMs into direct queries against the SQLite database, using semantic routing to search for design files, retrieve context windows, and output structured tool schema declarations.
+
+---
+
+## 3. Data Flow Patterns
+
+### 3.1 Document Scan, Verification, and Compilation Flow (Local/CI)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer / CI Runner
+    participant CLI as CLI Engine
+    participant SG as Styleguide Engine
+    participant Disk as Local File System
+
+    Dev->>CLI: run "sdd-cli compile"
+    CLI->>Disk: Scan workspace for *.md files
+    Disk-->>CLI: Return Markdown files & directories
+    CLI->>CLI: Extract YAML frontmatter metadata
+    
+    rect rgb(240, 248, 255)
+        note right of CLI: Validation Phase
+        CLI->>SG: Load Google Styleguide rules & config.alloy boundaries
+        SG-->>CLI: Validation rules schema
+        CLI->>CLI: Lint markdown syntax & verify mandatory sections
+        CLI->>CLI: Build cross-document dependency graph
+    end
+
+    CLI->>Disk: Write sdd-bundle.json (Compiled AST)
+    CLI-->>Dev: Compilation successful (Conformity Score: 98%)
+```
+
+### 3.2 Registry Sync and Central Registry Submission Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CLI as CLI Engine
+    participant SRV as Express Server
+    participant DB as SQLite DB
+
+    CLI->>SRV: POST /api/v1/registry/submit-draft (Auth Token + sdd-bundle.json)
+    SRV->>SRV: Validate auth token & bundle integrity checksums
+    
+    rect rgb(245, 245, 245)
+        note over SRV, DB: Database Transaction
+        SRV->>DB: Query current head revision of the target system
+        DB-->>SRV: Return active system metadata
+        SRV->>SRV: Verify Git merge-base path (prevent split-brain state)
+        SRV->>DB: Insert transaction record into `sdd_revisions`
+        SRV->>DB: Update system compliance status & metrics
+    end
+    
+    SRV-->>CLI: Sync Complete (Revision ID: #1042, System Status: COMPLIANT)
+```
+
+### 3.3 AI Agent Query Protocol Flow (MCP Interface)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Agent as AI Coding Agent (Claude)
+    participant MCP as MCP Server
+    participant SRV as Express Server
+    participant DB as SQLite DB
+
+    Agent->>MCP: JSON-RPC (mcp:list_tools)
+    MCP-->>Agent: Returns schema tools: ["search_sdds", "get_system_boundaries", "verify_local_sdd"]
+    Agent->>MCP: JSON-RPC (mcp:call_tool "search_sdds" { query: "UDP Protocol Contract" })
+    MCP->>DB: SQL Query over `sdd_documents` with full-text index
+    DB-->>MCP: Returns matching AST fragments & file paths
+    MCP-->>Agent: Raw text/JSON context block with structural constraints
+```
+
+---
+
+## 4. Package and Component Deep Dive
+
+### 4.1 CLI (`packages/cli`)
+The CLI acts as the entry point for local software engineering loops and automated integration environments.
+
+```
+packages/cli/src/
+├── index.ts           # Entrypoint, registers commander commands
+├── env.ts             # Strongly typed CLI environment parser
+├── init.ts            # Bootstraps empty projects with specs/ directories
+├── scan.ts            # Recursively navigates disk to build draft manifest
+├── verify.ts          # Evaluates markdown AST against Style Guides
+├── styleguides.ts     # Engine rules (Google Styleguide standards)
+├── compile.ts         # Bundles ASTs, resolves internal file links
+├── submitDrafts.ts    # Transports payload to remote Express API
+├── registry.ts        # Manages configuration states
+└── repo.ts            # Parses git parameters (commit hash, branch, remote)
+```
+
+* **Core Logic Flow:**
+  When `compile` runs, `scan.ts` filters the local workspaces using exclusion globs. Markdown files are parsed via an AST processing library. `verify.ts` runs checking algorithms on each AST node, evaluating formatting constraints (header ordering, presence of descriptions, valid link definitions). If validation fails, it generates diagnostic issues with row/column locations.
+
+### 4.2 Server (`packages/server`)
+The Server is an Express-based engine running SQLite via `better-sqlite3`.
+
+```
+packages/server/src/
+├── app.ts             # Express initialization, Middleware pipelines
+├── db.ts              # SQLite database driver client and schema setup
+├── env.ts             # Server configuration validation (yup/zod pattern)
+├── index.ts           # HTTP execution server wrapper
+├── seed.ts            # Default styles database seeder
+├── routes/            # REST API endpoints (systems, docs, sync, telemetry)
+└── lib/               # Authentication, token validation, parsing utils
+```
+
+* **State Persistence Strategy:**
+  SQLite handles concurrently read/write access using Write-Ahead Logging (WAL) mode. Transactions are executed synchronously inside memory-mapped Express route handlers.
+
+### 4.3 Web Client (`packages/web`)
+A single-page application focused on dashboard telemetry, audit-trail compliance, and real-time visualization of codebase specifications.
+
+```
+packages/web/src/
+├── main.tsx           # React virtual DOM mounter
+├── App.tsx            # Main layout & router orchestration
+├── api.ts             # HTTP client implementation to communicate with server
+├── components.tsx     # Reusable UI widgets (cards, diff-views, metric dials)
+└── styles.css         # Tailwind utility styling
+```
+
+* **Key Views:**
+  1. **Compliance Dashboard:** Real-time progress bar of a company's systems, listing which directories are out of sync with their physical code implementation.
+  2. **Interdependency View:** A directed visual graph illustrating where system specifications share interface references, enabling impact assessment when system definitions undergo structural modification.
+
+### 4.4 Model Context Protocol Adapter (`packages/mcp`)
+A standards-compliant bridge serving programmatic integration to AI systems.
+
+```
+packages/mcp/src/
+└── index.ts           # Implements MCP Node SDK, tool registrations
+```
+
+* **Integration Strategy:**
+  By parsing standard commands, the MCP server allows AI-supported editors to retrieve raw file contexts directly from the central design specification database instead of reading massive code paths.
+
+---
+
+## 5. Database Schema Design
+
+The SQLite database (`specregistry.db`) keeps track of systems, draft submissions, structural documents, and validation logs.
+
+```mermaid
+erDiagram
+    SYSTEMS ||--o{ SDD_REVISIONS : "has"
+    SYSTEMS ||--o{ STYLE_GUIDE_PROFILES : "enforces"
+    SDD_REVISIONS ||--|{ SDD_DOCUMENTS : "contains"
+    SDD_DOCUMENTS ||--o{ COMPLIANCE_VIOLATIONS : "produces"
+
+    SYSTEMS {
+        TEXT id PK
+        TEXT name
+        TEXT repository_url
+        TEXT description
+        TIMESTAMP created_at
+    }
+
+    STYLE_GUIDE_PROFILES {
+        TEXT id PK
+        TEXT name
+        TEXT rules_payload_json
+    }
+
+    SDD_REVISIONS {
+        TEXT id PK
+        TEXT system_id FK
+        TEXT git_commit_sha
+        TEXT git_branch
+        TEXT author_email
+        TIMESTAMP submitted_at
+        REAL compliance_score
+    }
+
+    SDD_DOCUMENTS {
+        TEXT id PK
+        TEXT revision_id FK
+        TEXT file_path
+        TEXT frontmatter_json
+        TEXT markdown_ast_json
+        TEXT content_hash
+    }
+
+    COMPLIANCE_VIOLATIONS {
+        TEXT id PK
+        TEXT document_id FK
+        TEXT rule_code
+        TEXT severity
+        INTEGER line_number
+        TEXT message
+    }
+```
+
+---
+
+## 6. Style Guide and Verification Logic
+
+The platform's verification engine (`styleguides.ts` and `verify.ts`) processes markdown files against predefined rule specifications.
+
+### 6.1 Standard Google Documentation Alignment
+The platform evaluates incoming document nodes against standard documentation criteria:
+* **Section Completeness:** Mandatory sections such as `# System Overview`, `# API Contracts`, and `# Data Structures` are verified using AST node traversal.
+* **Structural Correctness:** Evaluates relative header levels (e.g., ensuring a `###` header is preceded by an `##` parent).
+* **Reference Isolation:** Inspects external local markdown file pointers to ensure links are valid system-relative paths and do not point to missing assets.
+
+### 6.2 Compliance Score Calculation
+The server calculates a cumulative quality score ($Q$) for every uploaded revision:
+
+$$Q = 100 - \left( \frac{10 \cdot E_{critical} + 3 \cdot E_{warning} + 1 \cdot E_{info}}{\text{Total Document Count}} \right)$$
+
+* A system revision with a score of $Q < 80$ is labeled **NON-COMPLIANT** in the Web Dashboard and fails target pull request status checks during CI-CD workflows.
+
+---
+
+## 7. Operational Resilience, Security, and Observability
+
+### 7.1 Security & Authentication Bounds
+* **CLI Sync Pipeline:** Communication from CLI to Server requires a cryptographically signed HMAC authorization header. API Tokens are provisioned per system scope on the Admin console and passed to CLI environments via `SDD_API_TOKEN`.
+* **Database Isolation:** Better-SQLite3 operations execute in pre-compiled parametrized statement queries to prevent arbitrary runtime SQL injection vector injections.
+
+### 7.2 Observability and Logs
+* The REST server implements standardized, colorized stdout formats:
+  `[TIMESTAMP] [INFO/WARN/ERROR] [REQUEST_ID] METHOD /path STATUS_CODE - duration_ms`
+* Revisions maintain transition telemetry logs, ensuring tracking of documentation updates alongside Git branch merges.
+
+### 7.3 Performance Optimizations
+* **Bundle Caching:** The CLI caches local file hash maps under `.sdd_cache/` to identify unmodified files, running markdown parsing passes only on modified documents.
+* **Database Indexing:** SQLite tables contain index overlays on foreign keys (`revision_id`, `system_id`) to maintain fast payload query evaluation, even with extensive history tracking.
+
+---
+
+<!-- STRUCTURE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Codebase Structure and Architecture Map
+
+This document outlines the directory structure, entry points, configuration frameworks, and module dependencies of the SDDManager (System Design Document Manager) monorepo.
+
+---
+
+## 1. Core Directory Purposes
+
+The repository is organized as a monorepo containing distinct execution layers, static specification templates, and local configuration environments.
+
+```
+SDDManager/
+├── config/             # High-level configuration models (e.g., Alloy verification specs)
+├── docs/               # Tokenomics, design decisions, and system specifications
+├── packages/           # Monorepo workspaces (TypeScript codebase)
+│   ├── cli/            # CLI engine for document auditing, compilation, and registry sync
+│   ├── mcp/            # Model Context Protocol (MCP) server for LLM integration
+│   ├── server/         # Express backend API and database management engine
+│   ├── shared/         # Common schemas, TypeScript interfaces, and shared utilities
+│   └── web/            # Vite + React frontend single-page application (SPA)
+├── samples/            # Standardized sample documents for seeding and testing
+│   └── ai-sdd/         # Pre-configured mock system designs and standards files
+└── specs/              # Root specifications defining engineering policies and protocols
+```
+
+### Workspace Directory Profiles
+
+| Directory | Type | Purpose |
+| :--- | :--- | :--- |
+| `packages/cli` | TypeScript CLI | Executable tool for developers and agents to initialize, lint, compile, and sync specs locally or in CI/CD pipelines. |
+| `packages/mcp` | TypeScript Server | Model Context Protocol engine enabling LLMs and AI Agents to securely read, search, and navigate System Design Documents. |
+| `packages/server` | Express Server | Core API layer managing specs, verification runs, styleguides, and persistence to SQLite (`specregistry.db`). |
+| `packages/shared` | Library | Zero-dependency baseline schemas, types, validations, and helper utilities shared across the monorepo workspace. |
+| `packages/web` | React SPA | Visual interface for browsing registered systems, monitoring sync histories, analyzing metrics, and viewing style violations. |
+
+### Sidecar and Metadata Artifacts (.spec/)
+
+| Artifact Path | Format | Purpose |
+| :--- | :--- | :--- |
+| `.spec/code-map.json` | Schema V2 Dictionary JSON | Sidecar AST/code entity inventory with deduplicated string tables and compact tuples. |
+| `.spec/code-trace.json` | Schema V2 Dictionary JSON | Traceability graph linking code entities to Markdown specs, coverage, and drift metrics. |
+| `.spec/code-map.sqlite` | SQLite Database | Local zero-token indexed database sidecar for instant CLI lookups and compliance checks. |
+
+---
+
+## 2. Entry Points & Configurations
+
+### Runtime Entry Points
+
+The platform consists of multiple runtime processes with the following primary execution entries:
+
+| Service / Tool | Entry File Path | Execution Purpose |
+| :--- | :--- | :--- |
+| **Monorepo (Root)** | `package.json` | Controls monorepo workspace dependencies via NPM workspaces. |
+| **CLI Workspace** | `packages/cli/src/index.ts` | Dispatches CLI subcommands (e.g., `init`, `compile`, `verify`, `sync`). |
+| **MCP Workspace** | `packages/mcp/src/index.ts` | Boots up the Model Context Protocol engine over stdio/HTTP interfaces. |
+| **Server Workspace** | `packages/server/src/index.ts` | Starts the Express server listening on the configured HTTP port. |
+| **Server Database Seeder** | `packages/server/src/seed-cli.ts` | Populates SQLite tables from initial spec directories and samples. |
+| **Web Workspace** | `packages/web/src/main.tsx` | Hydrates the React DOM application; binds to `packages/web/index.html`. |
+
+### Configuration Mapping
+
+Each package is configured and constrained by its corresponding config workspace profiles:
+
+```
+SDDManager/
+├── package.json                   # Root workspace composition and global actions
+├── tsconfig.base.json             # Shared compiler options inherited across modules
+├── docker-compose.yml             # Local multi-container development orchestrator
+├── Dockerfile                     # Multi-stage production container build manifest
+├── specregistry.db                # Active SQLite database (development/local runtimes)
+├── config/
+│   └── alloy/
+│       └── config.alloy           # formal modeling assertions and system validations
+└── packages/
+    ├── cli/
+    │   ├── package.json           # CLI runtime dependencies & bin mappings
+    │   └── tsconfig.json          # TS target settings optimized for Node.js executable
+    ├── mcp/
+    │   ├── package.json           # MCP dependencies (e.g., `@modelcontextprotocol/sdk`)
+    │   └── tsconfig.json          # TS target optimized for modern ESM Node runs
+    ├── server/
+    │   ├── package.json           # Backend dependency mappings
+    │   └── tsconfig.json          # TS config customized for SQLite & Express modules
+    ├── shared/
+    │   ├── package.json           # Core shared types & schemas dependencies
+    │   └── tsconfig.json          # TS target optimized for ultra-compatible ESM/CJS build formats
+    └── web/
+        ├── package.json           # Frontend framework and bundling dependencies
+        ├── tsconfig.json          # TS configuration compiled for DOM targets
+        └── vite.config.ts         # Vite bundler options, proxy configurations, and build assets
+```
+
+---
+
+## 3. Dependency Mapping Between Modules
+
+The internal monorepo modules utilize a strict hierarchical dependency model to ensure decoupling, prevent circular references, and isolate system boundaries.
+
+### Architectural Dependency Graph
+
+```mermaid
+graph TD
+    %% Execution Layer
+    Web[packages/web]
+    CLI[packages/cli]
+    MCP[packages/mcp]
+    Server[packages/server]
+    Shared[packages/shared]
+
+    %% Persistent Layer
+    DB[(specregistry.db)]
+
+    %% File Inputs
+    Specs[specs/*.md]
+    Samples[samples/ai-sdd]
+
+    %% Dependencies
+    Web -->|HTTP Requests| Server
+    CLI -->|Verifies / Reads| Specs
+    CLI -->|Interacts with DB/API| Server
+    MCP -->|Accesses DB / File Context| Server
+    MCP -->|Reads Specs| Specs
+
+    %% Shared module bounds
+    Web -.->|Imports| Shared
+    CLI -.->|Imports| Shared
+    Server -.->|Imports| Shared
+    MCP -.->|Imports| Shared
+
+    %% Database bindings
+    Server --> DB
+```
+
+### Workspace Relationships
+
+1. **`packages/shared` (The Leaf Node)**:
+   * **Inbound Dependencies**: `packages/web`, `packages/cli`, `packages/mcp`, and `packages/server`.
+   * **Outbound Dependencies**: None. Must remain free of other internal workspaces to prevent cyclic compile runs.
+   * **Responsibility**: Contains models, types, schema contracts (e.g., Markdown parse types, database entity schemas, validation schemas).
+
+2. **`packages/server` (The Business Logic Hub)**:
+   * **Inbound Dependencies**: Called by `packages/web` (HTTP endpoints) and interacted with by `packages/cli` (Sync Actions).
+   * **Outbound Dependencies**: `packages/shared`. Directly manipulates and exposes the state maintained in `specregistry.db`.
+
+3. **`packages/cli` (The Verification Agent)**:
+   * **Inbound Dependencies**: Executed directly by CI platforms or local developers.
+   * **Outbound Dependencies**: `packages/shared`. Parses specifications (`specs/*.md`) and pushes verification states to `packages/server`.
+
+4. **`packages/mcp` (The LLM Interface)**:
+   * **Inbound Dependencies**: Invoked by standard MCP host clients (e.g., Claude Desktop, cursor, dev-agents).
+   * **Outbound Dependencies**: `packages/shared`. Reads SQLite state and provides context maps to connected LLM agents.
+
+5. **`packages/web` (The Presentation Layer)**:
+   * **Inbound Dependencies**: Served directly to browsers.
+   * **Outbound Dependencies**: `packages/shared` (for matching types), and connects over API interfaces to `packages/server` to query operational status.

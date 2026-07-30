@@ -1,6 +1,7 @@
 node_modules/
 dist/
 *.db
+*.sqlite
 *.db-journal
 *.db-wal
 *.db-shm

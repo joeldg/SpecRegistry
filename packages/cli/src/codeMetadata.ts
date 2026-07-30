@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript";
+
+const req = createRequire(import.meta.url);
 
 const IGNORED_DIRS = new Set([
   ".git",
@@ -900,8 +903,8 @@ function extractConfig(root: string, file: string, content: string, entities: Co
         parentId: fileEntity.id,
         metadata: { source: "package.json", dependency_count: deps.length, dependencies: deps.slice(0, 50) },
       });
-    } catch {
-      return;
+    } catch (err) {
+      console.error("[writeCodeMapSqlite] outer error:", err);
     }
   } else {
     addEntity(entities, {
@@ -1260,62 +1263,55 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
 function writeCodeMapSqlite(opts: CodeMapOptions, inventory: CodeInventory, trace: CodeTraceReport): void {
   const dbPath = path.resolve(opts.root, opts.out.replace(/\.json$/, ".sqlite"));
   try {
-    let DatabaseModule: any;
-    try {
-      // @ts-ignore
-      DatabaseModule = require("node:sqlite").DatabaseSync;
-    } catch {
-      try {
-        DatabaseModule = require("better-sqlite3");
-      } catch {
-        return;
-      }
+    const Database = req("better-sqlite3");
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    if (fs.existsSync(dbPath) && fs.statSync(dbPath).size === 0) {
+      fs.unlinkSync(dbPath);
     }
-    const db = new DatabaseModule(dbPath);
-    if (typeof db.exec === "function") {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS entities (
-          id TEXT PRIMARY KEY,
-          kind TEXT,
-          language TEXT,
-          path TEXT,
-          name TEXT,
-          signature TEXT,
-          start_line INTEGER,
-          end_line INTEGER,
-          hash TEXT,
-          parent_id TEXT
-        );
-        CREATE TABLE IF NOT EXISTS links (
-          entity_id TEXT PRIMARY KEY,
-          entity_path TEXT,
-          entity_name TEXT,
-          entity_kind TEXT,
-          spec_filename TEXT,
-          confidence REAL
-        );
-        CREATE TABLE IF NOT EXISTS summary (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-      `);
+    const db = new Database(dbPath);
+    db.exec("CREATE TABLE IF NOT EXISTS entities (id TEXT PRIMARY KEY, kind TEXT, language TEXT, path TEXT, name TEXT, signature TEXT, start_line INTEGER, end_line INTEGER, hash TEXT, parent_id TEXT);");
+    db.exec("CREATE TABLE IF NOT EXISTS links (entity_id TEXT PRIMARY KEY, entity_path TEXT, entity_name TEXT, entity_kind TEXT, spec_filename TEXT, confidence REAL);");
+    db.exec("CREATE TABLE IF NOT EXISTS summary (key TEXT PRIMARY KEY, value TEXT);");
+
+    const nullish = (v: any) => (v === undefined ? null : v);
+    const insertEntity = db.prepare("INSERT OR REPLACE INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const insertLink = db.prepare("INSERT OR REPLACE INTO links VALUES (?, ?, ?, ?, ?, ?)");
+    const insertSummary = db.prepare("INSERT OR REPLACE INTO summary VALUES (?, ?)");
+
+    const tx = db.transaction(() => {
       db.exec("DELETE FROM entities; DELETE FROM links; DELETE FROM summary;");
-      const insertEntity = db.prepare("INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
       for (const e of inventory.entities) {
-        insertEntity.run(e.id, e.kind, e.language, e.path, e.name, e.signature, e.start_line, e.end_line, e.hash, e.parent_id ?? null);
+        insertEntity.run(
+          nullish(e.id),
+          nullish(e.kind),
+          nullish(e.language),
+          nullish(e.path),
+          nullish(e.name),
+          nullish(e.signature),
+          nullish(e.start_line),
+          nullish(e.end_line),
+          nullish(e.hash),
+          nullish(e.parent_id)
+        );
       }
-      const insertLink = db.prepare("INSERT INTO links VALUES (?, ?, ?, ?, ?, ?)");
       for (const l of trace.links) {
-        insertLink.run(l.entity_id, l.entity_path, l.entity_name, l.entity_kind, l.spec_filename, l.confidence);
+        insertLink.run(
+          nullish(l.entity_id),
+          nullish(l.entity_path),
+          nullish(l.entity_name),
+          nullish(l.entity_kind),
+          nullish(l.spec_filename),
+          nullish(l.confidence)
+        );
       }
-      const insertSummary = db.prepare("INSERT INTO summary VALUES (?, ?)");
       insertSummary.run("coverage_ratio", String(trace.coverage?.coverage_ratio ?? 0));
       insertSummary.run("drift_score", String(trace.drift?.score ?? 0));
       insertSummary.run("drift_severity", trace.drift?.severity ?? "none");
-      if (typeof db.close === "function") db.close();
-    }
-  } catch {
-    // Graceful fallback
+    });
+    tx();
+    if (typeof db.close === "function") db.close();
+  } catch (err) {
+    console.error("[writeCodeMapSqlite error]:", err);
   }
 }
 

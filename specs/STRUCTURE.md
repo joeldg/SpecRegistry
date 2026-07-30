@@ -1,156 +1,194 @@
-# Codebase Structure and Architecture Map
+# SpecRegistry Codebase Structure
 
-This document outlines the directory structure, entry points, configuration frameworks, and module dependencies of the SDDManager (System Design Document Manager) monorepo.
+## Scope
 
----
+This specification maps the repository's package boundaries, entry points, configuration,
+tests, sidecars, and dependency direction. It is descriptive where paths are expected to
+exist and normative where ownership boundaries prevent architectural drift.
 
-## 1. Core Directory Purposes
+## Repository Layout
 
-The repository is organized as a monorepo containing distinct execution layers, static specification templates, and local configuration environments.
-
-```
-SDDManager/
-├── config/             # High-level configuration models (e.g., Alloy verification specs)
-├── docs/               # Tokenomics, design decisions, and system specifications
-├── packages/           # Monorepo workspaces (TypeScript codebase)
-│   ├── cli/            # CLI engine for document auditing, compilation, and registry sync
-│   ├── mcp/            # Model Context Protocol (MCP) server for LLM integration
-│   ├── server/         # Express backend API and database management engine
-│   ├── shared/         # Common schemas, TypeScript interfaces, and shared utilities
-│   └── web/            # Vite + React frontend single-page application (SPA)
-├── samples/            # Standardized sample documents for seeding and testing
-│   └── ai-sdd/         # Pre-configured mock system designs and standards files
-└── specs/              # Root specifications defining engineering policies and protocols
-```
-
-### Workspace Directory Profiles
-
-| Directory | Type | Purpose |
-| :--- | :--- | :--- |
-| `packages/cli` | TypeScript CLI | Executable tool for developers and agents to initialize, lint, compile, and sync specs locally or in CI/CD pipelines. |
-| `packages/mcp` | TypeScript Server | Model Context Protocol engine enabling LLMs and AI Agents to securely read, search, and navigate System Design Documents. |
-| `packages/server` | Express Server | Core API layer managing specs, verification runs, styleguides, and persistence to SQLite (`specregistry.db`). |
-| `packages/shared` | Library | Zero-dependency baseline schemas, types, validations, and helper utilities shared across the monorepo workspace. |
-| `packages/web` | React SPA | Visual interface for browsing registered systems, monitoring sync histories, analyzing metrics, and viewing style violations. |
-
-### Sidecar and Metadata Artifacts (.spec/)
-
-| Artifact Path | Format | Purpose |
-| :--- | :--- | :--- |
-| `.spec/code-map.json` | Schema V2 Dictionary JSON | Sidecar AST/code entity inventory with deduplicated string tables and compact tuples. |
-| `.spec/code-trace.json` | Schema V2 Dictionary JSON | Traceability graph linking code entities to Markdown specs, coverage, and drift metrics. |
-| `.spec/code-map.sqlite` | SQLite Database | Local zero-token indexed database sidecar for instant CLI lookups and compliance checks. |
-
----
-
-## 2. Entry Points & Configurations
-
-### Runtime Entry Points
-
-The platform consists of multiple runtime processes with the following primary execution entries:
-
-| Service / Tool | Entry File Path | Execution Purpose |
-| :--- | :--- | :--- |
-| **Monorepo (Root)** | `package.json` | Controls monorepo workspace dependencies via NPM workspaces. |
-| **CLI Workspace** | `packages/cli/src/index.ts` | Dispatches CLI subcommands (e.g., `init`, `compile`, `verify`, `sync`). |
-| **MCP Workspace** | `packages/mcp/src/index.ts` | Boots up the Model Context Protocol engine over stdio/HTTP interfaces. |
-| **Server Workspace** | `packages/server/src/index.ts` | Starts the Express server listening on the configured HTTP port. |
-| **Server Database Seeder** | `packages/server/src/seed-cli.ts` | Populates SQLite tables from initial spec directories and samples. |
-| **Web Workspace** | `packages/web/src/main.tsx` | Hydrates the React DOM application; binds to `packages/web/index.html`. |
-
-### Configuration Mapping
-
-Each package is configured and constrained by its corresponding config workspace profiles:
-
-```
-SDDManager/
-├── package.json                   # Root workspace composition and global actions
-├── tsconfig.base.json             # Shared compiler options inherited across modules
-├── docker-compose.yml             # Local multi-container development orchestrator
-├── Dockerfile                     # Multi-stage production container build manifest
-├── specregistry.db                # Active SQLite database (development/local runtimes)
-├── config/
-│   └── alloy/
-│       └── config.alloy           # formal modeling assertions and system validations
-└── packages/
-    ├── cli/
-    │   ├── package.json           # CLI runtime dependencies & bin mappings
-    │   └── tsconfig.json          # TS target settings optimized for Node.js executable
-    ├── mcp/
-    │   ├── package.json           # MCP dependencies (e.g., `@modelcontextprotocol/sdk`)
-    │   └── tsconfig.json          # TS target optimized for modern ESM Node runs
-    ├── server/
-    │   ├── package.json           # Backend dependency mappings
-    │   └── tsconfig.json          # TS config customized for SQLite & Express modules
-    ├── shared/
-    │   ├── package.json           # Core shared types & schemas dependencies
-    │   └── tsconfig.json          # TS target optimized for ultra-compatible ESM/CJS build formats
-    └── web/
-        ├── package.json           # Frontend framework and bundling dependencies
-        ├── tsconfig.json          # TS configuration compiled for DOM targets
-        └── vite.config.ts         # Vite bundler options, proxy configurations, and build assets
+```text
+SpecRegistry/
+├── packages/
+│   ├── cli/                 # specreg command-line application and embedded MCP server
+│   ├── mcp/                 # legacy standalone MCP stdio server
+│   ├── server/              # Fastify API, SQLite data model, integrations, and operations
+│   ├── shared/              # shared TypeScript types and pure helpers
+│   └── web/                 # React/Vite dashboard
+├── docs/                    # user, developer, API, operations, and product documentation
+├── specs/                   # governed specifications for this repository
+├── samples/ai-sdd/          # sample specification pack and loader
+├── config/alloy/            # formal model and Alloy checks
+├── .github/                 # CI workflow and bundled SpecRegistry check action
+├── Dockerfile               # production container build
+├── docker-compose.yml       # local/container deployment composition
+├── package.json             # npm workspace scripts
+└── tsconfig.base.json       # shared TypeScript compiler options
 ```
 
----
+Generated build output, local databases, credentials, MCP configuration, and local
+traceability artifacts are not source modules. Their ignore/tracking policy must remain
+explicit so governed specs are not confused with transient agent output.
 
-## 3. Dependency Mapping Between Modules
+### Sidecar and Metadata Artifacts
 
-The internal monorepo modules utilize a strict hierarchical dependency model to ensure decoupling, prevent circular references, and isolate system boundaries.
+| Artifact | Format | Purpose |
+| --- | --- | --- |
+| `.spec/code-map.json` | Schema V2 dictionary JSON | Compact AST/code-entity inventory with deduplicated strings and tuples. |
+| `.spec/code-trace.json` | Schema V2 dictionary JSON | Compact graph linking code entities to governed specs, coverage, and drift metrics. |
+| `.spec/code-map.sqlite` | SQLite | Local zero-token index for CLI lookups and compliance checks. |
+| `.spec/trace-overrides.json` | JSON | Explicit reviewed link overrides and waivers for traceability. |
 
-### Architectural Dependency Graph
+Sidecars are local or generated evidence, not registry persistence. Their schemas and
+tracking policy are governed by `OBSERVABILITY_AND_TRACEABILITY.md`.
+
+## Package Entry Points
+
+| Package | Runtime entry | Supporting entry points |
+| --- | --- | --- |
+| CLI | `packages/cli/src/index.ts` | Command modules under `packages/cli/src`; published binary name `specreg`. |
+| MCP | `packages/mcp/src/index.ts` | Published legacy binary `specreg-mcp`; generated configs prefer `specreg mcp`. |
+| Server | `packages/server/src/index.ts` | `app.ts` builds Fastify; `db.ts` owns schema/migrations; `seed-cli.ts` and `backup-cli.ts` provide operational commands. |
+| Web | `packages/web/src/main.tsx` | `App.tsx` owns routing/layout; `api.ts` owns REST calls; page modules live under `src/pages`. |
+| Shared | `packages/shared/src/index.ts` | Shared types and helpers exported for workspace consumers. |
+
+Each workspace has its own `package.json` and `tsconfig.json`. Root scripts orchestrate
+workspace builds and tests.
+
+## Server Structure
+
+```text
+packages/server/src/
+├── app.ts                   # Fastify construction and route registration
+├── index.ts                 # environment startup, posture checks, scheduler, listen
+├── db.ts                    # SQLite schema and append-only migrations
+├── env.ts                   # environment-file loading and configuration
+├── seed.ts                  # idempotent baseline/demo data
+├── seed-cli.ts              # seed command entry
+├── backup-cli.ts            # backup/verify/restore command entry
+├── routes/                  # HTTP handlers grouped by domain
+└── lib/                     # reusable domain, integration, security, and report helpers
+```
+
+Route modules currently cover project types, projects, specifications, reviews, feedback,
+automation, skills, administrative/reporting APIs, authentication, integrations, and
+metrics. New routes belong in the closest domain module and must be registered in
+`app.ts`.
+
+Database schema changes belong only in `db.ts` and must be append-only. Cross-route logic
+that represents a durable rule belongs in `lib/` rather than being copied between
+handlers.
+
+## CLI Structure
+
+`packages/cli/src/index.ts` owns argument parsing and command dispatch. Focused modules own
+individual workflows, including initialization, synchronization, compilation, verification,
+draft submission, code mapping, compliance, audits, migrations, skills, style guides, and
+MCP serving.
+
+CLI modules may:
+
+- Read repository files and Git metadata.
+- Write generated local artifacts in documented locations.
+- Call registry REST endpoints through the shared CLI request helper.
+
+CLI modules must not import server internals or open the registry database.
+
+Tests live under `packages/cli/test` and use Node's test runner.
+
+## MCP Structure
+
+`packages/mcp/src/index.ts` is a standalone stdio MCP adapter. The CLI has an embedded MCP
+implementation in `packages/cli/src/mcp.ts`. Both call the registry over HTTP and use the
+same public environment conventions:
+
+- `SPECREG_SERVER` for the registry URL.
+- `SPECREG_TOKEN` for bearer authentication.
+- `SPECREG_REPO` for concrete project context.
+
+Neither MCP implementation owns registry persistence.
+
+## Web Structure
+
+```text
+packages/web/src/
+├── main.tsx                 # React bootstrap
+├── App.tsx                  # application shell and routes
+├── api.ts                   # typed REST client
+├── components.tsx           # shared dashboard components
+├── styles.css               # application styles
+└── pages/                   # domain pages and report/settings views
+```
+
+Business rules and authorization remain server-owned. Web code should render server state,
+collect user intent, and call typed API helpers rather than duplicating lifecycle decisions.
+
+## Dependency Direction
 
 ```mermaid
-graph TD
-    %% Execution Layer
-    Web[packages/web]
-    CLI[packages/cli]
-    MCP[packages/mcp]
-    Server[packages/server]
-    Shared[packages/shared]
-
-    %% Persistent Layer
-    DB[(specregistry.db)]
-
-    %% File Inputs
-    Specs[specs/*.md]
-    Samples[samples/ai-sdd]
-
-    %% Dependencies
-    Web -->|HTTP Requests| Server
-    CLI -->|Verifies / Reads| Specs
-    CLI -->|Interacts with DB/API| Server
-    MCP -->|Accesses DB / File Context| Server
-    MCP -->|Reads Specs| Specs
-
-    %% Shared module bounds
-    Web -.->|Imports| Shared
-    CLI -.->|Imports| Shared
-    Server -.->|Imports| Shared
-    MCP -.->|Imports| Shared
-
-    %% Database bindings
-    Server --> DB
+flowchart TD
+  Web["packages/web"] --> Shared["packages/shared"]
+  CLI["packages/cli"] --> Shared
+  MCP["packages/mcp"] --> Shared
+  Server["packages/server"] --> Shared
+  Web -->|"HTTP"| Server
+  CLI -->|"HTTP"| Server
+  MCP -->|"HTTP"| Server
+  Server --> DB[("SQLite")]
 ```
 
-### Workspace Relationships
+`packages/shared` is the internal leaf dependency and must not import the server, CLI, MCP,
+or web packages. Runtime clients may depend on shared contracts, but only the server owns
+SQLite and privileged integration configuration.
 
-1. **`packages/shared` (The Leaf Node)**:
-   * **Inbound Dependencies**: `packages/web`, `packages/cli`, `packages/mcp`, and `packages/server`.
-   * **Outbound Dependencies**: None. Must remain free of other internal workspaces to prevent cyclic compile runs.
-   * **Responsibility**: Contains models, types, schema contracts (e.g., Markdown parse types, database entity schemas, validation schemas).
+The web, CLI, and MCP packages must remain independently buildable after `packages/shared`
+has been built.
 
-2. **`packages/server` (The Business Logic Hub)**:
-   * **Inbound Dependencies**: Called by `packages/web` (HTTP endpoints) and interacted with by `packages/cli` (Sync Actions).
-   * **Outbound Dependencies**: `packages/shared`. Directly manipulates and exposes the state maintained in `specregistry.db`.
+## Tests and Verification
 
-3. **`packages/cli` (The Verification Agent)**:
-   * **Inbound Dependencies**: Executed directly by CI platforms or local developers.
-   * **Outbound Dependencies**: `packages/shared`. Parses specifications (`specs/*.md`) and pushes verification states to `packages/server`.
+| Area | Location / command |
+| --- | --- |
+| Full TypeScript and web build | `npm run build` |
+| Full workspace tests | `npm test` |
+| Server tests | `packages/server/test`, run through the server workspace |
+| CLI tests | `packages/cli/test`, run through the CLI workspace |
+| CI | `.github/workflows/ci.yml` |
+| Governed bundle currency/integrity | `specreg check` and `specreg verify` |
 
-4. **`packages/mcp` (The LLM Interface)**:
-   * **Inbound Dependencies**: Invoked by standard MCP host clients (e.g., Claude Desktop, cursor, dev-agents).
-   * **Outbound Dependencies**: `packages/shared`. Reads SQLite state and provides context maps to connected LLM agents.
+Server behavior changes require tests. Public API, deployment, authentication, CLI/MCP,
+or workflow changes require corresponding documentation updates.
 
-5. **`packages/web` (The Presentation Layer)**:
-   * **Inbound Dependencies**: Served directly to browsers.
-   * **Outbound Dependencies**: `packages/shared` (for matching types), and connects over API interfaces to `packages/server` to query operational status.
+## Configuration Boundaries
+
+Runtime configuration is supplied through environment variables and settings persisted by
+the server. Important deployment variables include:
+
+- `PORT` and `SPECREG_DB`.
+- `SPECREG_PUBLIC_URL`.
+- `SPECREG_AUTH`, `SPECREG_ADMIN_PASSWORD`, and `SPECREG_TOKEN`.
+- `SPECREG_SECRET_KEY`.
+- Backup, LDAP, LLM, integration, and feature-specific variables documented in
+  `docs/OPERATIONS.md`.
+
+Do not repurpose generated client configuration as server configuration. `.mcp.json`,
+`.spec/`, and local credentials belong to consuming-repository workflows.
+
+## Ownership Rules
+
+- `packages/server/src/db.ts` owns schema migration.
+- `packages/server/src/lib/auth.ts` owns global role policy.
+- Route handlers own domain validation and project-scoped authorization.
+- `packages/web/src/api.ts` owns dashboard endpoint wiring.
+- `packages/cli/src/registry.ts` owns CLI registry HTTP/auth behavior.
+- `packages/cli/src/mcp.ts` and `packages/mcp/src/index.ts` must remain behaviorally aligned
+  for shared MCP capabilities.
+- `docs/` explains product and operator workflows; `specs/` states governed requirements.
+
+## AI Agent Directives
+
+Place changes in the package that owns the behavior and preserve the dependency direction
+above. Before adding a new helper or route, search the owning package for an existing
+implementation. Do not move database access into clients, duplicate authorization in the
+dashboard, or create undocumented authentication variables. When repository structure
+changes, update this specification in the same reviewed change.

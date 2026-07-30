@@ -19,6 +19,8 @@ Open a governed agent session with begin_task before doing non-trivial implement
 
 Before non-trivial work, call begin_task with the concrete task, a short plan, the model in use, and the spec files you intend to load. Resolve any returned blockers before editing, follow the declared plan, and keep the returned session_id to pass to finish_task when the work is complete.
 
+Harness improvement proposal: If work pauses, becomes blocked, or moves outside the current session, record the state explicitly with finish_task or an equivalent compliance/checkpoint call. Do not leave an active session as the only record of incomplete governed work.
+
 ## Safety Boundary
 
 This skill is a governed operating procedure, not permission to take external or destructive

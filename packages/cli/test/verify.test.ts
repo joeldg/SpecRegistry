@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { verifyLocalSpecFiles } from "../src/verify.js";
+import { verifyLocalSpecFiles, verifyManifestSignature } from "../src/verify.js";
 
 function sha256(content: string): string {
   return crypto.createHash("sha256").update(content, "utf8").digest("hex");
@@ -36,4 +36,37 @@ test("local spec verification reports missing governed files", () => {
   };
 
   assert.deepEqual(verifyLocalSpecFiles(dir, manifest), ["GLOBAL_SECURITY.md: file missing"]);
+});
+
+test("manifest signature verification ignores metadata appended locally after download", () => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
+  const payload = {
+    project_type: "Web App Standard",
+    project: "github.com/example/repo",
+    channel: "stable",
+    fetched_at: "2026-07-30T00:00:00.000Z",
+    specs: [{ filename: "GLOBAL_SECURITY.md", version: "1.0.0", sha256: "abc" }],
+  };
+  const signature = crypto.sign(null, Buffer.from(JSON.stringify(payload), "utf8"), privateKey).toString("base64");
+  const publicPem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const manifest = {
+    ...payload,
+    signature,
+    signature_alg: "ed25519",
+    compile_targets: ["claude"],
+    registry: {
+      url: "http://localhost:4000",
+      public_key: publicPem,
+      stamped_at: "2026-07-30T01:00:00.000Z",
+    },
+  };
+
+  assert.equal(verifyManifestSignature(publicPem, manifest), true);
+  assert.equal(
+    verifyManifestSignature(publicPem, {
+      ...manifest,
+      specs: [{ ...manifest.specs[0], version: "2.0.0" }],
+    }),
+    false
+  );
 });

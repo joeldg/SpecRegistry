@@ -63,7 +63,7 @@ export function ensureConsumer(app: FastifyInstance, input: Record<string, unkno
   return id;
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 function normalizeTracePayload(raw: Record<string, unknown>): CodeTracePayload {
   if (raw && raw.schema_version === 2 && raw.dict && typeof raw.dict === "object") {
     const dict = raw.dict as { paths?: string[]; kinds?: string[]; specs?: string[]; signatures?: string[] };
@@ -122,7 +122,7 @@ function normalizeTracePayload(raw: Record<string, unknown>): CodeTracePayload {
  * so the two gates can no longer contradict each other. The caller owns the
  * surrounding transaction.
  */
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<string, unknown>): { reportId: string; createdAt: string } {
   const trace = normalizeTracePayload(rawTrace);
   const links = Array.isArray(trace.links) ? (trace.links.slice(0, 500) as Array<Record<string, unknown>>) : [];

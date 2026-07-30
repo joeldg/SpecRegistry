@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "specregistry": {
+      "command": "specreg",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "SPECREG_SERVER": "http://localhost:4000",
+        "SPECREG_PROJECT_TYPE": "CLI Tool / Developer Tooling",
+        "SPECREG_REPO": "github.com/joeldg/SpecRegistry"
+      }
+    }
+  }
+}

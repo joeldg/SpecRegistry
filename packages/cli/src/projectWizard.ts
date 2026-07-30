@@ -1,6 +1,7 @@
 import path from "node:path";
 import readline from "node:readline/promises";
-import { SPECREGISTRY_PRODUCT_REPOSITORY_URL, type ProjectType } from "@specregistry/shared";
+import type { ProjectType } from "@specregistry/shared";
+import { SPECREGISTRY_PRODUCT_REPOSITORY_URL } from "./product.js";
 import { fetchJson, listProjectTypes } from "./registry.js";
 import { listAgentSkills, resolveAgentSkills, type AgentSkill } from "./skills.js";
 

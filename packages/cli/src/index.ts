@@ -143,12 +143,6 @@ const token =
   process.env.SPECREG_TOKEN ??
   readStoredCredentials()?.token;
 
-if (command && command !== "help" && command !== "scan" && !flags.help && !server) {
-  throw new Error(
-    "No registry server configured. Install the CLI from SpecRegistry Settings, set SPECREG_SERVER, or pass --server <url>."
-  );
-}
-
 function requireServer(): string {
   if (!server) {
     throw new Error(
@@ -178,6 +172,12 @@ function skillSourceTypeFlag(value: string | boolean | undefined): SkillSource["
 }
 
 try {
+  if (command && command !== "help" && command !== "scan" && !flags.help && !server) {
+    throw new Error(
+      "No registry server configured. Install the CLI from SpecRegistry Settings, set SPECREG_SERVER, or pass --server <url>."
+    );
+  }
+
   if (flags.help || command === undefined || command === "help") {
     console.log(HELP);
   } else if (command === "scan") {

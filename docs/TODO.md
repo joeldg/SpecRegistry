@@ -504,8 +504,7 @@ Remaining AST/code metadata work:
 - [x] Compact & token-aware `code-map` and `code-trace` Schema V2 using dictionary-encoded string tables (`paths`, `kinds`, `signatures`, `specs`) to reduce file/payload sizes by 70-80% while retaining full backward compatibility.
 - [x] Compact line-oriented DSL context projection for MCP tools (`check_compliance`, `finish_task`) and agent prompts to eliminate raw JSON overhead and reduce LLM prompt token consumption by >90%.
 - [x] Embedded SQLite sidecar (`.spec/code-map.sqlite`) support in `specreg` CLI for instant zero-token local compliance queries and indexed entity lookups.
-- [ ] Manual traceability override workflow to approve, reject, or intentionally waive
-  automatic code-to-spec links and route unmapped entities to new spec work.
+- [x] Manual traceability override workflow (`.spec/trace-overrides.json`) to approve, reject, or intentionally waive automatic code-to-spec links and route unmapped entities to new spec work.
 - [ ] Deepen the traceability system with manual override review, deleted-entity retention,
   split/merge history, richer dependency graphs, and additional language parsers.
 

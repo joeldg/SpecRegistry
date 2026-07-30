@@ -132,7 +132,7 @@ export interface CodeTraceReport {
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export interface DictCodeInventoryV2 {
   schema_version: 2;
   generated_at: string;
@@ -149,7 +149,7 @@ export interface DictCodeInventoryV2 {
   drift?: CodeDriftSummary;
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export interface DictCodeTraceReportV2 {
   schema_version: 2;
   generated_at: string;
@@ -175,7 +175,7 @@ export interface DictCodeTraceReportV2 {
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function encodeCodeInventoryV2(inventory: CodeInventory): DictCodeInventoryV2 {
   const paths: string[] = [];
   const kinds: CodeEntityKind[] = [];
@@ -236,7 +236,7 @@ export function encodeCodeInventoryV2(inventory: CodeInventory): DictCodeInvento
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function decodeCodeInventoryV2(raw: DictCodeInventoryV2 | CodeInventory | any): CodeInventory {
   if (!raw || typeof raw !== "object") throw new Error("Invalid code inventory object");
   if (raw.schema_version === 1 || !raw.dict) {
@@ -299,7 +299,7 @@ export function decodeCodeInventoryV2(raw: DictCodeInventoryV2 | CodeInventory |
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2 {
   const paths: string[] = [];
   const kinds: CodeEntityKind[] = [];
@@ -363,7 +363,7 @@ export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function decodeCodeTraceV2(raw: DictCodeTraceReportV2 | CodeTraceReport | any): CodeTraceReport {
   if (!raw || typeof raw !== "object") throw new Error("Invalid code trace report object");
   if (raw.schema_version === 1 || !raw.dict) {
@@ -417,7 +417,7 @@ export function decodeCodeTraceV2(raw: DictCodeTraceReportV2 | CodeTraceReport |
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function formatTraceAsDsl(trace: CodeTraceReport): string {
   const lines: string[] = [];
   const covPct = Math.round((trace.coverage?.coverage_ratio ?? 0) * 100);
@@ -1051,8 +1051,86 @@ function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): Tr
   return links.sort((a, b) => a.entity_id.localeCompare(b.entity_id) || b.confidence - a.confidence);
 }
 
-function summarizeCoverage(entities: CodeEntity[], links: TraceabilityLink[]): CodeCoverageSummary {
-  const governed = entities.filter(governable);
+export interface TraceOverride {
+  entity_id?: string;
+  entity_name?: string;
+  path?: string;
+  action: "override" | "waive" | "reject";
+  spec_filename?: string;
+  section?: string;
+  reason?: string;
+}
+
+export interface TraceOverridesConfig {
+  schema_version: 1;
+  overrides: TraceOverride[];
+}
+
+function loadTraceOverrides(root: string): TraceOverride[] {
+  const possible = [
+    path.join(root, ".spec", "trace-overrides.json"),
+    path.join(root, "trace-overrides.json"),
+  ];
+  for (const file of possible) {
+    if (fs.existsSync(file)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(file, "utf8")) as TraceOverridesConfig;
+        if (Array.isArray(raw.overrides)) return raw.overrides;
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+  return [];
+}
+
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+function applyTraceOverrides(
+  entities: CodeEntity[],
+  rawLinks: TraceabilityLink[],
+  root: string
+): { links: TraceabilityLink[]; waivedIds: Set<string> } {
+  const overrides = loadTraceOverrides(root);
+  if (overrides.length === 0) return { links: rawLinks, waivedIds: new Set() };
+
+  const waivedIds = new Set<string>();
+  const linkMap = new Map<string, TraceabilityLink>();
+  rawLinks.forEach((l) => linkMap.set(l.entity_id, l));
+
+  for (const ov of overrides) {
+    const matches = entities.filter((e) => {
+      if (ov.entity_id && e.id === ov.entity_id) return true;
+      if (ov.entity_name && e.name === ov.entity_name) {
+        if (!ov.path || e.path === ov.path || e.path.endsWith(ov.path)) return true;
+      }
+      return false;
+    });
+
+    for (const entity of matches) {
+      if (ov.action === "override" && ov.spec_filename) {
+        linkMap.set(entity.id, {
+          entity_id: entity.id,
+          entity_path: entity.path,
+          entity_name: entity.name,
+          entity_kind: entity.kind,
+          spec_filename: ov.spec_filename,
+          confidence: 1.0,
+          reasons: [`manual override: ${ov.reason || "configured in trace-overrides.json"}`],
+        });
+      } else if (ov.action === "waive") {
+        waivedIds.add(entity.id);
+        linkMap.delete(entity.id);
+      } else if (ov.action === "reject") {
+        linkMap.delete(entity.id);
+      }
+    }
+  }
+
+  return { links: Array.from(linkMap.values()), waivedIds };
+}
+
+function summarizeCoverage(entities: CodeEntity[], links: TraceabilityLink[], waivedIds = new Set<string>()): CodeCoverageSummary {
+  const governed = entities.filter((e) => governable(e) && !waivedIds.has(e.id));
   const linkedIds = new Set(links.map((link) => link.entity_id));
   const byKind = (items: CodeEntity[]) =>
     items.reduce<Record<string, number>>((acc, entity) => {
@@ -1135,8 +1213,9 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
   }
   const languages = [...new Set(entities.map((entity) => entity.language))].sort();
   const specs = loadSpecs(resolvedRoot, specsDir);
-  const links = linkEntitiesToSpecs(entities, specs);
-  const coverage = summarizeCoverage(entities, links);
+  const rawLinks = linkEntitiesToSpecs(entities, specs);
+  const { links, waivedIds } = applyTraceOverrides(entities, rawLinks, resolvedRoot);
+  const coverage = summarizeCoverage(entities, links, waivedIds);
   const drift = summarizeDrift(coverage, specs);
   const inventory: CodeInventory = {
     schema_version: 1,
@@ -1157,7 +1236,7 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
     spec_count: specs.length,
     entity_count: inventory.entity_count,
     links,
-    unlinked_entities: entities.filter((entity) => governable(entity) && !linked.has(entity.id)).map((entity) => ({
+    unlinked_entities: entities.filter((entity) => governable(entity) && !linked.has(entity.id) && !waivedIds.has(entity.id)).map((entity) => ({
       id: entity.id,
       kind: entity.kind,
       path: entity.path,
@@ -1177,7 +1256,7 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
   return { ...inventory, trace };
 }
 
-// @spec[STRUCTURE.md#sidecar--metadata-artifacts-spec]
+// @spec[STRUCTURE.md#sidecar-and-metadata-artifacts-spec]
 function writeCodeMapSqlite(opts: CodeMapOptions, inventory: CodeInventory, trace: CodeTraceReport): void {
   const dbPath = path.resolve(opts.root, opts.out.replace(/\.json$/, ".sqlite"));
   try {
@@ -1240,7 +1319,7 @@ function writeCodeMapSqlite(opts: CodeMapOptions, inventory: CodeInventory, trac
   }
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability--token-efficiency]
+// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
 export function writeCodeInventory(opts: CodeMapOptions): CodeInventory & { trace: CodeTraceReport } {
   const inventory = buildCodeInventory(opts.root, opts.specsDir ?? "specs", loadPreviousInventory(opts.root, opts.out));
   const target = path.resolve(opts.root, opts.out);

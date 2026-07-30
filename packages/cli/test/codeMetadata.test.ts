@@ -206,3 +206,38 @@ test("schema V2 dictionary encoding and decoding performs lossless round-trip an
   assert.ok(dsl.includes("[TRACE]"));
   assert.ok(dsl.includes("entities:"));
 });
+
+test("trace overrides sidecar forces link target or waives unlinked entities", () => {
+  const root = makeProject();
+  fs.mkdirSync(path.join(root, ".spec"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, ".spec", "trace-overrides.json"),
+    JSON.stringify({
+      schema_version: 1,
+      overrides: [
+        {
+          entity_name: "SessionStore",
+          action: "override",
+          spec_filename: "API.md",
+          reason: "Manually governed session store",
+        },
+        {
+          entity_name: "create_session",
+          action: "waive",
+          reason: "Waived experimental session helper",
+        },
+      ],
+    }),
+    "utf8"
+  );
+
+  const inventory = buildCodeInventory(root);
+  const sessionStoreLink = inventory.trace.links.find((l) => l.entity_name === "SessionStore");
+  assert.ok(sessionStoreLink);
+  assert.equal(sessionStoreLink!.spec_filename, "API.md");
+  assert.equal(sessionStoreLink!.confidence, 1.0);
+  assert.ok(sessionStoreLink!.reasons[0].includes("manual override"));
+
+  const waivedSession = inventory.trace.unlinked_entities.find((u) => u.name === "create_session");
+  assert.equal(waivedSession, undefined);
+});

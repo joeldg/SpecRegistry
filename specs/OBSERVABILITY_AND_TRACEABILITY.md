@@ -51,6 +51,7 @@ To ensure sidecar metadata artifacts and context injections remain economically 
 1. **Schema V2 Dictionary Encoding**: Sidecar metadata (`.spec/code-map.json` and `.spec/code-trace.json`) and network reports must use top-level string lookup tables (`dict.paths`, `dict.kinds`, `dict.signatures`, `dict.specs`) and compact index-tuples rather than verbose key-value objects. This structure must achieve a **70%–80% reduction** in file footprint and network payload size.
 2. **Compact DSL Projections**: MCP tools (`check_compliance`, `finish_task`) and agent prompt injectors MUST NOT dump raw JSON arrays into agent context. Traceability evidence must be projected into a line-oriented Compact DSL or TSV summary, reducing prompt token consumption by **>90%** (<200 tokens per check).
 3. **Transparent Compatibility**: Readers and decoders must transparently handle both Schema V1 (verbose JSON) and Schema V2 (compact dictionary) payloads without loss of fidelity.
+4. **Manual Traceability Overrides & Waivers**: Traceability engines MUST support version-controlled override sidecars (`.spec/trace-overrides.json`) allowing project maintainers to explicitly override auto-link targets, waive internal/test entities from coverage metrics with documented rationale, or reject invalid fuzzy matches.
 
 ## Root-Cause Classification
 

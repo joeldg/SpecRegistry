@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
 import { createDb } from "../src/db.js";
 import { seed, SPECREGISTRY_BASELINE_REQUIRED_SECTIONS, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
+import { recordAudit } from "../src/lib/auditLog.js";
 import { buildAdminTestApp } from "./helpers.js";
 
 let app: FastifyInstance;
@@ -891,6 +892,14 @@ describe("project types & specs", () => {
   });
 
   it("generates persisted registry operations audit reports with secret-safe posture evidence", async () => {
+    recordAudit(app.db, {
+      action: "review.rejected",
+      summary: "A reviewer intentionally rejected a noncompliant spec change.",
+    });
+    recordAudit(app.db, {
+      action: "server.update_failed",
+      summary: "A server update failed.",
+    });
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       status: "identical",
       ahead_by: 0,
@@ -920,6 +929,10 @@ describe("project types & specs", () => {
     expect(report.evidence.backups).toMatchObject({ configured: false });
     expect(report.evidence.metrics).toMatchObject({ available: true, endpoint: "/metrics" });
     expect(report.evidence.outstanding_actions).toContain("Authentication is optional; set SPECREG_AUTH=required for secured deployments.");
+    expect(report.evidence.audit_log.warning_count).toBe(1);
+    expect(report.evidence.audit_log.warnings).toEqual([
+      expect.objectContaining({ action: "server.update_failed" }),
+    ]);
     expect(report.markdown).toContain("# Registry Operations Audit");
     expect(report.markdown).toContain("## Security Posture");
     expect(report.markdown).not.toContain("undefined");

@@ -398,6 +398,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /DELETE/, path: /^\/api\/v1\/specs\//, min: "admin" },
   { method: /GET|POST|PUT|DELETE/, path: /^\/api\/v1\/(ldap|llm|embeddings|app-keys|features|server)(\/|$)/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/audit-log$/, min: "admin" },
+  { method: /GET|POST/, path: /^\/api\/v1\/audit-reports(\/|$)/, min: "admin" },
   { method: /GET|PUT/, path: /^\/api\/v1\/compliance-policies$/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/compliance-attestations$/, min: "admin" },
   { method: /GET/, path: /^\/api\/v1\/agent-sessions$/, min: "admin" },

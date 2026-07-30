@@ -52,6 +52,7 @@ To ensure sidecar metadata artifacts and context injections remain economically 
 2. **Compact DSL Projections**: MCP tools (`check_compliance`, `finish_task`) and agent prompt injectors MUST NOT dump raw JSON arrays into agent context. Traceability evidence must be projected into a line-oriented Compact DSL or TSV summary, reducing prompt token consumption by **>90%** (<200 tokens per check).
 3. **Transparent Compatibility**: Readers and decoders must transparently handle both Schema V1 (verbose JSON) and Schema V2 (compact dictionary) payloads without loss of fidelity.
 4. **Manual Traceability Overrides & Waivers**: Traceability engines MUST support version-controlled override sidecars (`.spec/trace-overrides.json`) allowing project maintainers to explicitly override auto-link targets, waive internal/test entities from coverage metrics with documented rationale, or reject invalid fuzzy matches.
+5. **Local SQLite Database Sidecar**: Traceability processing SHOULD emit an embedded SQLite sidecar database (`.spec/code-map.sqlite`) alongside JSON sidecars. The SQLite sidecar stores indexed relational tables for entities, specs, links, and unlinked entity sets, enabling zero-token local SQL queries, instant CLI lookups, and offline compliance evaluation.
 
 ## Root-Cause Classification
 

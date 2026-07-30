@@ -4,7 +4,7 @@
 
 This file is compiled from the organization's governed specification registry for the project type **Web App Standard**. Treat every section as authoritative guidance. If you find a contradiction or ambiguity while working, report it through the SpecRegistry feedback channel (MCP tool `report_spec_feedback` or POST /api/v1/ai/feedback) instead of guessing.
 
-_Compiled 2026-07-30T18:37:17.770Z · AGENT_OPERATING_RULES.md@1.0.0 · AI_AGENT_OPERATING_RULES.md@1.0.0 · CODE_DEVELOPMENT_STANDARDS.md@1.0.0 · CODING_STANDARDS.md@1.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · OBSERVABILITY_AND_TRACEABILITY.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · DESIGN.md@1.0.0 · STRUCTURE.md@1.0.0_
+_Compiled 2026-07-30T22:19:57.574Z · AGENT_OPERATING_RULES.md@2.0.0 · CODING_STANDARDS.md@1.0.0 · GLOBAL_SECURITY.md@1.0.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · API.md@1.0.0 · DESIGN.md@2.0.0 · STRUCTURE.md@2.0.0_
 
 ## SpecRegistry Operating Rules
 
@@ -45,150 +45,77 @@ When reporting feedback, include the affected `spec_id`, what you were trying to
 
 ---
 
-<!-- AGENT_OPERATING_RULES.md v1.0.0 (global) -->
+<!-- AGENT_OPERATING_RULES.md v2.0.0 (global) -->
 
 # Agent Operating Rules
 
 ## Scope
-This specification applies to AI agents, coding assistants, automation scripts, and MCP clients that read, search, compile, generate, audit, or modify work governed by SpecRegistry.
+
+This specification applies to AI agents and automated tools working in repositories
+governed by SpecRegistry.
 
 ## Intent
-Agents should make SpecRegistry usage repeatable and observable. They must load the right context, minimize token waste, cite governed guidance, and report spec problems rather than silently substituting model judgment.
+
+Agents must use current, reviewed context; preserve authorization and review boundaries;
+produce verifiable evidence; and report missing or contradictory guidance instead of
+silently guessing.
 
 ## Requirements
-1. Agents must use the SpecRegistry MCP server when available and call `get_specs` before non-trivial work.
-2. Agents should use `search_specs` for focused context before loading large reference specs into a prompt.
-3. In repo-specific work, agents must set or respect `SPECREG_REPO` so project-scoped specs can override project-type guidance.
-4. In auth-required deployments, agents must use `SPECREG_TOKEN` and never print or commit it.
-5. Agents must cite relevant spec filenames and sections in summaries when a change is materially governed by those specs.
-6. Agents must call `report_spec_feedback` or the feedback API for ambiguity, contradiction, outdated guidance, or missing requirements.
-7. Agents must distinguish approved specs from drafts, examples, local style guides, and generated prompts.
-8. Agents must not claim checks passed unless they actually ran and observed the result.
+
+1. Before implementation, an agent must load the governed specs for the applicable project
+   type and concrete repository through MCP or a verified generated context file.
+2. The agent must call `get_specs` or `begin_task` before governed work and use
+   `search_specs` or `resolve_guidance` when the initial context does not answer a focused
+   question.
+3. Concrete repositories must supply `SPECREG_REPO` so project-scoped guidance is loaded in
+   addition to global and project-type specs.
+4. Auth-required registry clients use `SPECREG_TOKEN` or an explicit bearer token. Agents
+   must not print, commit, or copy token values into reports, specs, or generated context.
+5. Drift, invalid bundle signatures, and local governed-file hash mismatches are blockers
+   until synchronized or explicitly resolved through the governance workflow.
+6. Ambiguity, contradiction, outdated guidance, missing intent, and missing coverage must
+   be reported with `report_spec_feedback` or the equivalent agent API.
+7. Agents must not bypass review, approval policy, separation of duties, RBAC, repository
+   scope, audit logging, or protected-branch controls.
+8. Completion claims must include the relevant spec mapping, actual build/test/check
+   outcomes, failed or skipped checks, assumptions, and residual risks.
+9. When compliance or traceability gates apply, the agent must run them and must not convert
+   a failed result into a successful completion claim.
+10. Skills and generated guidance structure a workflow but do not grant tool permission or
+    override published specifications.
 
 ## Non-Goals
-This spec does not grant an agent permission to access production, secrets, protected branches, or external systems. Host approval and least-privilege rules still apply.
+
+- Requiring agents to load every reference spec into every prompt.
+- Granting production, deployment, merge, or secret access.
+- Allowing locally inferred conventions to replace missing governed guidance.
 
 ## Acceptance Evidence
-- Agent output references the active registry URL or MCP config.
-- Work summaries cite specs or explain why no governing spec applied.
-- Feedback records exist for unclear or conflicting guidance.
-- Auth-required MCP clients include a token path without exposing token values.
+
+- Agent sessions or context events show the governing specs loaded for the repository.
+- Feedback records capture unresolved ambiguity, contradiction, staleness, or gaps.
+- Change summaries cite relevant specs and include observed verification results.
+- Auth-required MCP/CLI configuration uses token indirection without exposing token values.
+- Compliance and trace reports identify drift and unmapped implementation surfaces.
 
 ## Token Budget Class
-Workflow rule. Load by default for agents, but keep concise and operational.
+
+Global invariant. Load by default because it controls how agents acquire and apply all other
+governed context.
 
 ## Related Specs
+
 - `SDD_OPERATING_MODEL.md`
-- `TOKENOMICS.md`
 - `IMPLEMENTATION_EVIDENCE.md`
-
-## AI Agent Directives
-Use governed specs as authority. Prefer registry search over broad context loading. Stop on missing or conflicting guidance. Never treat local generated files or examples as published specifications.
-
----
-
-<!-- AI_AGENT_OPERATING_RULES.md v1.0.0 (global) -->
-
-# AI Agent Operating Rules
-
-## Scope
-
-These rules apply to every AI agent that reads, comments on, proposes, or implements
-changes to any system in the organization, regardless of project type. They are the
-rules of engagement: the non-negotiable conditions under which an agent is permitted
-to act. An agent that cannot satisfy a rule must stop and escalate rather than proceed.
-
-## Operating Principles
-
-1. **Specification-first.** An agent MUST read the relevant specification(s) before
-   making any change. If no governing specification exists for the affected system,
-   the agent must flag that gap and stop — it may not infer the contract from code alone.
-2. **Ticket-bound work.** An agent only works against an approved ticket. Work that is
-   not traceable to an approved ticket must not be started.
-3. **Diff discipline.** Every change must be produced as an understandable, reviewable
-   diff. Large, opaque, or mixed-purpose changes must be decomposed.
-4. **Test evidence.** An agent must run the tests required by the specification and the
-   ticket, and report the results. A change without evidence is not complete.
-5. **No silent assumptions.** Any assumption, ambiguity, or uncertainty must be documented
-   in the change, not resolved silently. When the specification is unclear or contradictory,
-   the agent files feedback against the specification instead of guessing.
-6. **Human approval gate.** An agent may never merge to a protected branch or deploy to
-   production without explicit human approval.
-
-## Boundaries
-
-| Boundary | Rule |
-| --- | --- |
-| Production access | Agents have no direct write access to production systems. |
-| Secrets | Agents must never read, log, or embed credentials, tokens, keys, or certificates. |
-| Scope | Agents act only within the systems named by the ticket's *Affected system* field. |
-| Retry limit | If a change is rejected more than the configured number of times, the agent flags the ticket and PR for human review rather than continuing to retry. |
-
-## Evidence the Agent Must Produce
-
-For every change, the agent must attach: the reviewable diff, the test results required
-by the ticket, a statement of assumptions and open questions, and a mapping from the
-change back to the specification section(s) it satisfies.
+- `SECURITY_AND_SECRETS.md`
+- `TRACEABILITY_AND_OBSERVABILITY.md`
 
 ## AI Agent Directives
 
-If any rule above cannot be satisfied — missing specification, missing tests, unclear
-ticket, or a required human gate — the agent MUST halt and report rather than produce a
-change that merely *looks* correct. A technically valid change that violates these rules
-is a failed change.
-
----
-
-<!-- CODE_DEVELOPMENT_STANDARDS.md v1.0.0 (global) -->
-
-# Code Development Specification
-
-## Purpose
-
-Defines coding standards, architecture rules, reuse principles, and implementation
-expectations that apply across software and firmware. Without explicit development rules,
-an AI agent can make changes that are technically correct but architecturally wrong —
-diverging from subsystem boundaries, duplicating logic, or introducing fragile patterns.
-
-## Coding Standards
-
-- Prefer clarity over cleverness; code is read far more often than it is written.
-- Match the conventions, naming, and idioms of the surrounding code.
-- Every public interface requires documentation that evolves with the code.
-- No dead code, commented-out blocks, or speculative abstractions left behind.
-
-## Architecture Rules
-
-| Rule | Requirement |
-| --- | --- |
-| Subsystem boundaries | Code stays within its declared subsystem; cross-boundary calls go through defined interfaces only. |
-| No architectural drift | Implementation must not diverge from the design intent recorded in the System and Subsystem specifications. |
-| Dependency direction | Dependencies flow inward toward domain logic; outer layers depend on inner, never the reverse. |
-| Configuration over hardcoding | Behavior that varies by environment is driven by configuration, not literals (see the Application Configuration specification). |
-
-## Reuse Principles
-
-1. Before adding logic, search for an existing implementation that already does it.
-2. Duplicated logic is a defect; extract and reuse rather than copy.
-3. Shared utilities live in their owning subsystem with a documented interface.
-
-## Maintainability & Testability
-
-- Functions and modules must be small enough to unit test in isolation.
-- Avoid hidden global state; make inputs and effects explicit so behavior is simulatable.
-- Flag overly complex or fragile areas for refactor rather than building on top of them.
-
-## Compliance Checks
-
-Static analysis enforces naming, structure, security risk, and these development rules.
-A change that fails static analysis is not eligible for review.
-
-## AI Agent Directives
-
-When an agent identifies redundant logic, architectural drift, or an opportunity for reuse
-while implementing a ticket, it must surface that finding in the PR rather than silently
-extending the problem. Agents must compare their changes against the expected subsystem
-boundaries before proposing them.
+Load current governed context before changing implementation. Search when focused guidance
+is missing. Report uncertainty rather than inventing policy. Preserve human approval and
+host authorization boundaries, and finish with concrete evidence instead of unsupported
+assurance.
 
 ---
 
@@ -207,116 +134,6 @@ Breaking guidance changes are MAJOR; new guidance is MINOR; clarifications are P
 
 ## Reviews
 No specification becomes active without an approved review in SpecRegistry.
-
----
-
-<!-- DOCUMENTATION_STANDARDS.md v1.0.0 (global) -->
-
-# Documentation Quality and Coverage Specification
-
-## Purpose
-
-AI agents are only as reliable as the context they are given. If documentation is stale,
-incomplete, or contradictory, an agent may follow the wrong instructions and produce unsafe
-changes. This specification ensures documentation evolves in lockstep with the application
-so that public interfaces and client SLAs remain firm contracts and a natural guardrail.
-
-## Documentation Inventory
-
-Every repository maintains an inventory of its README files, architecture docs, deployment
-guides, API docs, runbooks, troubleshooting guides, onboarding docs, and user-facing
-documentation. Each document has a named owner.
-
-## Accuracy & Coverage
-
-| Area | Requirement |
-| --- | --- |
-| Accuracy review | Documentation is compared against current code, configuration, APIs, schemas, and deployment behavior. |
-| Coverage gaps | Missing documentation for critical workflows, interfaces, environments, and operational procedures is identified and tracked. |
-| Outdated content | Stale, contradictory, duplicated, or misleading documentation is flagged for correction. |
-| AI usability | Documentation must be structured well enough for an AI agent to follow safely. |
-| Human usability | Engineers must be able to build, test, deploy, troubleshoot, and roll back from the documentation. |
-
-## Update Rules
-
-Documentation must be updated as part of any code, API, schema, configuration, or
-deployment change that affects it. Not every change has user impact — but any change to a
-public interface or client SLA **requires** a corresponding documentation update in the
-same pull request. This is enforced at the PR review gate.
-
-## Required Templates
-
-Standard templates are maintained for: specifications, runbooks, tickets, pull requests,
-test evidence, and release notes. New documents of these kinds start from the template.
-
-## Review Requirements
-
-Documentation changes pass through a review gate before merge or release, the same as code.
-
-## AI Agent Directives
-
-When an agent's change alters a public interface, client-facing behavior, or an operational
-procedure, it must include the documentation update in the same change. If the agent finds
-existing documentation that contradicts the code or the specification, it must file feedback
-rather than propagate the inconsistency.
-
----
-
-<!-- GIT_FLOW.md v1.0.0 (global) -->
-
-# Git Flow Specification
-
-## Purpose
-
-Defines branching, merge policy, review gates, release tagging, and rollback rules for
-every repository in the organization. In an AI-assisted SDLC, every ticket-driven change
-must pass through a controlled delivery workflow; this specification defines that workflow
-so that both humans and agents follow one traceable path from ticket to release.
-
-## Branching
-
-| Rule | Requirement |
-| --- | --- |
-| Branch naming | Branches are named `type/ticket-id-short-slug` (e.g. `fix/PLT-1421-udp-timeout`). |
-| Branch source | Feature and fix branches are cut from the current default branch head. |
-| One ticket per branch | A branch implements exactly one approved ticket. |
-| No direct commits | The default and release branches accept changes only through pull requests. |
-
-## Pull Requests & Review Gates
-
-1. Every change reaches the default branch through a pull request linked to its ticket.
-2. A PR must pass build validation, required unit and contract tests, and static analysis
-   before it is eligible for review.
-3. Code review is mandatory and must record an explicit rationale for why the change is
-   approved or rejected — review is not a silent thumbs-up.
-4. An agent-authored PR rejected more than the configured retry limit is escalated to a
-   human-in-the-loop owner.
-
-## Rebasing & Merge Control
-
-- Branches are kept current by rebasing onto the default branch before merge.
-- Merges to the default branch use a single squashed, well-described commit referencing
-  the ticket id.
-- Merges to a release branch require the additional gates defined by the release process.
-
-## Release Tagging
-
-Releases are tagged with semantic versions (`MAJOR.MINOR.PATCH`). The tag message records
-the tickets included and a link to the validation evidence for the release.
-
-## Rollback
-
-| Requirement | Rule |
-| --- | --- |
-| Revertability | Every merged change must be revertable as a discrete unit. |
-| Rollback plan | High-risk and hardware-impacting changes must document a rollback plan in the ticket before merge. |
-| Recorded rollbacks | A rollback is itself a tracked, reviewed change with its own audit trail. |
-
-## AI Agent Directives
-
-Agents must never push directly to a protected branch, never merge their own PR without a
-human approval, and must keep each PR scoped to a single ticket so the delivery trail stays
-auditable.
 
 ---
 
@@ -378,69 +195,6 @@ Workflow rule. Load for implementation, review, CI, and audit tasks.
 
 ## AI Agent Directives
 Never say a check passed without observed output. Include spec mapping, commands run, failures, skipped checks, and remaining risks in the final work summary.
-
----
-
-<!-- OBSERVABILITY_AND_TRACEABILITY.md v1.0.0 (global) -->
-
-# Observability and Traceability Specification
-
-## Purpose
-
-When AI writes the code, the code is no longer the source of truth — the specification is.
-Observability must therefore shift from observing software execution to observing the
-translation of intent into execution. This specification defines how every line of
-synthesized code is traced back to the specification that motivated it, and how divergence
-from the specification is detected and reported.
-
-## Bidirectional Traceability
-
-The system must be able to:
-
-1. Trace a block of specification to the token usage and the specific lines of code in a PR
-   that implement it, **and**
-2. Trace lines of code in a PR back to an agent id, a prompt template, and the section of
-   the specification they satisfy.
-
-Requirement IDs are derived from specification headings (for example, a clause under
-section 7.4 is `REQ-7.4`). Generated code references its requirement id inline, e.g.
-`// @spec[REQ-7.4]`, so traceability survives in the source.
-
-## Divergence and Orphan Scoring
-
-Anything that cannot be mapped clearly back to the specification is **divergence**. Every PR
-generates a divergence/orphan report. The specification defines limits for acceptable
-divergence; a PR exceeding the limit is held for human review.
-
-## Telemetry
-
-Telemetry is tied to model usage, duration, and agent id.
-
-| Metric | Description |
-| --- | --- |
-| TTFT & latency | Time to first token and total generation duration per agent step. |
-| Token efficiency ratio | Ratio of prompt tokens to generated code tokens (detects over-verbose prompting). |
-| Cost per feature/fix | Total cost of the LLM calls required to merge a specification. |
-| Tokens missed | Tokens wasted on blind-alley work, rewrites, and bad output. |
-| Self-healing iteration rate | Loops (compile → fail → correct → regenerate) before reaching a passing state. |
-| First-pass success rate | Percentage of specs that compile and pass all generated tests on iteration 0. |
-| Spec compliance | Independent 0–100% score of how thoroughly generated code covers the spec's constraints. |
-| Semantic drift | Vector distance between the new code's structural intent and the established architecture. |
-| Architecture boundary violations | Count of times an agent violated a specification boundary. |
-| Spec error attribution | Regressions traced back to a vague or contradictory specification node. |
-
-## Root-Cause Classification
-
-Failures are classified as a **logic gap** (code did not match the spec) or a **context gap**
-(code matched the spec, but the spec did not account for the real-world state). Code that
-scores perfect spec compliance yet still fails is a **spec flaw** — it signals a problem with
-the specification itself and is routed back to the spec authors.
-
-## AI Agent Directives
-
-Agents must emit the spec id, spec version, and prompt hash for every action so that each
-change is attributable. An agent must not produce code it cannot map to a specification
-clause; unmappable output is divergence and must be reported, not merged.
 
 ---
 
@@ -656,64 +410,6 @@ Do not bypass the registry workflow. When a requested spec edit affects publishe
 
 ---
 
-<!-- TICKET_WORKFLOW.md v1.0.0 (global) -->
-
-# Ticket Creation and Governance Specification
-
-## Purpose
-
-In a Spec-Driven Development model the ticket becomes more important, not less. The ticket
-is the entry point for change: it defines the desired outcome, acceptance criteria, affected
-systems, expected tests, and the evidence required before the work is complete. An AI agent
-may *draft* a ticket, but the organization must *approve* it before any implementation begins.
-
-## Ticket Formatting
-
-A ticket defines an intended outcome, not just a task. Every ticket must include:
-
-| Field | Description |
-| --- | --- |
-| Change objective | What needs to change and why. |
-| Affected system | Repo, service, subsystem, API, protocol, database, or configuration area impacted. |
-| Specification references | Links to the relevant system, API, protocol, configuration, database, or testing specifications. |
-| Acceptance criteria | Conditions that must be true for the ticket to be considered complete. |
-| Verification criteria | Tests, build steps, reviews, simulations, or artifacts required to prove the work. |
-| Risk classification | Low, medium, high, or hardware-impacting. |
-| Compatibility impact | Whether the change affects APIs, protocols, schemas, configs, or downstream consumers. |
-| Rollback expectation | How the change can be reverted or mitigated. |
-| Evidence requirements | Logs, test reports, screenshots, build artifacts, simulation reports, or review notes. |
-| Open questions | Assumptions or missing details that require human clarification. |
-
-## Quality
-
-A weak ticket creates weak AI output. A vague ticket — missing objective, acceptance, or
-verification criteria — lets an agent produce code that looks correct but fails the real
-objective. Improve ticket quality by asking an agent "how can you improve this ticket," and
-by validating a ticket with more than one model: diversity of thought yields better tickets.
-
-## Minimum Requirements for a Good Ticket
-
-Maintain a guide for engineers, product owners, and managers on asking AI to create tickets:
-the required format, examples of vague or unsafe requests, how to describe done conditions,
-how to specify validation requirements, how to flag risk, and how to link to specifications.
-
-## Governance
-
-The role of the developer shifts from builder to architect and inspector. Governance tooling
-validates that the architecture stays in line with the specification, and requires full code
-review with an explicit explanation for every pass or rejection. Dashboards generated at each
-step show the actions of the agents. Agents have a bounded retry process to fix issues
-themselves; if a ticket's changes are rejected more than the configured number of times, the
-agent flags the ticket and PR for human-in-the-loop review.
-
-## AI Agent Directives
-
-An agent must not begin implementation against an unapproved ticket, must populate every
-required field (filing open questions rather than guessing), and must attach the verification
-evidence the ticket demands before marking work complete.
-
----
-
 <!-- TOKENOMICS.md v1.0.0 (global) -->
 
 # Tokenomics
@@ -798,474 +494,426 @@ When work changes code structure, APIs, schemas, commands, or config, prefer gen
 
 ---
 
-<!-- DESIGN.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+<!-- API.md v1.0.0 (Web App Standard) -->
 
-# System Architecture and Design Specification (DESIGN.md)
+# Web App Standard — API Specification
 
-This document provides a comprehensive technical design specification for the **SDDManager (Software Design Document Manager)**. SDDManager is an enterprise-grade platform built to manage, compile, verify, and query structured Software Design Documents (SDDs). It enables a GitOps-driven workflow where software architecture documentation is treated as code, compiled into structured JSON schemas, audited for style and completeness, and exposed to both human developers and AI coding agents via a Model Context Protocol (MCP) server.
+## Scope
+This specification governs REST or JSON API endpoints in Web App Standard projects.
+
+## Endpoints
+Every endpoint spec must list method, path, purpose, authentication requirements, request shape,
+response shape, and compatibility expectations. Health/readiness endpoints must return stable JSON
+and documented status codes.
+
+## Request and Response Contracts
+Request validation belongs at the API boundary. Response payloads must be stable, typed or
+schema-described, and covered by tests. Breaking response or path changes require a major spec delta.
+
+## Errors
+Unknown routes must return a documented 404 shape. Validation and authorization failures must use
+consistent JSON error payloads and must not leak secrets or internal stack traces.
+
+## Traceability
+Route declarations, API handlers, response helpers, and package commands that serve the API should
+map to the governing project or project-type API spec.
 
 ---
 
-## 1. System Architecture Overview
+<!-- DESIGN.md v2.0.0 (project:github.com/joeldg/SpecRegistry) -->
 
-The SDDManager is structured as a monorepo consisting of five decoupled packages that interact over defined protocol boundaries. The system utilizes a centralized SQLite repository, standardizes communication via a `shared` types library, and offers CLI, Web, and MCP interfaces.
+# SpecRegistry System Architecture and Design
 
-### 1.1 High-Level Block Diagram
+## Scope
+
+This specification governs the architecture of SpecRegistry itself. SpecRegistry is a
+TypeScript monorepo that manages versioned Markdown specifications, distributes governed
+context to developers and agents, records review and compliance evidence, and exposes that
+state through a web application, CLI, REST API, and Model Context Protocol (MCP) server.
+
+## Architectural Outcomes
+
+The system must preserve these outcomes:
+
+1. Published specifications remain the reviewed source of truth.
+2. Project-specific guidance is isolated from reusable project-type and global guidance.
+3. Every distributed bundle is attributable to exact spec versions and content hashes.
+4. Review, approval, publication, feedback, compliance, and administrative actions remain
+   auditable.
+5. Agent integrations use bounded registry APIs instead of direct database access.
+6. Deployments can require authentication without embedding credentials in generated files
+   that are intended for source control.
+
+## Runtime Architecture
 
 ```mermaid
-graph TD
-    subgraph Local Developer Environment / CI-CD
-        CLI[packages/cli]
-        LocalGit[(Git Repo / MD Files)]
-    end
-
-    subgraph SDD Platform Services
-        SRV[packages/server]
-        DB[(SQLite: specregistry.db)]
-        Web[packages/web]
-    end
-
-    subgraph AI Assistant Ecosystem
-        MCP[packages/mcp]
-        LLM[AI Coding Agent / IDE]
-    end
-
-    %% Interactions
-    LocalGit -->|Reads MD| CLI
-    CLI -->|Parses & Verifies| CLI
-    CLI -->|Push Compile Artifacts / HTTPS REST| SRV
-    SRV <-->|Read / Write| DB
-    Web <-->|Fetch SDD State & Metrics| SRV
-    LLM <-->|JSON-RPC Protocol| MCP
-    MCP <-->|Internal API / DB Query| SRV
+flowchart LR
+  Browser["Web dashboard"] -->|"REST /api/v1"| Server["Fastify server"]
+  CLI["specreg CLI"] -->|"REST /api/v1"| Server
+  Host["MCP host / coding agent"] -->|"MCP over stdio"| MCP["specreg mcp or specreg-mcp"]
+  MCP -->|"REST /api/v1"| Server
+  Server --> DB[("SQLite registry")]
+  Server --> Integrations["GitHub, webhooks, chat, LDAP, LLM providers"]
 ```
 
-### 1.2 Component Breakdown
+### Package Responsibilities
 
-| Package / Directory | Type | Runtime / Tech | Responsibility |
-| :--- | :--- | :--- | :--- |
-| `packages/cli` | Node CLI Tool | TypeScript, Node.js | Scans directory trees for Markdown files, validates schemas and frontmatter, executes linter/style checks, and compiles documents into single-file AST bundles to sync with the central server. |
-| `packages/server` | Back-end API Server | Express, Better-SQLite3 | Exposes REST APIs for document registry, manages historical versions, tracks style-guide conformance scores, handles JWT-based client auth, and serves compiled artifacts. |
-| `packages/web` | Front-end SPA | React, Vite, Tailwind | Provides a graphical portal for reading compiled SDDs, tracking audit trails, monitoring team adherence to documentation rules, and visualizing system dependency graphs. |
-| `packages/mcp` | Model Context Protocol | TypeScript, MCP SDK | Exposes a standardized Model Context Protocol interface. Enables AI assistants (e.g., Claude, Cursor) to dynamically query, search, and validate software design documents. |
-| `packages/shared` | Types & Utilities | TypeScript | Defines system-wide data interfaces, compilation schemas, validation rules, and endpoint specs used by both CLI, Web, and Server. |
-| `config/alloy` | Formal Modeling | Alloy Analyzer | Holds formal specification models (`config.alloy`) used to mathematically verify core architectural invariants (e.g., draft submission and revision rules). |
+| Package | Responsibility |
+| --- | --- |
+| `packages/server` | Fastify REST API, SQLite persistence and migrations, authentication and RBAC, review workflow, audit evidence, integrations, metrics, and production static-web serving. |
+| `packages/web` | React/Vite management dashboard using the server REST API. |
+| `packages/cli` | `specreg` developer workflow: initialization, sync, verification, compilation, traceability, compliance, audits, and embedded MCP serving. |
+| `packages/mcp` | Legacy standalone MCP stdio server that translates MCP tool calls into registry REST requests. |
+| `packages/shared` | Shared TypeScript domain types and deterministic helpers used across packages. |
 
----
+The packages communicate through explicit interfaces. The web client, CLI, and MCP servers
+must not open or mutate the registry SQLite database directly.
 
-## 2. High-Level Design Patterns
+## Server Design
 
-To ensure modularity, high performance, and reliability, the SDDManager implements several core design patterns:
+The server is built with Fastify. `packages/server/src/app.ts` constructs the application,
+registers cross-origin policy and request authentication, and mounts route families under
+`/api/v1`. `packages/server/src/index.ts` owns process startup, secure-posture checks,
+backup scheduling, and listening on the configured port.
 
-### 2.1 Compiler and AST Pattern (packages/cli)
-Instead of treating Markdown files as raw text blocks, the CLI compiles them into an Abstract Syntax Tree (AST).
-* **Parser:** Reads markdown frontmatter (YAML) and divides headers into hierarchical sections.
-* **Semantic Analyzer:** Verifies document cross-references (e.g., an API contract in `API.md` linking to a schema in `DATABASE_SCHEMA.md`).
-* **Code Generator:** Produces a single `sdd-bundle.json` containing the AST, schema classifications, and checksums for atomic delivery to the registry.
+SQLite is accessed through `better-sqlite3`. Schema creation and append-only migrations live
+in `packages/server/src/db.ts`. The server uses WAL mode and parameterized statements.
+Routes may compose deterministic helpers, but durable state changes must continue to honor
+review, audit-log, and scope semantics.
 
-### 2.2 Contract-First Shared Core Pattern (packages/shared)
-To prevent drift across boundaries:
-* All network payloads, database entity interfaces, validation errors, and metadata schemas are declared inside `packages/shared`.
-* Both `packages/cli` (the producer) and `packages/server` (the consumer) import compile-time contracts from `shared`, enforcing strong end-to-end type safety.
+Important durable entities include:
 
-### 2.3 Command/Handler & Registry Sync Pattern
-The CLI uses a command pattern organized as explicit actions: `init`, `scan`, `verify`, `compile`, and `sync` (submit drafts).
-* Local state changes are buffered in a temporary schema folder.
-* Synchronizing with the database utilizes an optimistic concurrency control protocol. The CLI submits the document hash along with parent commit references. If the remote history has diverged, the server rejects the synchronization, requiring a local re-scan and pull.
+- `project_types`: reusable baselines plus the global scope.
+- `repo_consumers`: concrete repositories attached to a project type.
+- `specs` and `spec_versions`: current specifications and immutable published history.
+- `change_requests` and `review_approvals`: proposed changes and approval evidence.
+- `agent_feedback`, `audit_reports`, `audit_log`, and compliance/trace tables: governance
+  evidence.
+- `users` and `tokens`: identities and hashed bearer-token records.
+- governed skill identities, versions, assignments, sources, and candidates.
 
-### 2.4 Model Context Protocol (MCP) Wrapper
-To integrate natively with Large Language Models (LLMs), the `packages/mcp` module acts as an adapter layer over the system's registry. It translates context requests from LLMs into direct queries against the SQLite database, using semantic routing to search for design files, retrieve context windows, and output structured tool schema declarations.
+Database migrations must be additive. Existing review, approval, audit, feedback, and
+traceability records must not be rewritten merely to simplify a feature.
 
----
-
-## 3. Data Flow Patterns
-
-### 3.1 Document Scan, Verification, and Compilation Flow (Local/CI)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer / CI Runner
-    participant CLI as CLI Engine
-    participant SG as Styleguide Engine
-    participant Disk as Local File System
-
-    Dev->>CLI: run "sdd-cli compile"
-    CLI->>Disk: Scan workspace for *.md files
-    Disk-->>CLI: Return Markdown files & directories
-    CLI->>CLI: Extract YAML frontmatter metadata
-    
-    rect rgb(240, 248, 255)
-        note right of CLI: Validation Phase
-        CLI->>SG: Load Google Styleguide rules & config.alloy boundaries
-        SG-->>CLI: Validation rules schema
-        CLI->>CLI: Lint markdown syntax & verify mandatory sections
-        CLI->>CLI: Build cross-document dependency graph
-    end
-
-    CLI->>Disk: Write sdd-bundle.json (Compiled AST)
-    CLI-->>Dev: Compilation successful (Conformity Score: 98%)
-```
-
-### 3.2 Registry Sync and Central Registry Submission Flow
+## Specification Lifecycle
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant CLI as CLI Engine
-    participant SRV as Express Server
-    participant DB as SQLite DB
+  participant Author
+  participant API as Fastify API
+  participant DB as SQLite
+  participant Reviewer
 
-    CLI->>SRV: POST /api/v1/registry/submit-draft (Auth Token + sdd-bundle.json)
-    SRV->>SRV: Validate auth token & bundle integrity checksums
-    
-    rect rgb(245, 245, 245)
-        note over SRV, DB: Database Transaction
-        SRV->>DB: Query current head revision of the target system
-        DB-->>SRV: Return active system metadata
-        SRV->>SRV: Verify Git merge-base path (prevent split-brain state)
-        SRV->>DB: Insert transaction record into `sdd_revisions`
-        SRV->>DB: Update system compliance status & metrics
-    end
-    
-    SRV-->>CLI: Sync Complete (Revision ID: #1042, System Status: COMPLIANT)
+  Author->>API: Submit draft or change request
+  API->>DB: Store pending review and audit event
+  Reviewer->>API: Approve or reject
+  API->>DB: Record reviewer evidence
+  API->>DB: Publish a new immutable version after policy passes
+  API-->>Author: Return current version and review state
 ```
 
-### 3.3 AI Agent Query Protocol Flow (MCP Interface)
+An update to a published specification must go through a change request. Required reviewer
+counts, separation of duties, stable/beta channel behavior, and audit attribution are
+enforced by the server. Initial project-scoped specifications may be published only through
+the explicit workflow supported for enrolled agents and authorized actors.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Agent as AI Coding Agent (Claude)
-    participant MCP as MCP Server
-    participant SRV as Express Server
-    participant DB as SQLite DB
+## Distribution and Integrity
 
-    Agent->>MCP: JSON-RPC (mcp:list_tools)
-    MCP-->>Agent: Returns schema tools: ["search_sdds", "get_system_boundaries", "verify_local_sdd"]
-    Agent->>MCP: JSON-RPC (mcp:call_tool "search_sdds" { query: "UDP Protocol Contract" })
-    MCP->>DB: SQL Query over `sdd_documents` with full-text index
-    DB-->>MCP: Returns matching AST fragments & file paths
-    MCP-->>Agent: Raw text/JSON context block with structural constraints
-```
+The server distributes governed specs as downloads, compiled context, agent packs, search
+results, and MCP responses. Downloads include `specs/.specregistry.json` containing exact
+versions and SHA-256 content hashes. The signed manifest payload uses Ed25519; local
+`specreg verify` checks both file hashes and the signature against the originating
+registry's public key.
+
+Generated MCP and agent guidance must use the effective public registry URL. Resolution
+follows `SPECREG_PUBLIC_URL`, forwarded host/protocol headers, and finally the local bind
+address. Auth-required deployments use bearer tokens supplied with `--token` or
+`SPECREG_TOKEN`.
+
+## CLI Design
+
+`packages/cli/src/index.ts` parses commands and delegates to focused modules. Major command
+families include:
+
+- Repository onboarding and currency: `init`, `check`, `sync`, and `migrate`.
+- Context and draft workflows: `generate`, `compile`, and `submit-drafts`.
+- Traceability and governance: `code-map`, `trace-check`, `comply`, `audit`, and
+  `audit-report`.
+- Agent integration: `mcp`.
+- Governed skills and advisory style-guide management.
+
+The CLI reads and writes local repository artifacts but communicates with registry state
+through REST. It must use `SPECREG_TOKEN` or `--token` for authenticated registries and must
+not invent a separate authentication convention.
+
+## MCP Design
+
+Generated configurations prefer `specreg mcp`; `packages/mcp` remains the standalone legacy
+binary. Both implementations are MCP stdio adapters over the registry REST API.
+
+Core tools include governed context loading and search (`begin_task`, `get_specs`,
+`search_specs`, and `resolve_guidance`), feedback reporting, governed skill discovery, token
+usage reporting, and compliance/session evidence. MCP implementations must send
+`SPECREG_TOKEN` as a bearer token when configured and use `SPECREG_REPO` to request the
+correct project-scoped context.
+
+MCP tools must not query SQLite directly. The REST API remains the authorization,
+observability, and scope boundary.
+
+## Web Design
+
+The web package is a React application built by Vite. It obtains all registry state through
+`packages/web/src/api.ts`. Page components cover specs, reviews, feedback, reports,
+projects, baselines, skills, templates, and settings.
+
+The dashboard is an administrative presentation layer, not a second business-logic
+implementation. Server responses remain authoritative for authorization, lifecycle rules,
+and persisted evidence.
+
+## Authentication and Authorization
+
+Requests authenticate with bearer tokens or `x-api-key`; stored token material is hashed.
+The server supports local users and optional LDAP authentication with the roles `agent`,
+`author`, `reviewer`, and `admin`. Route policies in `packages/server/src/lib/auth.ts` define
+minimum roles, while project-scoped agent mutations receive additional repository-scope
+checks in their handlers.
+
+When `SPECREG_AUTH=required`:
+
+- Non-public routes require a valid, unexpired token.
+- The server must refuse insecure default-admin posture at startup.
+- Administrative settings, user/key management, audit evidence, and operational controls
+  require the admin role.
+- Generated and documented clients use `SPECREG_TOKEN`; credentials are not committed.
+
+Secrets stored in settings may be encrypted at rest with `SPECREG_SECRET_KEY`. Public
+configuration responses expose presence/status metadata rather than secret values.
+
+## Observability and Operations
+
+`GET /metrics` exposes Prometheus metrics. The registry also records audit-log entries,
+context delivery, real LLM token usage when available, feedback, compliance attestations,
+trace reports, and deterministic audit reports.
+
+Backups use SQLite's online backup API, checksum sidecars, retention, and optional scheduled
+execution. Public URL configuration, server version checks, LLM providers, application
+keys, LDAP, feature flags, and backup controls are managed through admin-only routes.
+
+## Architecture Invariants
+
+- Fastify is the only HTTP server framework for the registry API.
+- SQLite access is owned by `packages/server`.
+- MCP, CLI, and web clients use registry APIs rather than direct database access.
+- Shared types must remain free of runtime dependencies on the other internal packages.
+- Authentication uses registry bearer/API tokens, not JWT or custom HMAC request signing.
+- Published spec changes preserve immutable version history and review evidence.
+- Generated context remains aware of public URL and token configuration.
+- Operational and governance evidence must be classified from explicit event semantics,
+  not incidental words in human-readable summaries.
+
+## AI Agent Directives
+
+Before changing a package boundary, route contract, authentication behavior, database
+schema, review workflow, bundle format, or MCP tool, compare the change with this
+specification and the product specification in `docs/SPEC.md`. Report contradictions or
+outdated guidance instead of implementing around them. Update architecture documentation
+in the same reviewed change whenever a public interface or durable invariant changes.
 
 ---
 
-## 4. Package and Component Deep Dive
+<!-- STRUCTURE.md v2.0.0 (project:github.com/joeldg/SpecRegistry) -->
 
-### 4.1 CLI (`packages/cli`)
-The CLI acts as the entry point for local software engineering loops and automated integration environments.
+# SpecRegistry Codebase Structure
 
+## Scope
+
+This specification maps the repository's package boundaries, entry points, configuration,
+tests, sidecars, and dependency direction. It is descriptive where paths are expected to
+exist and normative where ownership boundaries prevent architectural drift.
+
+## Repository Layout
+
+```text
+SpecRegistry/
+├── packages/
+│   ├── cli/                 # specreg command-line application and embedded MCP server
+│   ├── mcp/                 # legacy standalone MCP stdio server
+│   ├── server/              # Fastify API, SQLite data model, integrations, and operations
+│   ├── shared/              # shared TypeScript types and pure helpers
+│   └── web/                 # React/Vite dashboard
+├── docs/                    # user, developer, API, operations, and product documentation
+├── specs/                   # governed specifications for this repository
+├── samples/ai-sdd/          # sample specification pack and loader
+├── config/alloy/            # formal model and Alloy checks
+├── .github/                 # CI workflow and bundled SpecRegistry check action
+├── Dockerfile               # production container build
+├── docker-compose.yml       # local/container deployment composition
+├── package.json             # npm workspace scripts
+└── tsconfig.base.json       # shared TypeScript compiler options
 ```
-packages/cli/src/
-├── index.ts           # Entrypoint, registers commander commands
-├── env.ts             # Strongly typed CLI environment parser
-├── init.ts            # Bootstraps empty projects with specs/ directories
-├── scan.ts            # Recursively navigates disk to build draft manifest
-├── verify.ts          # Evaluates markdown AST against Style Guides
-├── styleguides.ts     # Engine rules (Google Styleguide standards)
-├── compile.ts         # Bundles ASTs, resolves internal file links
-├── submitDrafts.ts    # Transports payload to remote Express API
-├── registry.ts        # Manages configuration states
-└── repo.ts            # Parses git parameters (commit hash, branch, remote)
-```
 
-* **Core Logic Flow:**
-  When `compile` runs, `scan.ts` filters the local workspaces using exclusion globs. Markdown files are parsed via an AST processing library. `verify.ts` runs checking algorithms on each AST node, evaluating formatting constraints (header ordering, presence of descriptions, valid link definitions). If validation fails, it generates diagnostic issues with row/column locations.
+Generated build output, local databases, credentials, MCP configuration, and local
+traceability artifacts are not source modules. Their ignore/tracking policy must remain
+explicit so governed specs are not confused with transient agent output.
 
-### 4.2 Server (`packages/server`)
-The Server is an Express-based engine running SQLite via `better-sqlite3`.
+### Sidecar and Metadata Artifacts
 
-```
+| Artifact | Format | Purpose |
+| --- | --- | --- |
+| `.spec/code-map.json` | Schema V2 dictionary JSON | Compact AST/code-entity inventory with deduplicated strings and tuples. |
+| `.spec/code-trace.json` | Schema V2 dictionary JSON | Compact graph linking code entities to governed specs, coverage, and drift metrics. |
+| `.spec/code-map.sqlite` | SQLite | Local zero-token index for CLI lookups and compliance checks. |
+| `.spec/trace-overrides.json` | JSON | Explicit reviewed link overrides and waivers for traceability. |
+
+Sidecars are local or generated evidence, not registry persistence. Their schemas and
+tracking policy are governed by `OBSERVABILITY_AND_TRACEABILITY.md`.
+
+## Package Entry Points
+
+| Package | Runtime entry | Supporting entry points |
+| --- | --- | --- |
+| CLI | `packages/cli/src/index.ts` | Command modules under `packages/cli/src`; published binary name `specreg`. |
+| MCP | `packages/mcp/src/index.ts` | Published legacy binary `specreg-mcp`; generated configs prefer `specreg mcp`. |
+| Server | `packages/server/src/index.ts` | `app.ts` builds Fastify; `db.ts` owns schema/migrations; `seed-cli.ts` and `backup-cli.ts` provide operational commands. |
+| Web | `packages/web/src/main.tsx` | `App.tsx` owns routing/layout; `api.ts` owns REST calls; page modules live under `src/pages`. |
+| Shared | `packages/shared/src/index.ts` | Shared types and helpers exported for workspace consumers. |
+
+Each workspace has its own `package.json` and `tsconfig.json`. Root scripts orchestrate
+workspace builds and tests.
+
+## Server Structure
+
+```text
 packages/server/src/
-├── app.ts             # Express initialization, Middleware pipelines
-├── db.ts              # SQLite database driver client and schema setup
-├── env.ts             # Server configuration validation (yup/zod pattern)
-├── index.ts           # HTTP execution server wrapper
-├── seed.ts            # Default styles database seeder
-├── routes/            # REST API endpoints (systems, docs, sync, telemetry)
-└── lib/               # Authentication, token validation, parsing utils
+├── app.ts                   # Fastify construction and route registration
+├── index.ts                 # environment startup, posture checks, scheduler, listen
+├── db.ts                    # SQLite schema and append-only migrations
+├── env.ts                   # environment-file loading and configuration
+├── seed.ts                  # idempotent baseline/demo data
+├── seed-cli.ts              # seed command entry
+├── backup-cli.ts            # backup/verify/restore command entry
+├── routes/                  # HTTP handlers grouped by domain
+└── lib/                     # reusable domain, integration, security, and report helpers
 ```
 
-* **State Persistence Strategy:**
-  SQLite handles concurrently read/write access using Write-Ahead Logging (WAL) mode. Transactions are executed synchronously inside memory-mapped Express route handlers.
+Route modules currently cover project types, projects, specifications, reviews, feedback,
+automation, skills, administrative/reporting APIs, authentication, integrations, and
+metrics. New routes belong in the closest domain module and must be registered in
+`app.ts`.
 
-### 4.3 Web Client (`packages/web`)
-A single-page application focused on dashboard telemetry, audit-trail compliance, and real-time visualization of codebase specifications.
+Database schema changes belong only in `db.ts` and must be append-only. Cross-route logic
+that represents a durable rule belongs in `lib/` rather than being copied between
+handlers.
 
-```
+## CLI Structure
+
+`packages/cli/src/index.ts` owns argument parsing and command dispatch. Focused modules own
+individual workflows, including initialization, synchronization, compilation, verification,
+draft submission, code mapping, compliance, audits, migrations, skills, style guides, and
+MCP serving.
+
+CLI modules may:
+
+- Read repository files and Git metadata.
+- Write generated local artifacts in documented locations.
+- Call registry REST endpoints through the shared CLI request helper.
+
+CLI modules must not import server internals or open the registry database.
+
+Tests live under `packages/cli/test` and use Node's test runner.
+
+## MCP Structure
+
+`packages/mcp/src/index.ts` is a standalone stdio MCP adapter. The CLI has an embedded MCP
+implementation in `packages/cli/src/mcp.ts`. Both call the registry over HTTP and use the
+same public environment conventions:
+
+- `SPECREG_SERVER` for the registry URL.
+- `SPECREG_TOKEN` for bearer authentication.
+- `SPECREG_REPO` for concrete project context.
+
+Neither MCP implementation owns registry persistence.
+
+## Web Structure
+
+```text
 packages/web/src/
-├── main.tsx           # React virtual DOM mounter
-├── App.tsx            # Main layout & router orchestration
-├── api.ts             # HTTP client implementation to communicate with server
-├── components.tsx     # Reusable UI widgets (cards, diff-views, metric dials)
-└── styles.css         # Tailwind utility styling
+├── main.tsx                 # React bootstrap
+├── App.tsx                  # application shell and routes
+├── api.ts                   # typed REST client
+├── components.tsx           # shared dashboard components
+├── styles.css               # application styles
+└── pages/                   # domain pages and report/settings views
 ```
 
-* **Key Views:**
-  1. **Compliance Dashboard:** Real-time progress bar of a company's systems, listing which directories are out of sync with their physical code implementation.
-  2. **Interdependency View:** A directed visual graph illustrating where system specifications share interface references, enabling impact assessment when system definitions undergo structural modification.
+Business rules and authorization remain server-owned. Web code should render server state,
+collect user intent, and call typed API helpers rather than duplicating lifecycle decisions.
 
-### 4.4 Model Context Protocol Adapter (`packages/mcp`)
-A standards-compliant bridge serving programmatic integration to AI systems.
-
-```
-packages/mcp/src/
-└── index.ts           # Implements MCP Node SDK, tool registrations
-```
-
-* **Integration Strategy:**
-  By parsing standard commands, the MCP server allows AI-supported editors to retrieve raw file contexts directly from the central design specification database instead of reading massive code paths.
-
----
-
-## 5. Database Schema Design
-
-The SQLite database (`specregistry.db`) keeps track of systems, draft submissions, structural documents, and validation logs.
+## Dependency Direction
 
 ```mermaid
-erDiagram
-    SYSTEMS ||--o{ SDD_REVISIONS : "has"
-    SYSTEMS ||--o{ STYLE_GUIDE_PROFILES : "enforces"
-    SDD_REVISIONS ||--|{ SDD_DOCUMENTS : "contains"
-    SDD_DOCUMENTS ||--o{ COMPLIANCE_VIOLATIONS : "produces"
-
-    SYSTEMS {
-        TEXT id PK
-        TEXT name
-        TEXT repository_url
-        TEXT description
-        TIMESTAMP created_at
-    }
-
-    STYLE_GUIDE_PROFILES {
-        TEXT id PK
-        TEXT name
-        TEXT rules_payload_json
-    }
-
-    SDD_REVISIONS {
-        TEXT id PK
-        TEXT system_id FK
-        TEXT git_commit_sha
-        TEXT git_branch
-        TEXT author_email
-        TIMESTAMP submitted_at
-        REAL compliance_score
-    }
-
-    SDD_DOCUMENTS {
-        TEXT id PK
-        TEXT revision_id FK
-        TEXT file_path
-        TEXT frontmatter_json
-        TEXT markdown_ast_json
-        TEXT content_hash
-    }
-
-    COMPLIANCE_VIOLATIONS {
-        TEXT id PK
-        TEXT document_id FK
-        TEXT rule_code
-        TEXT severity
-        INTEGER line_number
-        TEXT message
-    }
+flowchart TD
+  Web["packages/web"] --> Shared["packages/shared"]
+  CLI["packages/cli"] --> Shared
+  MCP["packages/mcp"] --> Shared
+  Server["packages/server"] --> Shared
+  Web -->|"HTTP"| Server
+  CLI -->|"HTTP"| Server
+  MCP -->|"HTTP"| Server
+  Server --> DB[("SQLite")]
 ```
 
----
+`packages/shared` is the internal leaf dependency and must not import the server, CLI, MCP,
+or web packages. Runtime clients may depend on shared contracts, but only the server owns
+SQLite and privileged integration configuration.
 
-## 6. Style Guide and Verification Logic
+The web, CLI, and MCP packages must remain independently buildable after `packages/shared`
+has been built.
 
-The platform's verification engine (`styleguides.ts` and `verify.ts`) processes markdown files against predefined rule specifications.
+## Tests and Verification
 
-### 6.1 Standard Google Documentation Alignment
-The platform evaluates incoming document nodes against standard documentation criteria:
-* **Section Completeness:** Mandatory sections such as `# System Overview`, `# API Contracts`, and `# Data Structures` are verified using AST node traversal.
-* **Structural Correctness:** Evaluates relative header levels (e.g., ensuring a `###` header is preceded by an `##` parent).
-* **Reference Isolation:** Inspects external local markdown file pointers to ensure links are valid system-relative paths and do not point to missing assets.
+| Area | Location / command |
+| --- | --- |
+| Full TypeScript and web build | `npm run build` |
+| Full workspace tests | `npm test` |
+| Server tests | `packages/server/test`, run through the server workspace |
+| CLI tests | `packages/cli/test`, run through the CLI workspace |
+| CI | `.github/workflows/ci.yml` |
+| Governed bundle currency/integrity | `specreg check` and `specreg verify` |
 
-### 6.2 Compliance Score Calculation
-The server calculates a cumulative quality score ($Q$) for every uploaded revision:
+Server behavior changes require tests. Public API, deployment, authentication, CLI/MCP,
+or workflow changes require corresponding documentation updates.
 
-$$Q = 100 - \left( \frac{10 \cdot E_{critical} + 3 \cdot E_{warning} + 1 \cdot E_{info}}{\text{Total Document Count}} \right)$$
+## Configuration Boundaries
 
-* A system revision with a score of $Q < 80$ is labeled **NON-COMPLIANT** in the Web Dashboard and fails target pull request status checks during CI-CD workflows.
+Runtime configuration is supplied through environment variables and settings persisted by
+the server. Important deployment variables include:
 
----
+- `PORT` and `SPECREG_DB`.
+- `SPECREG_PUBLIC_URL`.
+- `SPECREG_AUTH`, `SPECREG_ADMIN_PASSWORD`, and `SPECREG_TOKEN`.
+- `SPECREG_SECRET_KEY`.
+- Backup, LDAP, LLM, integration, and feature-specific variables documented in
+  `docs/OPERATIONS.md`.
 
-## 7. Operational Resilience, Security, and Observability
+Do not repurpose generated client configuration as server configuration. `.mcp.json`,
+`.spec/`, and local credentials belong to consuming-repository workflows.
 
-### 7.1 Security & Authentication Bounds
-* **CLI Sync Pipeline:** Communication from CLI to Server requires a cryptographically signed HMAC authorization header. API Tokens are provisioned per system scope on the Admin console and passed to CLI environments via `SDD_API_TOKEN`.
-* **Database Isolation:** Better-SQLite3 operations execute in pre-compiled parametrized statement queries to prevent arbitrary runtime SQL injection vector injections.
+## Ownership Rules
 
-### 7.2 Observability and Logs
-* The REST server implements standardized, colorized stdout formats:
-  `[TIMESTAMP] [INFO/WARN/ERROR] [REQUEST_ID] METHOD /path STATUS_CODE - duration_ms`
-* Revisions maintain transition telemetry logs, ensuring tracking of documentation updates alongside Git branch merges.
+- `packages/server/src/db.ts` owns schema migration.
+- `packages/server/src/lib/auth.ts` owns global role policy.
+- Route handlers own domain validation and project-scoped authorization.
+- `packages/web/src/api.ts` owns dashboard endpoint wiring.
+- `packages/cli/src/registry.ts` owns CLI registry HTTP/auth behavior.
+- `packages/cli/src/mcp.ts` and `packages/mcp/src/index.ts` must remain behaviorally aligned
+  for shared MCP capabilities.
+- `docs/` explains product and operator workflows; `specs/` states governed requirements.
 
-### 7.3 Performance Optimizations
-* **Bundle Caching:** The CLI caches local file hash maps under `.sdd_cache/` to identify unmodified files, running markdown parsing passes only on modified documents.
-* **Database Indexing:** SQLite tables contain index overlays on foreign keys (`revision_id`, `system_id`) to maintain fast payload query evaluation, even with extensive history tracking.
+## AI Agent Directives
 
----
-
-<!-- STRUCTURE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
-
-# Codebase Structure and Architecture Map
-
-This document outlines the directory structure, entry points, configuration frameworks, and module dependencies of the SDDManager (System Design Document Manager) monorepo.
-
----
-
-## 1. Core Directory Purposes
-
-The repository is organized as a monorepo containing distinct execution layers, static specification templates, and local configuration environments.
-
-```
-SDDManager/
-├── config/             # High-level configuration models (e.g., Alloy verification specs)
-├── docs/               # Tokenomics, design decisions, and system specifications
-├── packages/           # Monorepo workspaces (TypeScript codebase)
-│   ├── cli/            # CLI engine for document auditing, compilation, and registry sync
-│   ├── mcp/            # Model Context Protocol (MCP) server for LLM integration
-│   ├── server/         # Express backend API and database management engine
-│   ├── shared/         # Common schemas, TypeScript interfaces, and shared utilities
-│   └── web/            # Vite + React frontend single-page application (SPA)
-├── samples/            # Standardized sample documents for seeding and testing
-│   └── ai-sdd/         # Pre-configured mock system designs and standards files
-└── specs/              # Root specifications defining engineering policies and protocols
-```
-
-### Workspace Directory Profiles
-
-| Directory | Type | Purpose |
-| :--- | :--- | :--- |
-| `packages/cli` | TypeScript CLI | Executable tool for developers and agents to initialize, lint, compile, and sync specs locally or in CI/CD pipelines. |
-| `packages/mcp` | TypeScript Server | Model Context Protocol engine enabling LLMs and AI Agents to securely read, search, and navigate System Design Documents. |
-| `packages/server` | Express Server | Core API layer managing specs, verification runs, styleguides, and persistence to SQLite (`specregistry.db`). |
-| `packages/shared` | Library | Zero-dependency baseline schemas, types, validations, and helper utilities shared across the monorepo workspace. |
-| `packages/web` | React SPA | Visual interface for browsing registered systems, monitoring sync histories, analyzing metrics, and viewing style violations. |
-
-### Sidecar and Metadata Artifacts (.spec/)
-
-| Artifact Path | Format | Purpose |
-| :--- | :--- | :--- |
-| `.spec/code-map.json` | Schema V2 Dictionary JSON | Sidecar AST/code entity inventory with deduplicated string tables and compact tuples. |
-| `.spec/code-trace.json` | Schema V2 Dictionary JSON | Traceability graph linking code entities to Markdown specs, coverage, and drift metrics. |
-| `.spec/code-map.sqlite` | SQLite Database | Local zero-token indexed database sidecar for instant CLI lookups and compliance checks. |
-
----
-
-## 2. Entry Points & Configurations
-
-### Runtime Entry Points
-
-The platform consists of multiple runtime processes with the following primary execution entries:
-
-| Service / Tool | Entry File Path | Execution Purpose |
-| :--- | :--- | :--- |
-| **Monorepo (Root)** | `package.json` | Controls monorepo workspace dependencies via NPM workspaces. |
-| **CLI Workspace** | `packages/cli/src/index.ts` | Dispatches CLI subcommands (e.g., `init`, `compile`, `verify`, `sync`). |
-| **MCP Workspace** | `packages/mcp/src/index.ts` | Boots up the Model Context Protocol engine over stdio/HTTP interfaces. |
-| **Server Workspace** | `packages/server/src/index.ts` | Starts the Express server listening on the configured HTTP port. |
-| **Server Database Seeder** | `packages/server/src/seed-cli.ts` | Populates SQLite tables from initial spec directories and samples. |
-| **Web Workspace** | `packages/web/src/main.tsx` | Hydrates the React DOM application; binds to `packages/web/index.html`. |
-
-### Configuration Mapping
-
-Each package is configured and constrained by its corresponding config workspace profiles:
-
-```
-SDDManager/
-├── package.json                   # Root workspace composition and global actions
-├── tsconfig.base.json             # Shared compiler options inherited across modules
-├── docker-compose.yml             # Local multi-container development orchestrator
-├── Dockerfile                     # Multi-stage production container build manifest
-├── specregistry.db                # Active SQLite database (development/local runtimes)
-├── config/
-│   └── alloy/
-│       └── config.alloy           # formal modeling assertions and system validations
-└── packages/
-    ├── cli/
-    │   ├── package.json           # CLI runtime dependencies & bin mappings
-    │   └── tsconfig.json          # TS target settings optimized for Node.js executable
-    ├── mcp/
-    │   ├── package.json           # MCP dependencies (e.g., `@modelcontextprotocol/sdk`)
-    │   └── tsconfig.json          # TS target optimized for modern ESM Node runs
-    ├── server/
-    │   ├── package.json           # Backend dependency mappings
-    │   └── tsconfig.json          # TS config customized for SQLite & Express modules
-    ├── shared/
-    │   ├── package.json           # Core shared types & schemas dependencies
-    │   └── tsconfig.json          # TS target optimized for ultra-compatible ESM/CJS build formats
-    └── web/
-        ├── package.json           # Frontend framework and bundling dependencies
-        ├── tsconfig.json          # TS configuration compiled for DOM targets
-        └── vite.config.ts         # Vite bundler options, proxy configurations, and build assets
-```
-
----
-
-## 3. Dependency Mapping Between Modules
-
-The internal monorepo modules utilize a strict hierarchical dependency model to ensure decoupling, prevent circular references, and isolate system boundaries.
-
-### Architectural Dependency Graph
-
-```mermaid
-graph TD
-    %% Execution Layer
-    Web[packages/web]
-    CLI[packages/cli]
-    MCP[packages/mcp]
-    Server[packages/server]
-    Shared[packages/shared]
-
-    %% Persistent Layer
-    DB[(specregistry.db)]
-
-    %% File Inputs
-    Specs[specs/*.md]
-    Samples[samples/ai-sdd]
-
-    %% Dependencies
-    Web -->|HTTP Requests| Server
-    CLI -->|Verifies / Reads| Specs
-    CLI -->|Interacts with DB/API| Server
-    MCP -->|Accesses DB / File Context| Server
-    MCP -->|Reads Specs| Specs
-
-    %% Shared module bounds
-    Web -.->|Imports| Shared
-    CLI -.->|Imports| Shared
-    Server -.->|Imports| Shared
-    MCP -.->|Imports| Shared
-
-    %% Database bindings
-    Server --> DB
-```
-
-### Workspace Relationships
-
-1. **`packages/shared` (The Leaf Node)**:
-   * **Inbound Dependencies**: `packages/web`, `packages/cli`, `packages/mcp`, and `packages/server`.
-   * **Outbound Dependencies**: None. Must remain free of other internal workspaces to prevent cyclic compile runs.
-   * **Responsibility**: Contains models, types, schema contracts (e.g., Markdown parse types, database entity schemas, validation schemas).
-
-2. **`packages/server` (The Business Logic Hub)**:
-   * **Inbound Dependencies**: Called by `packages/web` (HTTP endpoints) and interacted with by `packages/cli` (Sync Actions).
-   * **Outbound Dependencies**: `packages/shared`. Directly manipulates and exposes the state maintained in `specregistry.db`.
-
-3. **`packages/cli` (The Verification Agent)**:
-   * **Inbound Dependencies**: Executed directly by CI platforms or local developers.
-   * **Outbound Dependencies**: `packages/shared`. Parses specifications (`specs/*.md`) and pushes verification states to `packages/server`.
-
-4. **`packages/mcp` (The LLM Interface)**:
-   * **Inbound Dependencies**: Invoked by standard MCP host clients (e.g., Claude Desktop, cursor, dev-agents).
-   * **Outbound Dependencies**: `packages/shared`. Reads SQLite state and provides context maps to connected LLM agents.
-
-5. **`packages/web` (The Presentation Layer)**:
-   * **Inbound Dependencies**: Served directly to browsers.
-   * **Outbound Dependencies**: `packages/shared` (for matching types), and connects over API interfaces to `packages/server` to query operational status.
+Place changes in the package that owns the behavior and preserve the dependency direction
+above. Before adding a new helper or route, search the owning package for an existing
+implementation. Do not move database access into clients, duplicate authorization in the
+dashboard, or create undocumented authentication variables. When repository structure
+changes, update this specification in the same reviewed change.

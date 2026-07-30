@@ -2,28 +2,14 @@
   "project_type": "Web App Standard",
   "project": "github.com/joeldg/SpecRegistry",
   "channel": "stable",
-  "fetched_at": "2026-07-30T18:23:56.464Z",
+  "fetched_at": "2026-07-30T22:19:57.507Z",
   "specs": [
     {
       "filename": "AGENT_OPERATING_RULES.md",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "project_type": "Global",
       "scope": "global",
-      "sha256": "6ffc0e6d3bd6ab0436af0af71bc67d401fd3cd4ebcccdd33a50fca4c306d18dc"
-    },
-    {
-      "filename": "AI_AGENT_OPERATING_RULES.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "ebe91205bd45c0e539b902718117612fb321c324ff9bf67c3b2cade1a37039ad"
-    },
-    {
-      "filename": "CODE_DEVELOPMENT_STANDARDS.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "02718a69f83562bac56c0d51dfef5e43ac99a979eabc015670cf98d844484fa4"
+      "sha256": "df506cc32205abc262e3ba7fa261b838c87eb66d6650daa6d4308381b77e9770"
     },
     {
       "filename": "CODING_STANDARDS.md",
@@ -31,20 +17,6 @@
       "project_type": "Global",
       "scope": "global",
       "sha256": "df5ab4efb98c790338ed1a5ecde725a52dc0189be6743fde3d5eef6e576622b9"
-    },
-    {
-      "filename": "DOCUMENTATION_STANDARDS.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "524e63c0a3799ee41b5466d126c1b1c8c391cc4874a79e1b00173e3d71dd850f"
-    },
-    {
-      "filename": "GIT_FLOW.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "27c232763d9b6a1934675c4d84ad61ddd097766fd52d0524f265ebf2a9cfa7a8"
     },
     {
       "filename": "GLOBAL_SECURITY.md",
@@ -59,13 +31,6 @@
       "project_type": "Global",
       "scope": "global",
       "sha256": "a2459c93f52ebf392832dd949ed5a820c0235c543c85cf868ff02455638e50ee"
-    },
-    {
-      "filename": "OBSERVABILITY_AND_TRACEABILITY.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "97496a9b3eb5416be2362859556d0a77e79d4f05d8f37e135f07d7b4e151b54e"
     },
     {
       "filename": "PROJECT_PROFILE.md",
@@ -103,13 +68,6 @@
       "sha256": "dfdb68f322be27396d30321acc251acda002beefad997075db049128d231e5b7"
     },
     {
-      "filename": "TICKET_WORKFLOW.md",
-      "version": "1.0.0",
-      "project_type": "Global",
-      "scope": "global",
-      "sha256": "c93b3c26d131d6c4cf77b9ade272674e7bda6995853776774cdd371a2090f4b2"
-    },
-    {
       "filename": "TOKENOMICS.md",
       "version": "1.0.0",
       "project_type": "Global",
@@ -124,28 +82,35 @@
       "sha256": "f616c339ba94f0b7bc54f8c7c75ec26a22cb6e31ca79789a2e06b3010539130c"
     },
     {
-      "filename": "DESIGN.md",
+      "filename": "API.md",
       "version": "1.0.0",
+      "project_type": "Web App Standard",
+      "scope": "project_type",
+      "sha256": "23c31db3fe7771f528db51b06412ace3d64fdedd43428c854a84d0a5f4eb3879"
+    },
+    {
+      "filename": "DESIGN.md",
+      "version": "2.0.0",
       "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
-      "sha256": "8c9bddbfcfe029f406c5888e42a83744d7301f1c4234769c28bfc91b6cee0c62"
+      "sha256": "4c3c89236c6b04a82ed14f14af2830824ff130592ff647a9a99097043d0c92d2"
     },
     {
       "filename": "STRUCTURE.md",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
-      "sha256": "9454eff699f14c1f28e5e7e445c56a5d473e0e0cd875bfa9ad11036da84121ec"
+      "sha256": "0188d4a8bedb1eebbaf10bfeeb5326219a073ee45056b521fbef981c79191689"
     }
   ],
-  "signature": "JEZymP/YDG0UNF15HWgvctYlAM5CaGoq/MnT7F03elUFoSMffk+0WCsLaPQ54sk9rYMe2kXE2BYvR6ZbbDyQDA==",
+  "signature": "qc5Xpy1begnyiNiFGQ7QRauZDLjSgTACznJ9uw319BZUtjsF0wNDXdEP1qOMBoMZLEL5DrYI36Bs+7n4DqV6AA==",
   "signature_alg": "ed25519",
   "compile_targets": [
     "claude"
   ],
   "registry": {
-    "url": "http://localhost:4000",
-    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAkJ7JaI+SuvG/Dqrmg7TPDtZyBIsPG8Ja18/11uWhrpg=\n-----END PUBLIC KEY-----",
-    "stamped_at": "2026-07-30T18:32:15.042Z"
+    "url": "http://127.0.0.1:4000",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAZExslRlV2RRhtEEYMUqcQRCfmh1jBxP3s305dmi4o7Q=\n-----END PUBLIC KEY-----",
+    "stamped_at": "2026-07-30T22:21:30.655Z"
   }
 }

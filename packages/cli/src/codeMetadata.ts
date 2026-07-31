@@ -91,6 +91,8 @@ export interface TraceabilityLink {
   entity_name: string;
   entity_kind: CodeEntityKind;
   spec_filename: string;
+  /** Exact normalized section anchor from an explicit annotation, when known. */
+  spec_section?: string;
   confidence: number;
   reasons: string[];
 }
@@ -135,7 +137,7 @@ export interface CodeTraceReport {
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export interface DictCodeInventoryV2 {
   schema_version: 2;
   generated_at: string;
@@ -152,7 +154,7 @@ export interface DictCodeInventoryV2 {
   drift?: CodeDriftSummary;
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export interface DictCodeTraceReportV2 {
   schema_version: 2;
   generated_at: string;
@@ -165,8 +167,9 @@ export interface DictCodeTraceReportV2 {
     kinds: CodeEntityKind[];
     specs: string[];
     signatures: string[];
+    sections?: string[];
   };
-  links: Array<[string, number, string, number, number, number, string[]?]>;
+  links: Array<[string, number, string, number, number, number, string[]?, number?]>;
   unlinked_entities: Array<[string, number, number, string, number, number]>;
   aliases: CodeAlias[];
   coverage: CodeCoverageSummary;
@@ -178,7 +181,7 @@ export interface DictCodeTraceReportV2 {
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export function encodeCodeInventoryV2(inventory: CodeInventory): DictCodeInventoryV2 {
   const paths: string[] = [];
   const kinds: CodeEntityKind[] = [];
@@ -239,7 +242,7 @@ export function encodeCodeInventoryV2(inventory: CodeInventory): DictCodeInvento
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export function decodeCodeInventoryV2(raw: DictCodeInventoryV2 | CodeInventory | any): CodeInventory {
   if (!raw || typeof raw !== "object") throw new Error("Invalid code inventory object");
   if (raw.schema_version === 1 || !raw.dict) {
@@ -302,17 +305,19 @@ export function decodeCodeInventoryV2(raw: DictCodeInventoryV2 | CodeInventory |
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[SPEC_SECTION_EVIDENCE.md#trace-payload]
 export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2 {
   const paths: string[] = [];
   const kinds: CodeEntityKind[] = [];
   const specs: string[] = [];
   const signatures: string[] = [];
+  const sections: string[] = [];
 
   const pathMap = new Map<string, number>();
   const kindMap = new Map<CodeEntityKind, number>();
   const specMap = new Map<string, number>();
   const sigMap = new Map<string, number>();
+  const sectionMap = new Map<string, number>();
 
   function getIdx<T>(value: T, list: T[], map: Map<T, number>): number {
     let idx = map.get(value);
@@ -339,6 +344,10 @@ export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2
     if (link.reasons && link.reasons.length > 0) {
       tuple.push(link.reasons);
     }
+    if (link.spec_section) {
+      if (tuple.length === 6) tuple.push([]);
+      tuple.push(getIdx(link.spec_section, sections, sectionMap));
+    }
     return tuple;
   });
 
@@ -356,7 +365,7 @@ export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2
     specs_dir: trace.specs_dir,
     spec_count: trace.spec_count,
     entity_count: trace.entity_count,
-    dict: { paths, kinds, specs, signatures },
+    dict: { paths, kinds, specs, signatures, ...(sections.length ? { sections } : {}) },
     links,
     unlinked_entities,
     aliases: trace.aliases,
@@ -366,23 +375,24 @@ export function encodeCodeTraceV2(trace: CodeTraceReport): DictCodeTraceReportV2
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[SPEC_SECTION_EVIDENCE.md#trace-payload]
 export function decodeCodeTraceV2(raw: DictCodeTraceReportV2 | CodeTraceReport | any): CodeTraceReport {
   if (!raw || typeof raw !== "object") throw new Error("Invalid code trace report object");
   if (raw.schema_version === 1 || !raw.dict) {
     return raw as CodeTraceReport;
   }
   const v2 = raw as DictCodeTraceReportV2;
-  const { paths, kinds, specs, signatures } = v2.dict;
+  const { paths, kinds, specs, signatures, sections = [] } = v2.dict;
 
   const links: TraceabilityLink[] = (v2.links || []).map((tuple) => {
-    const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons] = tuple;
+    const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons, sectionIdx] = tuple;
     return {
       entity_id,
       entity_path: paths[pathIdx] || "",
       entity_name,
       entity_kind: kinds[kindIdx],
       spec_filename: specs[specIdx] || "",
+      ...(sectionIdx !== undefined && sections[sectionIdx] ? { spec_section: sections[sectionIdx] } : {}),
       confidence,
       reasons: reasons || [],
     };
@@ -420,7 +430,7 @@ export function decodeCodeTraceV2(raw: DictCodeTraceReportV2 | CodeTraceReport |
   };
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export function formatTraceAsDsl(trace: CodeTraceReport): string {
   const lines: string[] = [];
   const covPct = Math.round((trace.coverage?.coverage_ratio ?? 0) * 100);
@@ -439,7 +449,7 @@ export function formatTraceAsDsl(trace: CodeTraceReport): string {
     const sampleLinks = trace.links.slice(0, 5);
     lines.push(`[LINKS SAMPLE] (Top ${sampleLinks.length} of ${trace.links.length})`);
     for (const l of sampleLinks) {
-      lines.push(`- ${l.entity_kind}:${l.entity_name} -> ${l.spec_filename} (conf:${l.confidence})`);
+      lines.push(`- ${l.entity_kind}:${l.entity_name} -> ${l.spec_filename}${l.spec_section ? `#${l.spec_section}` : ""} (conf:${l.confidence})`);
     }
   }
 
@@ -585,6 +595,18 @@ function extractTypeScript(root: string, file: string, content: string, entities
   const sourceKind = file.endsWith(".tsx") || file.endsWith(".jsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, sourceKind);
   const classStack: string[] = [];
+  const exportedClassStack: boolean[] = [];
+
+  function isExported(node: ts.Node): boolean {
+    let declaration: ts.Node = node;
+    if (ts.isVariableDeclaration(node)) {
+      declaration = node.parent.parent;
+    }
+    return Boolean(
+      ts.canHaveModifiers(declaration) &&
+      ts.getModifiers(declaration)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    );
+  }
 
   function addNode(kind: CodeEntityKind, name: string, node: ts.Node, parentId?: string, metadata?: Record<string, MetadataValue>): CodeEntity {
     const loc = nodeLineColumn(source, node);
@@ -636,23 +658,32 @@ function extractTypeScript(root: string, file: string, content: string, entities
         metadata: { module: node.moduleSpecifier.text, export: true },
       });
     } else if (ts.isClassDeclaration(node) && node.name) {
-      const entity = addNode("class", node.name.text, node);
+      const exported = isExported(node);
+      const entity = addNode("class", node.name.text, node, undefined, { exported });
       classStack.push(entity.id);
+      exportedClassStack.push(exported);
       ts.forEachChild(node, visit);
       classStack.pop();
+      exportedClassStack.pop();
       return;
     }
     if (ts.isInterfaceDeclaration(node)) {
-      addNode("interface", node.name.text, node);
+      addNode("interface", node.name.text, node, undefined, { exported: isExported(node) });
     } else if (ts.isTypeAliasDeclaration(node)) {
-      addNode("type", node.name.text, node);
+      addNode("type", node.name.text, node, undefined, { exported: isExported(node) });
     } else if (ts.isFunctionDeclaration(node) && node.name) {
-      addNode("function", node.name.text, node);
+      addNode("function", node.name.text, node, undefined, { exported: isExported(node) });
     } else if (ts.isMethodDeclaration(node) && node.name) {
-      addNode("method", node.name.getText(source), node, classStack[classStack.length - 1] ?? fileEntity.id);
+      addNode(
+        "method",
+        node.name.getText(source),
+        node,
+        classStack[classStack.length - 1] ?? fileEntity.id,
+        { exported: exportedClassStack[exportedClassStack.length - 1] ?? false }
+      );
     } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       if (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) {
-        addNode("function", node.name.text, node);
+        addNode("function", node.name.text, node, undefined, { exported: isExported(node) });
       }
     } else if (ts.isCallExpression(node)) {
       const route = routeFromCall(source, node);
@@ -762,7 +793,10 @@ function extractPython(root: string, file: string, content: string, entities: Co
         endLine: lineNumber,
         body: line,
         parentId,
-        metadata: { async: functionMatch[1].startsWith("async") },
+        metadata: {
+          async: functionMatch[1].startsWith("async"),
+          exported: !functionMatch[2].startsWith("_"),
+        },
       });
       if (pendingRoute) {
         addEntity(entities, {
@@ -944,9 +978,12 @@ function sectionAnchor(section: string): string {
  * couple of lines, so an explicit annotation short-circuits the fuzzy text-matching
  * linker below with a high-confidence, human-authored link.
  */
+// @spec[SPEC_SECTION_EVIDENCE.md#trace-payload]
 function annotateSpecReferences(content: string, entities: CodeEntity[], relativePath: string): void {
   const fileEntities = entities
-    .filter((entity) => entity.path === relativePath && governable(entity))
+    // Scan every traceable declaration here. An explicit annotation is itself what
+    // brings an internal helper into the governed denominator.
+    .filter((entity) => entity.path === relativePath && !["file", "import", "field"].includes(entity.kind))
     .sort((a, b) => a.start_line - b.start_line);
   if (fileEntities.length === 0) return;
   const lines = content.split(/\r?\n/);
@@ -990,10 +1027,14 @@ function tokensFor(value: string): string[] {
   return [...new Set(value.toLowerCase().split(/[^a-z0-9:/._-]+/).filter((token) => token.length >= 3))];
 }
 
+// @spec[CODE_TRACE_SCOPE.md#governed-entity-denominator]
 function governable(entity: CodeEntity): boolean {
-  return !["file", "import", "field"].includes(entity.kind);
+  if (typeof entity.metadata?.spec_ref === "string") return true;
+  if (["route", "command", "config", "migration", "schema", "index", "class"].includes(entity.kind)) return true;
+  return entity.metadata?.exported === true && ["function", "interface", "type", "method"].includes(entity.kind);
 }
 
+// @spec[SPEC_SECTION_EVIDENCE.md#trace-payload]
 function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): TraceabilityLink[] {
   const links: TraceabilityLink[] = [];
   const specByFilename = new Map(specs.map((spec) => [spec.filename.toLowerCase(), spec]));
@@ -1012,6 +1053,7 @@ function linkEntitiesToSpecs(entities: CodeEntity[], specs: SpecReference[]): Tr
           entity_name: entity.name,
           entity_kind: entity.kind,
           spec_filename: spec.filename,
+          ...(refSection && sectionKnown ? { spec_section: refSection.toLowerCase() } : {}),
           confidence: sectionKnown ? 1 : 0.9,
           reasons: [
             "explicit @spec annotation",
@@ -1087,7 +1129,7 @@ function loadTraceOverrides(root: string): TraceOverride[] {
   return [];
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 function applyTraceOverrides(
   entities: CodeEntity[],
   rawLinks: TraceabilityLink[],
@@ -1251,7 +1293,7 @@ export function buildCodeInventory(root: string, specsDir = "specs", previous?: 
     coverage,
     drift,
     embedding_profile: {
-      default_scope: ["route", "schema", "command", "config", "class", "function", "method"],
+      default_scope: ["route", "schema", "command", "config", "migration", "index", "class", "exported function", "exported interface", "exported type", "exported method", "explicitly annotated entity"],
       recommended_fields: ["kind", "path", "name", "signature", "metadata", "linked spec filename", "linked spec sections"],
       notes: "Embed concise structural summaries for code entities separately from full spec-text embeddings.",
     },
@@ -1315,7 +1357,7 @@ function writeCodeMapSqlite(opts: CodeMapOptions, inventory: CodeInventory, trac
   }
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 export function writeCodeInventory(opts: CodeMapOptions): CodeInventory & { trace: CodeTraceReport } {
   const inventory = buildCodeInventory(opts.root, opts.specsDir ?? "specs", loadPreviousInventory(opts.root, opts.out));
   const target = path.resolve(opts.root, opts.out);

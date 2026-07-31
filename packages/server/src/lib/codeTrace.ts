@@ -63,25 +63,27 @@ export function ensureConsumer(app: FastifyInstance, input: Record<string, unkno
   return id;
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[SPEC_SECTION_EVIDENCE.md#trace-payload]
 function normalizeTracePayload(raw: Record<string, unknown>): CodeTracePayload {
   if (raw && raw.schema_version === 2 && raw.dict && typeof raw.dict === "object") {
-    const dict = raw.dict as { paths?: string[]; kinds?: string[]; specs?: string[]; signatures?: string[] };
+    const dict = raw.dict as { paths?: string[]; kinds?: string[]; specs?: string[]; signatures?: string[]; sections?: string[] };
     const paths = dict.paths || [];
     const kinds = dict.kinds || [];
     const specs = dict.specs || [];
     const signatures = dict.signatures || [];
+    const sections = dict.sections || [];
 
     const rawLinks = Array.isArray(raw.links) ? raw.links : [];
     const links = rawLinks.map((tuple: any) => {
       if (Array.isArray(tuple)) {
-        const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons] = tuple;
+        const [entity_id, pathIdx, entity_name, kindIdx, specIdx, confidence, reasons, sectionIdx] = tuple;
         return {
           entity_id,
           entity_path: paths[pathIdx] || "",
           entity_name,
           entity_kind: kinds[kindIdx],
           spec_filename: specs[specIdx] || "",
+          spec_section: typeof sectionIdx === "number" ? sections[sectionIdx] || undefined : undefined,
           confidence,
           reasons: reasons || [],
         };
@@ -122,7 +124,7 @@ function normalizeTracePayload(raw: Record<string, unknown>): CodeTracePayload {
  * so the two gates can no longer contradict each other. The caller owns the
  * surrounding transaction.
  */
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[SPEC_SECTION_EVIDENCE.md#persistence]
 export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<string, unknown>): { reportId: string; createdAt: string } {
   const trace = normalizeTracePayload(rawTrace);
   const links = Array.isArray(trace.links) ? (trace.links.slice(0, 500) as Array<Record<string, unknown>>) : [];
@@ -157,8 +159,8 @@ export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<st
   );
   const insertLink = db.prepare(
     `INSERT OR REPLACE INTO code_trace_links
-     (report_id, entity_id, entity_path, entity_name, entity_kind, spec_filename, confidence, reasons)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+     (report_id, entity_id, entity_path, entity_name, entity_kind, spec_filename, spec_section, confidence, reasons)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   for (const link of links) {
     if (typeof link.entity_id !== "string" || typeof link.spec_filename !== "string") continue;
@@ -169,6 +171,7 @@ export function persistCodeTrace(db: Db, consumerId: string, rawTrace: Record<st
       stringValue(link.entity_name),
       stringValue(link.entity_kind),
       link.spec_filename,
+      typeof link.spec_section === "string" ? link.spec_section : null,
       numberValue(link.confidence),
       JSON.stringify(Array.isArray(link.reasons) ? link.reasons : [])
     );

@@ -36,7 +36,7 @@ export function traceKinds(value: string | boolean | undefined, fallback: CodeEn
   return value.split(",").map((item) => item.trim()).filter(Boolean) as CodeEntityKind[];
 }
 
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#compact-traceability-and-token-efficiency]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 function readTrace(tracePath: string): CodeTraceReport {
   const resolved = path.resolve(process.cwd(), tracePath);
   if (!fs.existsSync(resolved)) {

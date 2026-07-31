@@ -49,6 +49,7 @@ import { getPublicUrlConfig, savePublicHostnameConfig } from "../lib/publicUrl.j
 import { listBackups, readBackupConfig, runBackup } from "../lib/backup.js";
 import { projectSpecCurrency } from "../lib/projectCurrency.js";
 import { tokenUsageCsv, tokenUsageReport } from "../lib/tokenUsage.js";
+import { bundleSpecs } from "../lib/compile.js";
 
 function isLlmTier(value: unknown): value is LlmTier {
   return typeof value === "string" && LLM_TIER_VALUES.includes(value as LlmTier);
@@ -2658,6 +2659,96 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       projects,
       code_trace_reports: codeTraceReports,
       global_specs: globalSpecs,
+    };
+  });
+
+  // @spec[SPEC_SECTION_EVIDENCE.md#project-section-evidence-report]
+  app.get("/reports/projects/:id/spec-sections", async (req) => {
+    const { id } = req.params as { id: string };
+    const project = requireProjectConsumer(app.db, id);
+    const specs = bundleSpecs(app.db, project.project_type_id, "stable", project.id);
+    const latestTrace = app.db
+      .prepare(
+        `SELECT id, generated_at, created_at
+         FROM code_trace_reports
+         WHERE consumer_id = ?
+         ORDER BY created_at DESC
+         LIMIT 1`
+      )
+      .get(project.id) as { id: string; generated_at: string; created_at: string } | undefined;
+    const implementationRows = latestTrace
+      ? (app.db
+          .prepare(
+            `SELECT spec_filename, spec_section,
+                    COUNT(DISTINCT entity_id) AS link_count,
+                    GROUP_CONCAT(DISTINCT entity_name) AS entity_names
+             FROM code_trace_links
+             WHERE report_id = ? AND spec_section IS NOT NULL
+             GROUP BY spec_filename, spec_section`
+          )
+          .all(latestTrace.id) as Array<Record<string, unknown>>)
+      : [];
+    const implementationBySection = new Map(
+      implementationRows.map((row) => [`${row.spec_filename}#${row.spec_section}`, row])
+    );
+    const retrievalRows = app.db
+      .prepare(
+        `SELECT ces.spec_id, ces.section_anchor,
+                COUNT(*) AS deliveries,
+                COUNT(DISTINCT ce.id) AS context_events,
+                MAX(ce.created_at) AS last_delivered_at
+         FROM context_event_sections ces
+         JOIN context_events ce ON ce.id = ces.context_event_id
+         WHERE ce.consumer_id = ?
+         GROUP BY ces.spec_id, ces.section_anchor`
+      )
+      .all(project.id) as Array<Record<string, unknown>>;
+    const retrievalBySection = new Map(
+      retrievalRows.map((row) => [`${row.spec_id}#${row.section_anchor}`, row])
+    );
+    const sections = specs.flatMap((spec) =>
+      markdownSections(spec.content).map((section) => {
+        const implementation = implementationBySection.get(`${spec.filename}#${section.anchor}`);
+        const retrieval = retrievalBySection.get(`${spec.id}#${section.anchor}`);
+        const linkCount = Number(implementation?.link_count ?? 0);
+        const deliveries = Number(retrieval?.deliveries ?? 0);
+        return {
+          spec_id: spec.id,
+          filename: spec.filename,
+          version: spec.current_version,
+          scope: spec.project_id ? "project" : spec.project_type_id === project.project_type_id ? "project_type" : "global",
+          section_title: section.title,
+          section_anchor: section.anchor,
+          approx_tokens: section.approx_tokens,
+          implementation_links: linkCount,
+          linked_entities:
+            typeof implementation?.entity_names === "string" && implementation.entity_names
+              ? implementation.entity_names.split(",").slice(0, 10)
+              : [],
+          implementation_status: linkCount > 0 ? "linked" : "unlinked",
+          implementation_reported_at: linkCount > 0 ? latestTrace?.created_at ?? null : null,
+          context_events: Number(retrieval?.context_events ?? 0),
+          deliveries,
+          retrieval_status: deliveries > 0 ? "observed" : "unobserved",
+          last_delivered_at: retrieval?.last_delivered_at ?? null,
+        };
+      })
+    );
+    return {
+      project: {
+        id: project.id,
+        repo: project.repo,
+        project_type_id: project.project_type_id,
+      },
+      trace_report: latestTrace ?? null,
+      summary: {
+        total_sections: sections.length,
+        linked_sections: sections.filter((section) => section.implementation_status === "linked").length,
+        unlinked_sections: sections.filter((section) => section.implementation_status === "unlinked").length,
+        observed_sections: sections.filter((section) => section.retrieval_status === "observed").length,
+        unobserved_sections: sections.filter((section) => section.retrieval_status === "unobserved").length,
+      },
+      sections,
     };
   });
 

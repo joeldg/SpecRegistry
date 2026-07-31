@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-// @spec[OBSERVABILITY_AND_TRACEABILITY.md#telemetry]
+// @spec[TRACEABILITY_AND_OBSERVABILITY.md#requirements]
 import type { Spec } from "@specregistry/shared";
 import type { Db } from "../db.js";
 import { now } from "../db.js";

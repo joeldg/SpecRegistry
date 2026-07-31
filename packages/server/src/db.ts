@@ -206,6 +206,7 @@ CREATE TABLE IF NOT EXISTS code_trace_links (
   entity_name TEXT NOT NULL,
   entity_kind TEXT NOT NULL,
   spec_filename TEXT NOT NULL,
+  spec_section TEXT,
   confidence REAL NOT NULL DEFAULT 0,
   reasons TEXT NOT NULL DEFAULT '[]',
   PRIMARY KEY (report_id, entity_id, spec_filename)
@@ -1404,6 +1405,11 @@ Project types are reusable baselines; projects are concrete repositories. The pr
     sql: `
       ALTER TABLE code_trace_links ADD COLUMN entity_path TEXT;
     `,
+  },
+  {
+    // Preserve exact section anchors from explicit code-to-spec annotations.
+    version: 44,
+    sql: "ALTER TABLE code_trace_links ADD COLUMN spec_section TEXT",
   },
 ];
 

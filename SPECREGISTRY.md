@@ -5,8 +5,8 @@ This repository is governed by SpecRegistry.
 ## Active Spec Set
 
 - Registry: http://localhost:4000
-- Project type: CLI Tool / Developer Tooling
-- Project/repo: github.com/joeldg/nvidiarouter
+- Project type: Web App Standard
+- Project/repo: github.com/joeldg/SpecRegistry
 - Governed specs directory: specs/
 - Manifest: specs/.specregistry.json
 
@@ -24,8 +24,8 @@ Do not edit code, configuration, tests, or generated artifacts until all of thes
 
 1. Run `specreg check` and stop on drift, missing specs, or tampered governed files.
 2. Start the `specregistry` MCP server from `.mcp.json`; it should run `specreg mcp`.
-3. Call `begin_task` for the concrete task, project type `CLI Tool / Developer Tooling`, and repo `github.com/joeldg/nvidiarouter`.
-4. Call `get_specs` for project type `CLI Tool / Developer Tooling` and repo `github.com/joeldg/nvidiarouter`.
+3. Call `begin_task` for the concrete task, project type `Web App Standard`, and repo `github.com/joeldg/SpecRegistry`.
+4. Call `get_specs` for project type `Web App Standard` and repo `github.com/joeldg/SpecRegistry`.
 5. Load every relevant governed skill from `.spec/skills/` before performing that workflow.
 6. If MCP is unavailable, use only the documented fallback API endpoints in this file,
    record that MCP was unavailable, and do not browse or probe the registry server.
@@ -108,8 +108,8 @@ that as a SpecRegistry auth failure. Ask the registry operator for a URL reachab
 agent sandbox (public DNS, VPN, or a tunnel) and update `.mcp.json` / `SPECREG_SERVER`.
 Required MCP flow:
 
-1. Call `begin_task` for the concrete task, project type `CLI Tool / Developer Tooling`, and repo `github.com/joeldg/nvidiarouter`.
-2. Call `get_specs` for project type `CLI Tool / Developer Tooling` and repo `github.com/joeldg/nvidiarouter`.
+1. Call `begin_task` for the concrete task, project type `Web App Standard`, and repo `github.com/joeldg/SpecRegistry`.
+2. Call `get_specs` for project type `Web App Standard` and repo `github.com/joeldg/SpecRegistry`.
 3. Use `search_specs` for focused questions.
 4. Before writing in a language or working in a domain the loaded specs do not cover
    (e.g. a new language, or networking/auth/database work), call `resolve_guidance`
@@ -134,7 +134,7 @@ or styleguides, **acquire the proper guidance instead of inventing a standard**:
 If the MCP server is unavailable, the same data is available over the documented agent API —
 and only these endpoints:
 
-- `GET http://localhost:4000/api/v1/ai/specs/CLI%20Tool%20%2F%20Developer%20Tooling` — current governed specs.
+- `GET http://localhost:4000/api/v1/ai/specs/Web%20App%20Standard?repo=github.com%2Fjoeldg%2FSpecRegistry` — current governed specs.
 - `GET http://localhost:4000/api/v1/ai/search?q=...` — focused section search.
 - `POST http://localhost:4000/api/v1/ai/resolve-guidance` — resolve styleguides/specs for a language or topic.
 - `POST http://localhost:4000/api/v1/ai/agent-sessions/begin` — register preflight and get a session id.

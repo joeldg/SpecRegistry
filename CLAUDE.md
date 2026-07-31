@@ -4,7 +4,7 @@
 
 This file is compiled from the organization's governed specification registry for the project type **Web App Standard**. Treat every section as authoritative guidance. If you find a contradiction or ambiguity while working, report it through the SpecRegistry feedback channel (MCP tool `report_spec_feedback` or POST /api/v1/ai/feedback) instead of guessing.
 
-_Compiled 2026-07-31T21:00:07.398Z · AGENT_OPERATING_RULES.md@1.0.0 · AI_AGENT_OPERATING_RULES.md@1.0.0 · CODE_DEVELOPMENT_STANDARDS.md@1.0.0 · CODING_STANDARDS.md@2.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · GLOBAL_SECURITY.md@1.1.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · OBSERVABILITY_AND_TRACEABILITY.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · API.md@1.0.0 · DESIGN.md@1.0.0 · STRUCTURE.md@1.0.0_
+_Compiled 2026-07-31T21:35:05.451Z · AGENT_OPERATING_RULES.md@1.0.0 · AI_AGENT_OPERATING_RULES.md@1.0.0 · CODE_DEVELOPMENT_STANDARDS.md@1.0.0 · CODING_STANDARDS.md@2.0.0 · DOCUMENTATION_STANDARDS.md@1.0.0 · GIT_FLOW.md@1.0.0 · GLOBAL_SECURITY.md@1.1.0 · IMPLEMENTATION_EVIDENCE.md@1.0.0 · OBSERVABILITY_AND_TRACEABILITY.md@1.0.0 · PROJECT_PROFILE.md@1.0.0 · SDD_OPERATING_MODEL.md@1.0.0 · SECURITY_AND_SECRETS.md@1.0.0 · SPEC_AUTHORING_STANDARD.md@1.0.0 · SPEC_GOVERNANCE.md@1.0.0 · TICKET_WORKFLOW.md@1.0.0 · TOKENOMICS.md@1.0.0 · TRACEABILITY_AND_OBSERVABILITY.md@1.0.0 · API.md@1.0.0 · DESIGN.md@1.0.0 · STRUCTURE.md@1.0.0 · CODE_TRACE_SCOPE.md@1.0.0 · SPEC_SECTION_EVIDENCE.md@1.0.0_
 
 ## SpecRegistry Operating Rules
 
@@ -1550,3 +1550,107 @@ graph TD
 5. **`packages/web` (The Presentation Layer)**:
    * **Inbound Dependencies**: Served directly to browsers.
    * **Outbound Dependencies**: `packages/shared` (for matching types), and connects over API interfaces to `packages/server` to query operational status.
+
+---
+
+<!-- CODE_TRACE_SCOPE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Code Trace Scope
+
+## Governed Entity Denominator
+
+Code inventory records all supported entities, but coverage and drift measure only
+implementation surfaces that can reasonably assert a governing contract:
+
+- routes, commands, configuration, schemas, migrations, indexes, and classes;
+- exported functions, interfaces, and types;
+- class methods whose exported class forms a public implementation surface; and
+- any internal entity carrying an explicit `@spec[FILENAME.md#section-anchor]` annotation.
+
+Private helpers, local callbacks, and internal data-shape aliases remain searchable in the
+inventory but do not count as uncovered governance by default. This prevents compliance
+scores from rewarding blanket annotations on implementation details that no specification
+actually governs.
+
+## Evidence Semantics
+
+An entity in the denominator is linked when an explicit annotation or a supported trace
+matcher identifies a governing specification. Exact section evidence is claimed only by a
+valid explicit annotation. Waivers remain available for exceptional public surfaces and
+must include a reviewable rationale.
+
+## Acceptance Evidence
+
+- Extraction tests distinguish exported declarations from internal helpers.
+- Coverage tests prove internal helpers remain in the inventory but outside the governed
+  denominator unless explicitly annotated.
+- Routes and other runtime boundary entities remain governed regardless of export syntax.
+- Existing schema V1 and V2 inventories remain readable when export metadata is absent.
+
+## AI Agent Directives
+
+Do not export code or add annotations solely to improve coverage. Treat an unlinked public
+surface as missing implementation evidence and an uncounted internal helper as inventory,
+not proof of governance.
+
+---
+
+<!-- SPEC_SECTION_EVIDENCE.md v1.0.0 (project:github.com/joeldg/SpecRegistry) -->
+
+# Project Spec Section Evidence
+
+## Scope
+
+This project-specific specification governs section-level evidence in code trace reports,
+the SpecRegistry API, and the Reports dashboard for the concrete
+`github.com/joeldg/SpecRegistry` repository.
+
+## Trace Payload
+
+1. An explicit `@spec[FILENAME.md#section-anchor]` annotation links the next governable
+   code entity to both the named specification and the exact normalized section anchor.
+2. Trace schema V1 links carry the optional `spec_section` field.
+3. Trace schema V2 dictionary encoding carries section anchors without breaking readers of
+   older tuples that do not contain a section value.
+4. Fuzzy links that identify only a specification do not claim section-level evidence.
+
+## Persistence
+
+The registry stores the optional section anchor with each persisted code-trace link.
+Database evolution is append-only and existing trace rows remain valid with a null section.
+
+## Project Section Evidence Report
+
+For a selected project, the API reports every section in its current effective governed
+bundle and combines two independent signals:
+
+- implementation evidence: explicit code-entity links to that exact section in the
+  project's latest code trace report;
+- retrieval usage: recorded project context deliveries for that section.
+
+The report identifies sections with no implementation evidence and sections with no
+retrieval observations. Absence is a review signal, not proof that guidance is obsolete:
+process, security, documentation, governance, and operational sections may legitimately
+have no direct code entity.
+
+## Dashboard
+
+The Reports → Projects view lets an operator select a project and inspect section evidence.
+It shows the specification, section, implementation-link count, retrieval-delivery count,
+and latest evidence timestamps. Sections lacking implementation evidence are visibly
+highlighted and accompanied by the caution that reviewers must decide whether the section
+is process-only, missing annotations, stale guidance, or missing implementation.
+
+## Acceptance Evidence
+
+- CLI tests prove exact section anchors survive V1 and V2 trace generation.
+- Server tests prove section anchors are persisted and the project report distinguishes
+  implementation links from context deliveries.
+- Web build/tests verify the dashboard consumes the typed report.
+- Existing trace payloads and database rows without section anchors remain readable.
+
+## AI Agent Directives
+
+Add section annotations only where the exact section governs the entity. Never manufacture
+links to improve a percentage. Treat an unlinked section as a prompt for review and record
+missing guidance, intentional process-only scope, or implementation drift explicitly.

@@ -2,7 +2,7 @@
   "project_type": "Web App Standard",
   "project": "github.com/joeldg/SpecRegistry",
   "channel": "stable",
-  "fetched_at": "2026-07-31T21:00:07.316Z",
+  "fetched_at": "2026-07-31T21:35:05.314Z",
   "specs": [
     {
       "filename": "AGENT_OPERATING_RULES.md",
@@ -143,10 +143,29 @@
       "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
       "sha256": "9454eff699f14c1f28e5e7e445c56a5d473e0e0cd875bfa9ad11036da84121ec"
+    },
+    {
+      "filename": "CODE_TRACE_SCOPE.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "cc68359eb1f81bc91b98003780356541d6e290f3b1e7cf6e3ec3b8a6f72d645a"
+    },
+    {
+      "filename": "SPEC_SECTION_EVIDENCE.md",
+      "version": "1.0.0",
+      "project_type": "github.com/joeldg/SpecRegistry",
+      "scope": "project",
+      "sha256": "57251137699ab892aec52c5736e29b0771c80cefe9b0b8e3e3960d969873a826"
     }
   ],
-  "signature": "lyK0xBLDKPWrBNxA25/331IYlBnZfHkTjsxibJIyIM9AXwzElDQ7qYq5J541Mu31QGhKdNHrShlutVjE+T7sDg==",
+  "signature": "J6Jvt13I6gVH2fec5hpGyZar5o7ZCbWSRLiJ0X7FXjnexx171+LdyhOEevw+6G/U4yclmXmTeuYDO7rSDXGYCw==",
   "signature_alg": "ed25519",
+  "registry": {
+    "url": "http://localhost:4000",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAkJ7JaI+SuvG/Dqrmg7TPDtZyBIsPG8Ja18/11uWhrpg=\n-----END PUBLIC KEY-----",
+    "stamped_at": "2026-07-31T21:35:05.350Z"
+  },
   "compile_targets": [
     "claude"
   ]

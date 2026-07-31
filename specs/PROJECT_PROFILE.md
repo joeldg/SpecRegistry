@@ -1,39 +1,127 @@
-# Project Profile
+# SpecRegistry — Project Profile
 
 ## Scope
-This specification defines the standard project-scoped profile that `specreg init` drafts for a concrete repository.
+
+This profile governs the concrete repository `github.com/joeldg/SpecRegistry`. It narrows
+the Web App Standard project-type baseline for this specific repository. Where this profile
+is silent, the Web App Standard baseline and global specs apply without modification.
 
 ## Intent
-A repository's profile captures the local choices that make generic project-type guidance specific: product intent, stack, data stores, runtime, deployment, compliance posture, agent skills, and explicit non-goals.
-Project types are reusable baselines; projects are concrete repositories. The profile keeps a project from accidentally turning its baseline into a one-off project definition.
+
+Capture the local choices that make the generic Web App Standard guidance specific to
+SpecRegistry: the product intent, technology stack, data stores, runtime, deployment
+posture, compliance obligations, non-goals, and explicit governance decisions that differ
+from or supplement the inherited baseline.
 
 ## Requirements
-1. Every initialized repository should submit a project-scoped `PROJECT_PROFILE.md` draft for review.
-2. The profile must identify project type, repository identity, lifecycle stage, users, platforms, languages, frameworks, databases, APIs, infrastructure, tests, observability, security, privacy, and non-goals.
-3. The profile is not governed until reviewed and published.
-4. Material changes to stack, platform, deployment, data stores, external interfaces, or compliance scope must update the profile through review.
-5. Project profile guidance may narrow project-type guidance only for the attached repository and only when explicit.
-6. Agents must not invent missing project profile choices; they must report ambiguity or ask for a reviewed profile change.
-7. A project type should not be named after a single repository or product unless it is intentionally a reusable family name.
-8. Specs that mention repo-specific routes, deployment hosts, credentials, local model catalogs, customers, research goals, or product behavior must be project-scoped unless at least one other project is expected to inherit the same rule.
+
+### Identity and Lifecycle
+1. Repository identity: `github.com/joeldg/SpecRegistry`, branch `main`.
+2. Project type: Web App Standard.
+3. Lifecycle stage: active development (pre-1.0 product release).
+4. Primary users: platform engineers, AI coding agents, and team leads who author, review,
+   and consume governed specifications.
+
+### Platform and Stack
+5. Runtime: Node.js ≥ 20 (LTS). The `.nvmrc` file pins the exact version.
+6. Languages: TypeScript across all packages; plain JavaScript for sample loaders.
+7. Package manager: npm workspaces. Do not introduce Yarn, pnpm, or Bun without a reviewed
+   profile update.
+8. Frameworks: Fastify (server), React + Vite (web dashboard), Node test runner (tests).
+9. No additional HTTP server frameworks may be introduced; Fastify is the only permitted
+   framework per `DESIGN.md`.
+
+### Data Stores
+10. Primary database: SQLite via `better-sqlite3`, WAL mode, owned exclusively by
+    `packages/server/src/db.ts`. No other package may open the database file directly.
+11. Local sidecar indexes: `.spec/code-map.sqlite` for traceability lookups.
+12. No external database (Postgres, MySQL, Redis, etc.) may be added without a reviewed
+    profile update.
+
+### External APIs and Integrations
+13. GitHub API: version-check and optional webhook delivery; access via `GITHUB_TOKEN` or
+    the configured app key.
+14. LLM providers: configurable (OpenAI-compatible, local endpoints). Provider selection is
+    an admin setting; agents must not hard-code a provider.
+15. LDAP: optional authentication source; configured through admin settings.
+16. Webhooks: outbound only, to user-configured URLs; no inbound webhook surface.
+
+### Infrastructure and Deployment
+17. Supported deployment targets: local Node process, Docker (via `docker-compose.yml`),
+    and Kubernetes (via `charts/specregistry/`).
+18. `SPECREG_PUBLIC_URL` must be set in non-local deployments so generated agent packs
+    and MCP configurations reference a reachable address.
+19. Authentication mode: `SPECREG_AUTH=required` is expected in production deployments.
+    Local/development deployments may run without auth but must not commit credentials.
+20. The SQLite database file (`SPECREG_DB`) must be persisted on a volume in container
+    deployments; it is not recreated from seed on restart.
+
+### Tests and Verification
+21. Server behavior changes require tests under `packages/server/test`.
+22. CLI behavior changes require tests under `packages/cli/test`. The test runner is
+    Node's built-in test runner.
+23. The full build (`npm run build`) and full test suite (`npm test`) must pass before
+    any change request is submitted for review.
+24. `specreg check` must pass (valid manifest signature and no file drift) before
+    `specreg sync` stamps a new bundle.
+
+### Observability
+25. Prometheus-compatible metrics are exposed at `GET /metrics`.
+26. Audit events are recorded for all governance actions (spec publish, review, approval,
+    feedback, compliance).
+27. `.spec/code-map.json` and `.spec/code-trace.json` are generated by `specreg code-map`
+    and are local sidecar artifacts; they are not committed to source control.
+
+### Security and Privacy
+28. This repository does not collect or store personally identifiable information beyond
+    usernames and display names provided at account creation.
+29. Secrets (tokens, passwords, API keys) must never be committed to source control.
+    `.spec/credentials.json` is gitignored and must remain so.
+30. Bearer tokens are stored hashed in the database; raw token values are never persisted
+    beyond the initial enrollment response.
+31. `SPECREG_SECRET_KEY` enables at-rest encryption for LLM API keys and other sensitive
+    settings stored in the database.
 
 ## Non-Goals
-This profile is not a replacement for technical contract specs such as API, database, security, observability, or architecture specs.
+
+- This profile does not replace technical contract specs (`DESIGN.md`, `STRUCTURE.md`,
+  `API.md`) for architecture and route-level contracts.
+- This profile does not govern other repositories that consume the Web App Standard
+  project type.
+- This profile does not cover SpecRegistry's SaaS hosted offering or any multi-tenant
+  deployment; those require a separate project profile when applicable.
+- This profile does not define individual reviewer identities or approval counts; those
+  are governed by approval policies in the registry.
 
 ## Acceptance Evidence
-- `specreg init` creates a structured profile draft.
-- The profile is submitted as project-scoped draft or review request.
-- Reports show the concrete project as a consumer attached to a project type.
-- Agent summaries respect published project-scoped profile constraints.
-- Dashboard project pages show inherited global/project-type specs separately from project-scoped specs.
+
+- `specs/.specregistry.json` lists this project profile with scope `project` and
+  project `github.com/joeldg/SpecRegistry`.
+- `specreg check` passes with no manifest, signature, or file-hash drift.
+- Agent sessions for this repository load both the Web App Standard project-type specs
+  and this project-scoped profile.
+- Deployment documentation (`docs/INSTALL.md`, `docs/OPERATIONS.md`) reflects the
+  `SPECREG_PUBLIC_URL`, auth mode, and database-persistence requirements in this profile.
 
 ## Token Budget Class
-Project contract. Load for the attached repository; do not load for unrelated repositories.
+
+Project contract. Load only for the `github.com/joeldg/SpecRegistry` repository; do not
+load for unrelated projects or project-type-wide operations.
 
 ## Related Specs
-- `SDD_OPERATING_MODEL.md`
-- `SPEC_GOVERNANCE.md`
-- `AGENT_OPERATING_RULES.md`
+
+- `DESIGN.md` (project-scoped) — architecture and package design for this repository.
+- `STRUCTURE.md` (project-scoped) — codebase layout and ownership rules.
+- `API.md` (project-type) — REST endpoint contracts for Web App Standard projects.
+- `SDD_OPERATING_MODEL.md` (global) — SDD operating model and drift policy.
+- `SECURITY_AND_SECRETS.md` (global) — secrets and credential handling.
+- `PROJECT_PROFILE.md` (global) — the spec governing what a project profile must contain.
 
 ## AI Agent Directives
-Treat a published project profile as repository-specific guidance. Treat an unpublished generated profile as draft evidence only. Report conflicts between profile choices and global or project-type specs.
+
+Treat this profile as the authoritative source for repository-specific choices. Do not
+infer stack, deployment, or compliance decisions from code alone when this profile
+provides the answer. If a profile requirement conflicts with a global or project-type
+spec, report the contradiction as spec feedback rather than guessing. When adding a new
+integration, data store, or runtime dependency that would change Requirements §5–20,
+submit a profile change request rather than proceeding without governance coverage.

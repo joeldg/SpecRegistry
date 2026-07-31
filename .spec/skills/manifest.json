@@ -1,6 +1,6 @@
 {
   "source": "specregistry",
-  "installed_at": "2026-07-30T22:19:57.523Z",
+  "installed_at": "2026-07-31T21:00:07.358Z",
   "skills": [
     {
       "id": "builtin-collect-delivery-evidence",
@@ -60,7 +60,7 @@
       "risk_level": "safe",
       "version": "1.0.0",
       "version_id": "version-builtin-register-task-session-1-0-0",
-      "content_hash": "aabedf7982320909c2cc7b3d77575e7423f2e25c17bc475c5a2270d336fc3104"
+      "content_hash": "51b0107d5f8742442c2ba9b47861ac87f7c68b87bf8fb5b1858c67bdc16f6d15"
     },
     {
       "id": "builtin-report-spec-problems",
@@ -70,7 +70,7 @@
       "risk_level": "safe",
       "version": "1.0.0",
       "version_id": "version-builtin-report-spec-problems-1-0-0",
-      "content_hash": "dacc20317ccb646d7bd3a194f73a06b4eac6200882d85d6d38e8433d56aaed84"
+      "content_hash": "dc0168049283469825ad50762bd6db22556100a4c258693948a4b83547601108"
     },
     {
       "id": "builtin-resolve-uncovered-guidance",
@@ -80,7 +80,7 @@
       "risk_level": "safe",
       "version": "1.0.0",
       "version_id": "version-builtin-resolve-uncovered-guidance-1-0-0",
-      "content_hash": "8bcd9fd1e892c185e7fb90b324fe2cc1aab7e3e8ffdf4701b6addb44d89f32a5"
+      "content_hash": "75edc8341771caf24dcec9d0288652149253d5fe5bb6c3ee42be1d022efd06c3"
     },
     {
       "id": "builtin-run-compliance-loop",
@@ -90,7 +90,7 @@
       "risk_level": "safe",
       "version": "1.0.0",
       "version_id": "version-builtin-run-compliance-loop-1-0-0",
-      "content_hash": "f5d2001331bfcdf3f145938ac326b8c929f9b1f1bd94532daddc769d41b7da74"
+      "content_hash": "74873ac45ada6a73cd0c6d21eb68e654a1f0cb7670c5f1ca6c3f911c3a3c356d"
     },
     {
       "id": "builtin-search-spec-context",

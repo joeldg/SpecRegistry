@@ -17,9 +17,7 @@ Confirm objective compliance before claiming a task is complete, and keep workin
 
 ## Instructions
 
-Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, keep remediating and re-run — a self-assessed 'done' is not sufficient. Do not report completion while the objective coverage/drift gate still reports outstanding items.
-
-Harness improvement proposal: Before calling finish_task, refresh objective evidence with the repo's current code-map or compliance command when available. If finish_task returns blocked, treat every outstanding item as remaining work: remediate it, rerun the targeted checks, and call finish_task again before claiming completion.
+Before declaring a task done, call finish_task with your session_id (or check_compliance, or run specreg comply for CLI/CI). If it is not compliant, remediate with targeted evidence only: add @spec[FILE#section] annotations only when the code entity is truly governed by that exact section, and never blanket-map files to PROJECT_PROFILE.md or broad requirements just to raise coverage. If no section governs the behavior, report missing_guidance or propose the needed spec. If repeated compliance attempts still fail, halt autonomous remediation and show the user the exact latest output. Before creating a git commit for implementation work, include the compact SpecRegistry-Compliance/SpecRegistry-Signals/SpecRegistry-Command trailer emitted by specreg comply, or equivalent finish_task evidence. Do not report completion while objective compliance is failing or unavailable.
 
 ## Safety Boundary
 

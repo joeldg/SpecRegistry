@@ -2,22 +2,25 @@
 
 You are working on SpecRegistry, an SDD control plane for governing Markdown specifications, distributing agent context, and observing whether specs are useful, coherent, and followed.
 
+## Before You Start
+
+**Load governed specs first.** Call `get_specs` or `begin_task` via the `specregistry` MCP server before non-trivial changes. The MCP server is configured in `.mcp.json`. If MCP is not available, the compiled context in `CLAUDE.md` is the bootstrap — but it is a snapshot, not the live source.
+
+Set `SPECREG_REPO=github.com/joeldg/SpecRegistry` so project-scoped specs (DESIGN.md, STRUCTURE.md, PROJECT_PROFILE.md, CODE_TRACE_SCOPE.md, SPEC_SECTION_EVIDENCE.md) load alongside global and project-type specs.
+
+Use `search_specs` for focused lookups before pulling large reference specs into context. Report ambiguity, contradiction, or outdated guidance with `report_spec_feedback` — do not guess around it.
+
 ## North Star
 
 Preserve strict Spec Driven Development:
 
 - Specs are versioned source-of-truth documents.
-- Implementations should be traceable to current specs.
-- Agents should load governed specs through MCP or generated context files.
-- Ambiguity, contradiction, and outdated guidance should be reported, not guessed around.
+- Implementations must be traceable to current reviewed specs.
+- Agents must load governed specs through MCP or generated context before touching code.
+- Ambiguity, contradiction, and outdated guidance must be reported, not guessed around.
 - Token cost matters: specs should earn their prompt/context budget.
 
-Read these docs before large changes:
-
-- `README.md` for package layout, commands, and API surface.
-- `docs/SPEC.md` for the product specification.
-- `docs/SDD_TOKENOMICS.md` for the operating model, observability goals, and SDD failure modes.
-- `docs/TODO.md` for planned add-ons.
+The authoritative governed specs are in `specs/`. For architecture decisions, read `specs/DESIGN.md` and `specs/STRUCTURE.md`. For API contracts, read `specs/API.md`. For the project profile (stack, data stores, deployment), read `specs/PROJECT_PROFILE.md`.
 
 ## Repository Layout
 
@@ -37,18 +40,41 @@ npm run dev:server
 npm run dev:web
 ```
 
-The API defaults to `http://localhost:4000`. The Vite app defaults to `http://localhost:5173` and proxies `/api` to the API.
+The API defaults to `http://localhost:4000`. The Vite app defaults to `http://localhost:5173`.
 
 ## Development Rules
 
 - Prefer existing patterns and small vertical slices.
 - Keep database migrations append-only in `packages/server/src/db.ts`.
-- Add tests for server behavior changes.
-- Update README/docs when API surface, deployment, or SDD workflow changes.
-- Do not bypass review, approval policy, audit log, or feedback-loop semantics casually.
+- Add tests for server behavior changes (`packages/server/test`).
+- Add tests for CLI behavior changes (`packages/cli/test`).
+- Update `specs/` (via registry change request) when API surface, authentication, schema, or SDD workflow changes.
+- Update `docs/` when deployment or developer workflow changes.
+- Do not bypass review, approval policy, audit log, or feedback-loop semantics.
 - Keep generated agent/MCP artifacts aware of `SPECREG_PUBLIC_URL` for Docker/server deployments.
 - Keep CLI/MCP documentation and generated guidance aware of `SPECREG_TOKEN` for auth-required registries.
-- Leave unrelated local files alone, especially user-specific config.
+
+## Commit Evidence
+
+Every implementation commit must include SpecRegistry compliance trailers. Run `specreg comply` before committing and paste the output into the commit message:
+
+```
+SpecRegistry-Compliance: PASS objective=100/100 attempt=1
+SpecRegistry-Signals: bundle-signature=valid tests=<n>
+SpecRegistry-Command: npm test
+```
+
+Do not claim a check passed without running it and observing the result.
+
+## Spec Changes
+
+Published specs change through the registry review workflow — never edit files in `specs/` directly. To propose a change:
+
+1. POST to `/api/v1/specs/review` with `proposed_content`, `version_delta`, and `proposed_by`.
+2. The change request is reviewed and approved by a human before publication.
+3. After publication, run `specreg sync` to pull the updated bundle.
+
+Draft specs go under `.spec/drafts/` or the registry draft workflow, not directly into `specs/`.
 
 ## Docker/Public URL
 
@@ -62,7 +88,4 @@ In Docker or behind a proxy, set `SPECREG_PUBLIC_URL` to the URL that developer 
 
 ## CLI/MCP Authentication
 
-The CLI accepts `--token <token>` and reads `SPECREG_TOKEN`. The MCP server also reads
-`SPECREG_TOKEN` and sends it as a Bearer token to the registry. When updating agent packs,
-MCP guide content, or README examples, include this auth path for deployments using
-`SPECREG_AUTH=required`.
+The CLI accepts `--token <token>` and reads `SPECREG_TOKEN`. The MCP server also reads `SPECREG_TOKEN` and sends it as a Bearer token to the registry. Set `SPECREG_REPO` to load project-scoped context. When updating agent packs, MCP guide content, or README examples, include this auth path for deployments using `SPECREG_AUTH=required`.

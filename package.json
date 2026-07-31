@@ -12,7 +12,9 @@
     "dev:server": "npm run dev -w @specregistry/server",
     "dev:web": "npm run dev -w @specregistry/web",
     "seed": "npm run seed -w @specregistry/server",
-    "sample:ai-sdd": "node samples/ai-sdd/load.mjs"
+    "sample:ai-sdd": "node samples/ai-sdd/load.mjs",
+    "comply": "specreg comply",
+    "install-hooks": "bash scripts/install-hooks.sh"
   },
   "engines": {
     "node": ">=20"

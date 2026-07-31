@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# prepare-commit-msg — append SpecRegistry compliance trailers to commit messages.
+#
+# Installed by scripts/install-hooks.sh. Not run for merge commits, fixup commits,
+# squash commits, or amend operations, which don't carry new implementation evidence.
+#
+# Requires:
+#   - specreg CLI on PATH
+#   - SPECREG_SERVER env var (or a .env file in the repo root that exports it)
+#   - A local registry server reachable at that URL
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"   # message | template | merge | squash | (empty = normal commit)
+
+# Skip for merge, squash, fixup, amend — they don't carry new implementation evidence.
+if [[ "$COMMIT_SOURCE" == "merge" || "$COMMIT_SOURCE" == "squash" ]]; then
+  exit 0
+fi
+
+# If the message already contains a SpecRegistry trailer, don't add another.
+if grep -q "^SpecRegistry-Compliance:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+  exit 0
+fi
+
+# Resolve the registry server URL. Check env var first, then .env in repo root.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -z "$SPECREG_SERVER" && -f "$REPO_ROOT/.env" ]]; then
+  # Safely extract SPECREG_SERVER from .env without sourcing the whole file.
+  SPECREG_SERVER="$(grep -E '^SPECREG_SERVER=' "$REPO_ROOT/.env" | head -1 | cut -d= -f2-)"
+fi
+
+# Fall back to localhost default if still unset.
+SPECREG_SERVER="${SPECREG_SERVER:-http://localhost:4000}"
+
+# Run comply and capture output. If the server is not reachable or comply fails,
+# warn but don't block the commit — a developer without a local server shouldn't
+# be unable to commit; the CI gate catches missing trailers.
+COMPLY_OUTPUT="$(SPECREG_SERVER="$SPECREG_SERVER" specreg comply 2>&1)"
+COMPLY_EXIT="$?"
+
+if [[ "$COMPLY_EXIT" -ne 0 ]]; then
+  echo "[specreg] comply exited $COMPLY_EXIT — trailers not added. Check your local server." >&2
+  echo "[specreg] comply output:" >&2
+  echo "$COMPLY_OUTPUT" >&2
+  # Exit 0 so the commit is not blocked. Remove this line to make comply a hard gate.
+  exit 0
+fi
+
+# Extract the three trailer lines from comply output.
+COMPLIANCE_LINE="$(echo "$COMPLY_OUTPUT" | grep '^SpecRegistry-Compliance:')"
+SIGNALS_LINE="$(echo "$COMPLY_OUTPUT"    | grep '^SpecRegistry-Signals:')"
+COMMAND_LINE="$(echo "$COMPLY_OUTPUT"    | grep '^SpecRegistry-Command:')"
+
+if [[ -z "$COMPLIANCE_LINE" ]]; then
+  echo "[specreg] Could not parse trailers from comply output. Trailers not added." >&2
+  exit 0
+fi
+
+# Append the trailers after the commit message body.
+# Git trailer convention: trailers are separated from the body by a blank line.
+printf "\n%s\n%s\n%s\n" \
+  "$COMPLIANCE_LINE" \
+  "$SIGNALS_LINE" \
+  "$COMMAND_LINE" >> "$COMMIT_MSG_FILE"
+
+echo "[specreg] Compliance trailers appended." >&2

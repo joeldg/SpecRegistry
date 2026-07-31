@@ -54,14 +54,41 @@ The API defaults to `http://localhost:4000`. The Vite app defaults to `http://lo
 - Keep generated agent/MCP artifacts aware of `SPECREG_PUBLIC_URL` for Docker/server deployments.
 - Keep CLI/MCP documentation and generated guidance aware of `SPECREG_TOKEN` for auth-required registries.
 
+## Git Hooks Setup
+
+After cloning, install the local git hooks once:
+
+```sh
+bash scripts/install-hooks.sh
+# or
+npm run install-hooks
+```
+
+This installs a `prepare-commit-msg` hook (symlinked from `scripts/prepare-commit-msg`)
+that runs `specreg comply` automatically and appends the three compliance trailers to every
+commit message. The hook reads `SPECREG_SERVER` from the environment or from `.env`; if the
+server is unreachable it warns but does not block the commit.
+
+Hooks in `scripts/` are tracked in source control. Re-running the installer is safe.
+
 ## Commit Evidence
 
-Every implementation commit must include SpecRegistry compliance trailers. Run `specreg comply` before committing and paste the output into the commit message:
+Every implementation commit must include SpecRegistry compliance trailers. With the git
+hook installed, trailers are appended automatically. Without it, run `specreg comply`
+manually and paste the output into the commit message:
 
 ```
 SpecRegistry-Compliance: PASS objective=100/100 attempt=1
-SpecRegistry-Signals: bundle-signature=valid tests=<n>
-SpecRegistry-Command: npm test
+SpecRegistry-Signals: coverage=100% drift=0%
+SpecRegistry-Command: specreg comply
+```
+
+You can also run compliance on demand:
+
+```sh
+npm run comply
+# or
+SPECREG_SERVER=http://localhost:4000 specreg comply
 ```
 
 Do not claim a check passed without running it and observing the result.

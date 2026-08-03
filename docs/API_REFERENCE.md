@@ -167,3 +167,10 @@ Set `SPECREG_CORS_ORIGINS` to the browser origins that may call the API directly
 tokens expire after `SPECREG_LOGIN_TOKEN_TTL_HOURS` (default 24); long-lived API and agent tokens
 remain non-expiring unless `SPECREG_API_TOKEN_TTL_DAYS` or `SPECREG_AGENT_TOKEN_TTL_DAYS` is set.
 Admins can revoke individual API keys or bulk-revoke all tokens for a user.
+## Agent workspace state
+
+`POST /api/v1/cli/agent-state` stores the latest bounded unpublished-spec snapshot for one
+project workspace. `GET /api/v1/cli/agent-state?repo=<repo>&project_type=<type>` lists the
+latest workspace snapshots; `exclude_workspace=<id>` omits the caller. Agent credentials
+are restricted to their enrolled repository and project type. These endpoints coordinate
+draft work only and never mutate governed specifications.

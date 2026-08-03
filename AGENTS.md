@@ -10,6 +10,8 @@ Set `SPECREG_REPO=github.com/joeldg/SpecRegistry` so project-scoped specs (DESIG
 
 Use `search_specs` for focused lookups before pulling large reference specs into context. Report ambiguity, contradiction, or outdated guidance with `report_spec_feedback` — do not guess around it.
 
+When this repository may be active on another computer, run `specreg state sync` before changing specs. It reports this workspace's unpublished spec edits and places differing peer snapshots under `.spec/incoming/` for review without overwriting governed specs.
+
 ## North Star
 
 Preserve strict Spec Driven Development:
@@ -65,9 +67,11 @@ npm run install-hooks
 ```
 
 This installs a `prepare-commit-msg` hook (symlinked from `scripts/prepare-commit-msg`)
-that runs `specreg comply` automatically and appends the three compliance trailers to every
+that runs `specreg comply --no-write` automatically and appends the three compliance trailers to every
 commit message. The hook reads `SPECREG_SERVER` from the environment or from `.env`; if the
-server is unreachable it warns but does not block the commit.
+server is unreachable it warns but does not block the commit. It does not attest a commit
+while unstaged or untracked implementation files would make the scan differ from the index.
+CI verifies the trailers on implementation commits.
 
 Hooks in `scripts/` are tracked in source control. Re-running the installer is safe.
 

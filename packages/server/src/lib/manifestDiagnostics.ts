@@ -2,6 +2,7 @@ import { driftSeverity, satisfiesCaret, type SyncCheckResponse } from "@specregi
 import type { Db } from "../db.js";
 import { findProjectConsumer, requireProjectType } from "../helpers.js";
 import { bundleSpecs } from "./compile.js";
+import crypto from "node:crypto";
 
 export interface LocalManifestSpec {
   filename: string;
@@ -28,6 +29,7 @@ export interface ManifestDiagnostics extends SyncCheckResponse {
   breaking_count: number;
 }
 
+// @spec[DESIGN.md#distribution-and-integrity]
 export function diagnoseManifest(
   db: Db,
   input: {
@@ -58,9 +60,14 @@ export function diagnoseManifest(
   const not_on_server: string[] = [];
   for (const file of input.specs) {
     const serverSpec = latestByName.get(file.filename);
+    const serverType = serverSpec ? namesById.get(serverSpec.project_type_id) : undefined;
+    const serverScope = serverSpec?.project_id ? "project" : serverType?.scope === "global" ? "global" : "project_type";
+    const serverOwner = serverSpec?.project_id ? project?.repo ?? "Project" : serverType?.name ?? "Unknown";
+    const sameHash = !file.sha256 || !serverSpec || crypto.createHash("sha256").update(serverSpec.content).digest("hex") === file.sha256;
+    const sameScope = (!file.scope || file.scope === serverScope) && (!file.project_type || file.project_type === serverOwner);
     if (!serverSpec) {
       not_on_server.push(file.filename);
-    } else if (serverSpec.current_version === file.version) {
+    } else if (serverSpec.current_version === file.version && sameHash && sameScope) {
       up_to_date.push(file.filename);
     } else {
       outdated.push({

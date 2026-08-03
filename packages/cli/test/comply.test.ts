@@ -65,13 +65,23 @@ test("comply resolves the initialized registry root from a subdirectory", async 
     assert.match(output, /SpecRegistry-Compliance: PASS objective=100\/100 attempt=1/);
     assert.match(output, /SpecRegistry-Signals: coverage=100% drift=0%/);
     assert.match(output, /SpecRegistry-Command: specreg comply/);
+    const tracePath = path.join(root, ".spec", "code-trace.json");
+    assert.ok(fs.existsSync(tracePath));
+    fs.unlinkSync(tracePath);
+    await runComply({
+      server: "https://specreg.example.com",
+      type: workspace.manifest!.project_type,
+      dir: workspace.specsDir,
+      root: workspace.root,
+      writeEvidence: false,
+    });
+    assert.equal(fs.existsSync(tracePath), false, "--no-write mode must not mutate trace sidecars");
   } finally {
     globalThis.fetch = originalFetch;
     console.log = originalLog;
     process.chdir(originalCwd);
   }
 
-  assert.ok(fs.existsSync(path.join(root, ".spec", "code-trace.json")));
   assert.equal(fs.existsSync(path.join(nested, ".spec", "code-trace.json")), false);
   assert.equal(bodies[0].project_type, "CLI Tool / Developer Tooling");
 });

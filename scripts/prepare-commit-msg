@@ -22,6 +22,21 @@ if grep -q "^SpecRegistry-Compliance:" "$COMMIT_MSG_FILE" 2>/dev/null; then
   exit 0
 fi
 
+# Compliance scans the working tree. Only attest it when implementation files
+# match the index and no untracked implementation file would contaminate the
+# result with content that is not part of this commit.
+if ! git diff --quiet -- packages scripts; then
+  echo "[specreg] Unstaged implementation changes detected; compliance trailers not added." >&2
+  echo "[specreg] Stage or stash those changes, then retry the commit." >&2
+  exit 0
+fi
+UNTRACKED_IMPLEMENTATION="$(git ls-files --others --exclude-standard -- packages scripts | head -1)"
+if [[ -n "$UNTRACKED_IMPLEMENTATION" ]]; then
+  echo "[specreg] Untracked implementation file detected: $UNTRACKED_IMPLEMENTATION" >&2
+  echo "[specreg] Stage it or move it out of the repository before retrying the commit." >&2
+  exit 0
+fi
+
 # Resolve the registry server URL. Check env var first, then .env in repo root.
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 if [[ -z "$SPECREG_SERVER" && -f "$REPO_ROOT/.env" ]]; then
@@ -35,7 +50,7 @@ SPECREG_SERVER="${SPECREG_SERVER:-http://localhost:4000}"
 # Run comply and capture output. If the server is not reachable or comply fails,
 # warn but don't block the commit — a developer without a local server shouldn't
 # be unable to commit; the CI gate catches missing trailers.
-COMPLY_OUTPUT="$(SPECREG_SERVER="$SPECREG_SERVER" specreg comply 2>&1)"
+COMPLY_OUTPUT="$(SPECREG_SERVER="$SPECREG_SERVER" specreg comply --no-write 2>&1)"
 COMPLY_EXIT="$?"
 
 if [[ "$COMPLY_EXIT" -ne 0 ]]; then

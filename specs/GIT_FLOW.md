@@ -1,53 +1,50 @@
-# Git Flow Specification
+# Git Flow
 
-## Purpose
+## Scope
 
-Defines branching, merge policy, review gates, release tagging, and rollback rules for
-every repository in the organization. In an AI-assisted SDLC, every ticket-driven change
-must pass through a controlled delivery workflow; this specification defines that workflow
-so that both humans and agents follow one traceable path from ticket to release.
+This specification defines the minimum governed branch, pull-request, verification, merge,
+and rollback flow. A repository may document stricter naming and protection rules.
 
-## Branching
+## Branches
 
-| Rule | Requirement |
-| --- | --- |
-| Branch naming | Branches are named `type/ticket-id-short-slug` (e.g. `fix/PLT-1421-udp-timeout`). |
-| Branch source | Feature and fix branches are cut from the current default branch head. |
-| One ticket per branch | A branch implements exactly one approved ticket. |
-| No direct commits | The default and release branches accept changes only through pull requests. |
+1. Start work from the current default branch unless a reviewed release or hotfix process
+   specifies another base.
+2. Use the repository's configured branch prefix and naming convention. Agent-created
+   branches use the host-required prefix, such as `codex/`, when one is configured.
+3. Keep a branch focused on one reviewable objective. A ticket may be linked when the work
+   originates from an issue tracker, but a ticket is not required when an authorized user
+   request or governed task session is the source of work.
+4. Do not push implementation commits directly to a protected default or release branch.
 
-## Pull Requests & Review Gates
+## Pull Requests
 
-1. Every change reaches the default branch through a pull request linked to its ticket.
-2. A PR must pass build validation, required unit and contract tests, and static analysis
-   before it is eligible for review.
-3. Code review is mandatory and must record an explicit rationale for why the change is
-   approved or rejected — review is not a silent thumbs-up.
-4. An agent-authored PR rejected more than the configured retry limit is escalated to a
-   human-in-the-loop owner.
+- Changes reach protected branches through pull requests.
+- Open a ready PR when the change is complete and verified; use draft status only while
+  work is intentionally incomplete or awaiting a blocking decision.
+- The PR describes the objective, affected specs or exact sections, verification actually
+  run, skipped or failed checks, compatibility risk, and residual work.
+- Required repository checks and human approvals control merge eligibility.
+- Agents may prepare and update PRs but do not approve or merge their own governed changes.
 
-## Rebasing & Merge Control
+## Merge and History
 
-- Branches are kept current by rebasing onto the default branch before merge.
-- Merges to the default branch use a single squashed, well-described commit referencing
-  the ticket id.
-- Merges to a release branch require the additional gates defined by the release process.
+Use the merge method allowed by repository settings and maintainers. Do not claim that
+rebase, squash, or merge commits are universally required when the repository does not
+enforce that policy. Keep commits and PR scope coherent enough to review and revert.
 
-## Release Tagging
+## Releases
 
-Releases are tagged with semantic versions (`MAJOR.MINOR.PATCH`). The tag message records
-the tickets included and a link to the validation evidence for the release.
+When a repository publishes versioned releases, follow its release specification and
+Semantic Versioning policy. Release notes link the change and available validation evidence.
 
 ## Rollback
 
-| Requirement | Rule |
-| --- | --- |
-| Revertability | Every merged change must be revertable as a discrete unit. |
-| Rollback plan | High-risk and hardware-impacting changes must document a rollback plan in the ticket before merge. |
-| Recorded rollbacks | A rollback is itself a tracked, reviewed change with its own audit trail. |
+Every merged change should be recoverable through a reviewed revert, compensating migration,
+feature disablement, or documented operational rollback. High-risk changes state the
+rollback path before merge. A rollback is itself recorded and reviewed.
 
 ## AI Agent Directives
 
-Agents must never push directly to a protected branch, never merge their own PR without a
-human approval, and must keep each PR scoped to a single ticket so the delivery trail stays
-auditable.
+Create a scoped branch from the current base, open a truthful PR, and leave approval and
+merge to authorized humans. Do not invent a ticket, approval, check result, merge policy,
+or release requirement.

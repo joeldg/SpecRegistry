@@ -149,6 +149,44 @@ describe("governed agent skills", () => {
 });
 
 describe("sync-check (CLI drift detection)", () => {
+  it("detects equal-version content or scope changes", async () => {
+    const projectTypes = await getJson("/api/v1/project-types");
+    const type = projectTypes.find((item: any) => item.name === "Web App Standard");
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/manifest-report",
+      payload: { repo: "github.com/acme/scope-change", project_type: type.name, specs: [] },
+    });
+    const projectId = projectResponse.json().project_id;
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/specs",
+      payload: {
+        project_type_id: type.id,
+        project_id: projectId,
+        filename: "API.md",
+        content: "# Project API\n",
+        updated_by: "test",
+      },
+    });
+    await app.inject({ method: "POST", url: `/api/v1/specs/${created.json().id}/publish`, payload: { published_by: "test" } });
+
+    const check = await app.inject({
+      method: "POST",
+      url: "/api/v1/cli/sync-check",
+      payload: {
+        repo: "github.com/acme/scope-change",
+        project_type: type.name,
+        specs: [{ filename: "API.md", version: "1.0.0", project_type: "Web App Standard", scope: "project_type", sha256: "stale" }],
+      },
+    });
+    expect(check.statusCode).toBe(200);
+    expect(check.json().drift).toBe(true);
+    expect(check.json().outdated).toEqual([
+      expect.objectContaining({ filename: "API.md", local_version: "1.0.0", latest_version: "1.0.0" }),
+    ]);
+  });
+
   it("records repository manifest consumers and reports outdated counts", async () => {
     const report = await app.inject({
       method: "POST",

@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -28,6 +30,10 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Verify compliance trailers
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-compliance-trailers.sh "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
   spec-check:
     runs-on: ubuntu-latest
     steps:
@@ -41,9 +47,14 @@ jobs:
           cache: npm
 
       - name: SpecRegistry drift check
+        if: vars.SPECREG_SERVER != ''
         uses: ./.github/actions/specreg-check
         with:
           server: ${{ vars.SPECREG_SERVER }}
           token: ${{ secrets.SPECREG_TOKEN }}
           fail-on-drift: "true"
           comment: "true"
+
+      - name: Registry check not configured
+        if: vars.SPECREG_SERVER == ''
+        run: echo "SpecRegistry drift check skipped because the SPECREG_SERVER repository variable is not configured."

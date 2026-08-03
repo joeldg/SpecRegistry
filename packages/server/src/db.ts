@@ -179,6 +179,21 @@ CREATE TABLE IF NOT EXISTS repo_consumer_specs (
   PRIMARY KEY (consumer_id, filename)
 );
 
+CREATE TABLE IF NOT EXISTS agent_states (
+  id TEXT PRIMARY KEY,
+  consumer_id TEXT NOT NULL REFERENCES repo_consumers(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  agent_identifier TEXT NOT NULL,
+  branch TEXT,
+  commit_sha TEXT,
+  manifest_hash TEXT NOT NULL,
+  spec_changes TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (consumer_id, workspace_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_states_consumer_time ON agent_states(consumer_id, updated_at);
+
 CREATE TABLE IF NOT EXISTS code_trace_reports (
   id TEXT PRIMARY KEY,
   consumer_id TEXT NOT NULL REFERENCES repo_consumers(id) ON DELETE CASCADE,
@@ -1410,6 +1425,26 @@ Project types are reusable baselines; projects are concrete repositories. The pr
     // Preserve exact section anchors from explicit code-to-spec annotations.
     version: 44,
     sql: "ALTER TABLE code_trace_links ADD COLUMN spec_section TEXT",
+  },
+  {
+    // Coordinate local spec edits across multiple workspaces without publishing them.
+    version: 45,
+    sql: `
+      CREATE TABLE IF NOT EXISTS agent_states (
+        id TEXT PRIMARY KEY,
+        consumer_id TEXT NOT NULL REFERENCES repo_consumers(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL,
+        agent_identifier TEXT NOT NULL,
+        branch TEXT,
+        commit_sha TEXT,
+        manifest_hash TEXT NOT NULL,
+        spec_changes TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (consumer_id, workspace_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_states_consumer_time ON agent_states(consumer_id, updated_at);
+    `,
   },
 ];
 

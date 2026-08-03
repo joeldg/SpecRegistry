@@ -1,6 +1,9 @@
 import { fetchJson } from "./registry.js";
 import { writeCodeInventory } from "./codeMetadata.js";
 import { repoIdentity } from "./repo.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 export interface ComplyOptions {
   server: string;
@@ -10,6 +13,8 @@ export interface ComplyOptions {
   root?: string;
   /** agent's honest self-assessed compliance score (0-100) */
   score?: number;
+  /** generate trace evidence in a temporary directory instead of mutating sidecars */
+  writeEvidence?: boolean;
 }
 
 interface ComplianceVerdict {
@@ -33,13 +38,19 @@ interface ComplianceVerdict {
 export async function runComply(opts: ComplyOptions): Promise<void> {
   const root = opts.root ?? process.cwd();
   console.log("Regenerating code traceability report...");
-  const inventory = writeCodeInventory({
-    root,
-    out: ".spec/code-map.json",
-    specsDir: opts.dir,
-    traceOut: ".spec/code-trace.json",
-    force: true,
-  });
+  const tempDir = opts.writeEvidence === false ? fs.mkdtempSync(path.join(os.tmpdir(), "specreg-comply-")) : undefined;
+  let inventory;
+  try {
+    inventory = writeCodeInventory({
+      root,
+      out: tempDir ? path.join(tempDir, "code-map.json") : ".spec/code-map.json",
+      specsDir: opts.dir,
+      traceOut: tempDir ? path.join(tempDir, "code-trace.json") : ".spec/code-trace.json",
+      force: true,
+    });
+  } finally {
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+  }
   const cov = Math.round(inventory.trace.coverage.coverage_ratio * 100);
   console.log(`Measured coverage ${cov}%, drift ${inventory.trace.drift.severity} (${inventory.trace.drift.score}).`);
 

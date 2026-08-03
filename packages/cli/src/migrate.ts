@@ -5,6 +5,7 @@ import type { ChangeRequest, Spec, SpecSummary } from "@specregistry/shared";
 import { fetchJson, selectProjectType, specsForProjectType } from "./registry.js";
 import { reportManifest, type Manifest, type ManifestRegistry } from "./repo.js";
 import { resolveRegistryWorkspace } from "./workspace.js";
+import { runInit } from "./init.js";
 
 export interface MigrateOptions {
   /** target registry to migrate to */
@@ -19,6 +20,8 @@ export interface MigrateOptions {
   author: string;
   /** proceed even when the target key matches the recorded one */
   force: boolean;
+  /** discard the local governed bundle and adopt the target's approved bundle */
+  adoptTarget?: boolean;
 }
 
 type Classification = "identical" | "missing" | "conflict";
@@ -128,6 +131,32 @@ export async function runMigrate(opts: MigrateOptions): Promise<void> {
   if (missingOrgSpecs.length > 0) {
     console.log("\nOrg-owned specs missing on the target (a registry admin must add these; not migrated):");
     for (const spec of missingOrgSpecs) console.log(`  ! ${spec.filename} (${spec.project_type})`);
+  }
+
+  if (opts.adoptTarget) {
+    if (!opts.apply) {
+      console.log(
+        "\nTarget-authoritative recovery selected. The local governed bundle would be replaced by the target's approved signed bundle; no local spec would be uploaded."
+      );
+      console.log("Dry run. Re-run with --apply --adopt-target to perform the replacement.");
+      return;
+    }
+    await runInit({
+      server: opts.toServer,
+      token: opts.token,
+      type: projectType.name,
+      dir: opts.dir,
+      force: true,
+      styleguides: "none",
+      styleguideDir: ".spec/styleguides",
+      skills: "none",
+      skillDir: ".spec/skills",
+      allowRegistryIdentityChange: true,
+      skipEnrollment: true,
+      skipAuxiliarySetup: true,
+    });
+    console.log("Adopted the target registry's approved governed bundle. No local specs were uploaded.");
+    return;
   }
 
   if (!opts.apply) {

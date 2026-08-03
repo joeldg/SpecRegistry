@@ -13,3 +13,5 @@ packages/web/dist/
 docs/AI-SDD*
 TODO.local.md
 .spec/credentials.json
+.spec/agent-state.json
+.spec/incoming/

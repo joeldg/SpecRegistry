@@ -296,6 +296,32 @@ specreg migrate --server https://new-registry.example.com --token sreg_...
 specreg migrate --server https://new-registry.example.com --token sreg_... --apply
 ```
 
+If the local bundle came from the wrong registry and must not be uploaded, use the explicit
+target-authoritative recovery mode. Its default is a dry run:
+
+```sh
+specreg migrate --server https://correct-registry.example.com --adopt-target
+specreg migrate --server https://correct-registry.example.com --adopt-target --apply
+```
+
+This replaces governed files from the target's signed approved bundle, removes superseded
+governed files, and never uploads the local versions.
+
+### Coordinate spec edits across computers
+
+Before changing specs in a repository that may be active in another workspace, run:
+
+```sh
+specreg state sync
+```
+
+The command compares spec files with the governed manifest, uploads a bounded workspace
+snapshot to the registry, and checks the latest snapshots from other workspaces. Differing
+peer content is copied under `.spec/incoming/<workspace>/` for review. It never overwrites
+`specs/` and does not create, approve, or publish registry specs. Use `state push`, `check`,
+or `pull` when only one half of the workflow is wanted. The generated
+`.spec/agent-state.json` contains the opaque local workspace ID and is gitignored.
+
 What it does:
 
 - Reads the target's identity key; if it matches the recorded one, it reports "nothing to
@@ -374,6 +400,11 @@ SpecRegistry-Command: specreg comply
 Agents should include that trailer, or equivalent `finish_task` evidence with verdict,
 objective score, and session id, in the commit message body. If compliance cannot run or
 does not pass, halt and show the exact output instead of committing.
+
+Git hooks use `specreg comply --no-write`, which generates temporary trace evidence instead
+of mutating tracked sidecars. The hook declines to attest when unstaged or untracked
+implementation files would make its working-tree scan differ from the staged commit. CI
+checks the three trailers on implementation commits.
 
 Generate deterministic project governance evidence for PRs or release notes:
 

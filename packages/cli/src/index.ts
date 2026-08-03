@@ -22,6 +22,7 @@ import { runTraceCheck, traceKinds, traceThreshold } from "./traceCheck.js";
 import { checkMcpConnectivity, runMcpServer } from "./mcp.js";
 import { readInstalledDefaultServer } from "./defaultServer.js";
 import { resolveRegistryWorkspace } from "./workspace.js";
+import { runAgentState } from "./agentState.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -32,7 +33,8 @@ Usage:
   specreg submit-drafts  Submit generated draft specs into the registry workflow
   specreg check     Compare local specs to the registry; exit 1 on drift (CI gate)
   specreg sync      Like check, but pulls the latest approved specs when drift is found
-  specreg migrate   Move this governed repo to a different registry (--server target; --apply to upload)
+  specreg migrate   Move this governed repo to a different registry, or explicitly adopt the target bundle
+  specreg state push|check|pull|sync  Coordinate unpublished spec edits across workspaces
   specreg compile   Render the spec set into CLAUDE.md / AGENTS.md / .cursorrules
   specreg verify    Verify local spec hashes + the registry's ed25519 bundle signature
   specreg audit     Ask the configured server LLM whether this codebase violates its governed specs
@@ -77,11 +79,15 @@ Options:
   --author <name>   submit-drafts: author/proposer name (default: $USER or cli)
   --delta <d>       submit-drafts: major | minor | patch (default: minor)
   --publish         submit-drafts: publish newly-created registry drafts immediately
+  --file <name>     submit-drafts: submit one Markdown draft from --dir
   --write           generate: use configured CLI LLM provider to write generated specs
   --force           Overwrite protected/generated files where supported
   --ci              audit: exit 1 when findings exist
   --score <n>       comply: your honest 0-100 self-assessed compliance score
+  --no-write        comply: generate temporary evidence without changing .spec sidecars
   --apply           migrate: upload diffs for review + stamp the manifest (default: dry run)
+  --adopt-target    migrate: replace local governed specs from target; never upload local specs
+  --agent <name>    state: agent identifier recorded with this workspace snapshot
   --json            scan: print the machine-readable report instead of the summary
                     audit-report: print/write the full JSON evidence payload
   --html <path>     scan: also write a self-contained, shareable HTML report
@@ -197,6 +203,19 @@ try {
       apply: flags.apply === true,
       author: typeof flags.author === "string" ? flags.author : process.env.USER || "cli",
       force: flags.force === true,
+      adoptTarget: flags["adopt-target"] === true,
+    });
+  } else if (command === "state") {
+    const action = positionals[1] ?? "sync";
+    if (!["push", "check", "pull", "sync"].includes(action)) {
+      throw new Error("state action must be one of: push, check, pull, sync");
+    }
+    await runAgentState({
+      server: requireServer(),
+      token,
+      dir: typeof flags.dir === "string" ? flags.dir : "specs",
+      action: action as "push" | "check" | "pull" | "sync",
+      agentIdentifier: typeof flags.agent === "string" ? flags.agent : undefined,
     });
   // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "init") {
@@ -236,6 +255,7 @@ try {
       delta: delta as "major" | "minor" | "patch",
       publish: flags.publish === true,
       force: flags.force === true,
+      file: typeof flags.file === "string" ? flags.file : undefined,
     });
   // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "code-map") {
@@ -345,7 +365,15 @@ try {
     if (score !== undefined && (Number.isNaN(score) || score < 0 || score > 100)) {
       throw new Error("--score must be a number between 0 and 100");
     }
-    await runComply({ server: requireServer(), token, type: projectType, dir: workspace.specsDir, root: workspace.root, score });
+    await runComply({
+      server: requireServer(),
+      token,
+      type: projectType,
+      dir: workspace.specsDir,
+      root: workspace.root,
+      score,
+      writeEvidence: flags["no-write"] !== true,
+    });
   } else if (command === "styleguide") {
     const sub = positionals[1];
     const styleguideDir = typeof flags["styleguide-dir"] === "string" ? flags["styleguide-dir"] : ".spec/styleguides";

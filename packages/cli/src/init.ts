@@ -21,6 +21,12 @@ export interface InitOptions {
   styleguideDir: string;
   skills?: string;
   skillDir: string;
+  /** Internal recovery escape hatch used only by migrate --adopt-target. */
+  allowRegistryIdentityChange?: boolean;
+  /** Avoid creating a new agent credential during an explicit migration recovery. */
+  skipEnrollment?: boolean;
+  /** Preserve existing generated guides, styleguides, and skills during bundle-only recovery. */
+  skipAuxiliarySetup?: boolean;
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
@@ -31,7 +37,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     typeof previousManifest?.project === "string" && previousManifest.project.trim()
       ? previousManifest.project.trim()
       : identity.repo;
-  const token = opts.token ?? (opts.type ? await enrollAgent(opts.server, requestedRepo, opts.type) : undefined);
+  const token = opts.token ?? (opts.type && !opts.skipEnrollment ? await enrollAgent(opts.server, requestedRepo, opts.type) : undefined);
   if (token && !opts.token) {
     console.log(`Enrolled agent identity for ${requestedRepo}; token stored in .spec/credentials.json (gitignored).`);
   }
@@ -61,7 +67,8 @@ export async function runInit(opts: InitOptions): Promise<void> {
   if (!publicKey?.trim()) throw new Error("Registry did not return an Ed25519 public key");
   if (
     previousManifest?.registry?.public_key &&
-    previousManifest.registry.public_key.trim() !== publicKey.trim()
+    previousManifest.registry.public_key.trim() !== publicKey.trim() &&
+    !opts.allowRegistryIdentityChange
   ) {
     throw new Error(
       "Registry identity changed. Run `specreg migrate --server <target>` before syncing or re-initializing this governed repository."
@@ -97,25 +104,29 @@ export async function runInit(opts: InitOptions): Promise<void> {
   console.log(`\nManifest saved as ${opts.dir}/.specregistry.json (records versions for future syncs).`);
 
   let styleGuides: InstalledStyleGuide[] = [];
-  try {
-    styleGuides = await installGoogleStyleGuides({
-      selection: opts.styleguides,
-      dir: opts.styleguideDir,
-      force: opts.force,
-      suggestedLanguages: profile?.languages,
-    });
-  } catch (err) {
-    console.log(`Could not install Google style guides: ${err instanceof Error ? err.message : String(err)}`);
+  if (!opts.skipAuxiliarySetup) {
+    try {
+      styleGuides = await installGoogleStyleGuides({
+        selection: opts.styleguides,
+        dir: opts.styleguideDir,
+        force: opts.force,
+        suggestedLanguages: profile?.languages,
+      });
+    } catch (err) {
+      console.log(`Could not install Google style guides: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    installAgentSkills(skills, opts.skillDir, opts.force === true);
   }
-  installAgentSkills(skills, opts.skillDir, opts.force === true);
 
   const canonicalRepo =
     typeof nextManifest.project === "string" && nextManifest.project.trim()
       ? nextManifest.project.trim()
       : requestedRepo;
-  writeMcpConfig(opts.server, projectType.name, canonicalRepo, registryToken(token));
-  writeRegistryGuide(opts.server, projectType.name, canonicalRepo, opts.dir, registryToken(token), styleGuides, opts.styleguideDir, skills, opts.skillDir);
-  writeAgentsBootstrap(opts.server, projectType.name, canonicalRepo, opts.dir, opts.skillDir);
+  if (!opts.skipAuxiliarySetup) {
+    writeMcpConfig(opts.server, projectType.name, canonicalRepo, registryToken(token));
+    writeRegistryGuide(opts.server, projectType.name, canonicalRepo, opts.dir, registryToken(token), styleGuides, opts.styleguideDir, skills, opts.skillDir);
+    writeAgentsBootstrap(opts.server, projectType.name, canonicalRepo, opts.dir, opts.skillDir);
+  }
   let projectId: string | undefined;
   try {
     const reported = await reportManifest(opts.server, token, nextManifest, opts.dir, "init");

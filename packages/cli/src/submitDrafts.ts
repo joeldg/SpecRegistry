@@ -13,6 +13,7 @@ export interface SubmitDraftsOptions {
   delta: "major" | "minor" | "patch";
   publish: boolean;
   force: boolean;
+  file?: string;
 }
 
 export async function runSubmitDrafts(opts: SubmitDraftsOptions): Promise<void> {
@@ -21,7 +22,13 @@ export async function runSubmitDrafts(opts: SubmitDraftsOptions): Promise<void> 
   if (!fs.existsSync(draftDir)) {
     throw new Error(`No draft directory at ${path.relative(root, draftDir)}. Run specreg generate --write first.`);
   }
-  const files = fs.readdirSync(draftDir).filter((file) => file.toLowerCase().endsWith(".md")).sort();
+  const files = fs.readdirSync(draftDir)
+    .filter((file) => file.toLowerCase().endsWith(".md"))
+    .filter((file) => !opts.file || file === opts.file)
+    .sort();
+  if (opts.file && !files.includes(opts.file)) {
+    throw new Error(`Draft ${opts.file} was not found in ${path.relative(root, draftDir)}.`);
+  }
   if (files.length === 0) throw new Error(`No Markdown drafts found in ${path.relative(root, draftDir)}.`);
 
   const projectType = await selectProjectType(opts.server, opts.type, opts.token);

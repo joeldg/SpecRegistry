@@ -89,7 +89,7 @@ See [Install and Run](docs/INSTALL.md) for the complete setup guide.
 | --- | --- |
 | `packages/server` | Fastify API + SQLite storage, review workflow, signed bundles, AI feedback/draft-fix/audit/efficacy, FTS5 search, webhooks, analytics, auth + LDAP, git push-back, inbound git sync, Slack/GChat |
 | `packages/web` | React management dashboard (specs, diffs, reviews, feedback, templates, settings, search, analytics, login, efficacy) |
-| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `code-map`, `check`, `sync`, `compile`, `verify`, `audit`, `mcp`) |
+| `packages/cli` | `specreg` developer CLI (`init`, `generate`, `code-map`, `check`, `sync`, `state`, `compile`, `verify`, `audit`, `mcp`) |
 | `packages/mcp` | Legacy standalone `specreg-mcp` binary; generated configs prefer `specreg mcp` so the dashboard-downloaded CLI can run MCP directly |
 | `packages/shared` | Shared TypeScript domain types + semver/range helpers |
 | `samples/ai-sdd` | Loadable sample spec pack + API loader (`npm run sample:ai-sdd`) |
@@ -124,6 +124,7 @@ npm link -w @specregistry/cli
 # From an application repository
 specreg init --server http://localhost:4000
 specreg check
+specreg state sync  # coordinate unpublished spec edits across computers
 specreg comply
 ```
 

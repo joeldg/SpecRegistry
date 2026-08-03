@@ -154,3 +154,38 @@ test("submit-drafts still points at Reviews and Specs when a draft needs human r
   assert.ok(logs.some((line) => line.includes("Open the registry Reviews and Specs pages")));
   assert.ok(!logs.some((line) => line.includes("no further review action is needed")));
 });
+
+test("submit-drafts --file submits only the selected draft", async () => {
+  const restoreCwd = withTempDraftDir({ "ONE.md": "# One\n", "TWO.md": "# Two\n" });
+  const posted: string[] = [];
+  const restoreFetch = withMockedFetch((url, init) => {
+    if (url.pathname === "/api/v1/project-types") {
+      return response([{ id: "type-1", name: "Web App Standard", scope: "project_type", industry: null, description: null, created_at: "", updated_at: "" }]);
+    }
+    if (url.pathname === "/api/v1/cli/manifest-report") return response({ project_id: "project-1" });
+    if (url.pathname === "/api/v1/specs" && url.search) return response([]);
+    if (url.pathname === "/api/v1/specs" && init?.method === "POST") {
+      posted.push(JSON.parse(String(init.body)).filename);
+      return response({ id: "spec-1", status: "draft" }, { status: 201 });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}${url.search}`);
+  });
+  const { restore } = captureLogs();
+  try {
+    await runSubmitDrafts({
+      server: "https://specreg.example.com",
+      type: "Web App Standard",
+      dir: "specs",
+      author: "alice",
+      delta: "minor",
+      publish: false,
+      force: false,
+      file: "TWO.md",
+    });
+    assert.deepEqual(posted, ["TWO.md"]);
+  } finally {
+    restore();
+    restoreFetch();
+    restoreCwd();
+  }
+});

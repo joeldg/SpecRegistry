@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import AdmZip from "adm-zip";
 import { runMigrate } from "../src/migrate.js";
 
 function response(body: unknown, init: ResponseInit = {}): Response {
@@ -194,6 +195,81 @@ test("--apply refuses to re-stamp while inherited org specs are missing on the t
     assert.equal(uploads, 0, "migration must not partially upload before inherited org guidance is reconciled");
     const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "specs", ".specregistry.json"), "utf8"));
     assert.equal(manifest.registry.public_key, "OLDKEY");
+  } finally {
+    restore();
+    restoreFetch();
+    restoreCwd();
+  }
+});
+
+test("--adopt-target dry run never uploads local specs", async () => {
+  const restoreCwd = withWorkspace({ recordedKey: "OLDKEY" });
+  let uploads = 0;
+  const restoreFetch = withMockedFetch((url, init) => {
+    if (url.pathname === "/api/v1/specs" && init?.method === "POST") uploads++;
+    return baseHandler("NEWKEY", [])(url);
+  });
+  const { logs, restore } = captureLogs();
+  try {
+    await runMigrate({
+      toServer: "http://new:4000",
+      dir: "specs",
+      apply: false,
+      author: "alice",
+      force: false,
+      adoptTarget: true,
+    });
+    assert.equal(uploads, 0);
+    assert.match(logs.join("\n"), /Target-authoritative recovery selected/);
+  } finally {
+    restore();
+    restoreFetch();
+    restoreCwd();
+  }
+});
+
+test("--apply --adopt-target replaces the governed bundle and ignores missing local org specs", async () => {
+  const restoreCwd = withWorkspace({ recordedKey: "OLDKEY" });
+  const zip = new AdmZip();
+  zip.addFile("GLOBAL.md", Buffer.from("# Target global\n"));
+  zip.addFile("TARGET.md", Buffer.from("# Target project\n"));
+  zip.addFile(".specregistry.json", Buffer.from(JSON.stringify({
+    project_type: PROJECT_TYPE,
+    project: "github.com/acme/renamed-repo",
+    specs: [
+      { filename: "GLOBAL.md", version: "2.0.0", project_type: "Global" },
+      { filename: "TARGET.md", version: "1.0.0", project_type: "github.com/acme/renamed-repo" },
+    ],
+  })));
+  let uploads = 0;
+  const restoreFetch = withMockedFetch((url, init) => {
+    if (url.pathname === "/api/v1/meta/public-key") return response({ algorithm: "ed25519", public_key: "NEWKEY" });
+    if (url.pathname === "/api/v1/project-types") return response([TYPE_ROW]);
+    if (url.pathname === "/api/v1/skills") return response([]);
+    if (url.pathname === "/api/v1/cli/manifest-report") return response({ project_id: "p1" });
+    if (url.pathname === "/api/v1/specs" && url.search.includes("project_id=p1")) return response([]);
+    if (url.pathname === "/api/v1/specs/t1/download") return new Response(zip.toBuffer(), { status: 200 });
+    if (url.pathname === "/api/v1/specs" && init?.method === "POST") {
+      uploads++;
+      return response({ id: "unexpected" });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}${url.search}`);
+  });
+  const { restore } = captureLogs();
+  try {
+    await runMigrate({
+      toServer: "http://new:4000",
+      dir: "specs",
+      apply: true,
+      author: "alice",
+      force: false,
+      adoptTarget: true,
+    });
+    assert.equal(uploads, 0);
+    assert.equal(fs.existsSync(path.join(process.cwd(), "specs", "PROJECT.md")), false);
+    assert.equal(fs.readFileSync(path.join(process.cwd(), "specs", "TARGET.md"), "utf8"), "# Target project\n");
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "specs", ".specregistry.json"), "utf8"));
+    assert.equal(manifest.registry.public_key, "NEWKEY");
   } finally {
     restore();
     restoreFetch();

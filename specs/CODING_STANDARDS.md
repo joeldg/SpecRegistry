@@ -2,64 +2,61 @@
 
 ## Scope
 
-This specification applies to all source code authored, generated, or reviewed in
-repositories governed by SpecRegistry, regardless of project type.
+These standards apply across governed software repositories. Repository- and
+project-type specifications may add stricter language, architecture, testing, and
+deployment requirements.
 
-## Intent
+## Principles
 
-Shared coding standards ensure that generated and hand-written code is readable, testable,
-and traceable to reviewed specifications. Consistent practices across repositories reduce
-cognitive overhead when agents or humans move between projects.
+- Prefer clarity over cleverness and match the naming, structure, and idioms of the
+  surrounding code.
+- Search for an existing implementation before adding a helper, route, abstraction, or
+  dependency. Reuse the owning subsystem's interface instead of copying logic.
+- Keep effects and inputs explicit. Avoid hidden global state, dead code, commented-out
+  implementation blocks, and speculative abstractions.
+- Keep changes small enough to review and verify. Separate unrelated behavior changes.
 
-## Requirements
+## Architecture
 
-1. Prefer clarity over cleverness; code is read far more than it is written.
-2. Every public interface must be documented in the repository's spec files before it is
-   shipped.
-3. All changes must ship with tests that exercise the changed behavior. Tests must reflect
-   actual runtime behavior, not mocked approximations of it.
-4. All specification documents must follow strict Semantic Versioning (MAJOR.MINOR.PATCH):
-   breaking guidance changes are MAJOR; new guidance is MINOR; clarifications are PATCH.
-5. No specification becomes active guidance without an approved review in SpecRegistry.
-6. Generated code must not embed credentials, connection strings, or secrets; use the
-   approved secret-manager or environment-variable indirection documented in
-   `SECURITY_AND_SECRETS.md`.
-7. Code that changes a public API, database schema, command interface, or authentication
-   boundary must be accompanied by a corresponding spec update or spec feedback item.
+1. Implementation must follow the current repository architecture and governed design
+   specs; a generic layering preference must not override a documented local boundary.
+2. Cross-package or cross-subsystem behavior uses defined interfaces and shared types
+   rather than duplicating authorization, validation, persistence, or business rules.
+3. Environment-dependent behavior is configured through the repository's established
+   configuration path rather than new hard-coded values.
+4. Database evolution follows the repository's migration policy and preserves supported
+   existing data.
+5. Public APIs, CLI commands, configuration, and generated artifacts remain backward
+   compatible unless a reviewed specification explicitly authorizes a breaking change.
 
-## Non-Goals
+## Tests and Evidence
 
-- This spec does not prescribe language-specific style rules (indentation, naming
-  conventions, formatter configuration). Those belong in project-type or project-scoped
-  specs.
-- This spec does not define test frameworks or coverage thresholds. Project-type specs
-  define those contracts.
-- This spec does not govern documentation prose style or Markdown formatting beyond what
-  is required by the spec authoring standard.
+- Behavior changes include tests at the nearest useful boundary. Server behavior changes
+  include server tests; encoding and compatibility changes include round-trip or fixture
+  tests.
+- Run the repository's required build, test, static-analysis, and compliance commands.
+  Record failures and skipped checks honestly.
+- A passing test suite does not override a specification conflict, missing intent, or
+  observed wrong outcome. Report those as feedback.
 
-## Acceptance Evidence
+## Documentation
 
-- Pull requests include tests that fail before the fix and pass after.
-- New or changed public interfaces have corresponding spec entries or open feedback items
-  before merge.
-- Spec version deltas are classified correctly (major/minor/patch) in change requests.
-- No committed file contains raw credentials or embedded secrets.
+Update repository documentation in the same change when a public API, command,
+configuration option, deployment procedure, schema contract, or governed workflow changes.
+Comments explain non-obvious constraints; specifications define the authoritative contract.
 
-## Token Budget Class
+## Specification Versioning
 
-Global invariant. Load by default because these rules apply to every implementation task
-in every governed repository.
+Specification documents use Semantic Versioning. Breaking guidance changes are major,
+additive guidance is minor, and non-behavioral clarification is patch.
 
-## Related Specs
+## Reviews
 
-- `SPEC_AUTHORING_STANDARD.md` — structure and quality requirements for spec documents.
-- `SPEC_GOVERNANCE.md` — review, approval, and publication workflow.
-- `SECURITY_AND_SECRETS.md` — credential handling and secret management.
-- `IMPLEMENTATION_EVIDENCE.md` — evidence requirements for completed implementation work.
+No specification becomes active without the required SpecRegistry review. Code changes
+remain subject to the repository's pull-request and protected-branch rules.
 
 ## AI Agent Directives
 
-Before generating or modifying code, verify the change is covered by a current reviewed
-spec. If no spec covers the behavior, file spec feedback rather than proceeding on
-inferred convention. Do not embed credentials. Do not ship code without accompanying tests
-unless the project-type spec explicitly exempts the change category.
+Apply the most specific current governed guidance. Do not manufacture trace links or tests
+to improve a score. Surface architectural drift, duplicated logic, compatibility risk, and
+missing guidance in the change summary or SpecRegistry feedback.

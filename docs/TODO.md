@@ -514,3 +514,126 @@ Remaining AST/code metadata work:
 - GitHub App integration instead of raw `GITHUB_TOKEN`.
 - Read-only public share links for approved spec bundles.
 - SCIM or scheduled LDAP user/group sync.
+
+## General-Purpose Specification Library
+
+A curated library of ready-to-use, general-purpose spec templates that ship with the
+registry and appear in search results. Each spec is written to be directly useful out
+of the box and clearly marked for customization. The library covers common domains so
+teams adopting SpecRegistry have a starting point for every major governance concern
+rather than writing every spec from scratch.
+
+All library specs ship as published content in a `general` sample pack (alongside the
+existing `ai-sdd` and `embedded-systems-platform` packs) and are seeded as a selectable
+project-type pack during `specreg init`. Each spec declares its token budget class and
+AI Agent Directives so agents can use them immediately. Section headings are specific
+enough to be retrievable by `search_specs` without loading the full document.
+
+### Engineering Process
+
+- [ ] `BRANCHING_STRATEGY.md` — general Git branching model (trunk-based or GitFlow
+  variants) with protected branches, PR gates, and merge policies. Parameterized for
+  team size and release cadence.
+- [ ] `CODE_REVIEW.md` — code review expectations: what reviewers must check, mandatory
+  rationale for approvals/rejections, turnaround SLAs, and bot-vs-human review split.
+- [ ] `RELEASE_PROCESS.md` — versioning policy, release candidate promotion, rollback
+  procedure, and post-release validation checklist.
+- [ ] `INCIDENT_RESPONSE.md` — severity classification, on-call escalation path, war-room
+  protocol, post-mortem requirements, and blameless culture expectations.
+- [ ] `ON_CALL_RUNBOOK.md` — template runbook structure: alert context, triage steps,
+  common failure modes, escalation contacts, and rollback commands. Intended to be
+  cloned per-service.
+- [ ] `CHANGE_MANAGEMENT.md` — change request process for production systems: risk
+  classification, approval gates, freeze windows, and emergency change exceptions.
+
+### Architecture and Design
+
+- [ ] `ADR_TEMPLATE.md` — Architecture Decision Record template with status, context,
+  options considered, decision, consequences, and review date. Explains how ADRs become
+  governed specs once a decision is finalized.
+- [ ] `API_CONTRACT.md` — general REST/JSON API contract spec covering versioning,
+  pagination, error shapes, authentication, deprecation policy, and backwards-
+  compatibility expectations. Language-agnostic.
+- [ ] `EVENT_SCHEMA.md` — event-driven messaging contract: schema registry, topic naming,
+  envelope format, versioning, consumer guarantees, and dead-letter policy.
+- [ ] `DATA_MODEL.md` — entity relationship and data ownership spec: canonical entity
+  definitions, ownership boundaries, ID conventions, nullability rules, and migration
+  policy.
+- [ ] `SERVICE_BOUNDARIES.md` — microservice or monolith boundary spec: what each service
+  owns, allowed communication patterns, shared-nothing enforcement, and data duplication
+  policy.
+- [ ] `DEPENDENCY_POLICY.md` — rules for introducing, pinning, auditing, and retiring
+  third-party dependencies. Covers license allowlist, CVE response SLA, and vendoring
+  policy.
+
+### Security and Compliance
+
+- [ ] `AUTHENTICATION_FLOWS.md` — authentication patterns (OAuth 2.0, OIDC, API keys,
+  mTLS) with session lifecycle, token storage, refresh policy, and security review
+  gate requirements.
+- [ ] `AUTHORIZATION_MODEL.md` — RBAC or ABAC model spec: roles, permissions, resource
+  scopes, privilege escalation rules, and audit requirements.
+- [ ] `DATA_CLASSIFICATION.md` — data sensitivity tiers (public/internal/confidential/
+  restricted), handling rules per tier, retention limits, and disposal procedure.
+- [ ] `PRIVACY_AND_PII.md` — PII inventory, minimization requirements, consent model,
+  subject rights (access/erasure/portability), and breach notification steps.
+- [ ] `VULNERABILITY_MANAGEMENT.md` — CVE triage process, severity-to-SLA mapping,
+  exception/waiver policy, and responsible disclosure procedure.
+- [ ] `SECRETS_MANAGEMENT.md` — where secrets live, how they rotate, who can access them,
+  emergency revocation procedure, and prohibited patterns (hard-coded values, .env
+  in source, logged values).
+
+### Testing and Quality
+
+- [ ] `TEST_STRATEGY.md` — general test pyramid policy: unit/integration/e2e coverage
+  expectations, what must be tested before merge, and what test types are exempt. Uses
+  placeholder thresholds teams replace with their own numbers.
+- [ ] `ACCEPTANCE_CRITERIA_STANDARD.md` — how to write testable, auditable acceptance
+  criteria for tickets and specs. Includes a rubric for distinguishing weak ("it works")
+  from strong ("returns 400 with body `{error: ...}` when field X is missing") criteria.
+- [ ] `LOAD_AND_PERFORMANCE.md` — performance baseline definition, load test gate
+  requirements, latency/throughput targets (parameterized), and regression detection
+  policy.
+- [ ] `CHAOS_AND_RESILIENCE.md` — game day and chaos engineering expectations: what failure
+  scenarios must be tested, how results are reviewed, and how findings become tickets.
+
+### Observability and Operations
+
+- [ ] `LOGGING_STANDARD.md` — structured log format, required fields (timestamp, level,
+  trace ID, service, actor), prohibited fields (secrets, PII), retention policy, and
+  alerting expectations.
+- [ ] `METRICS_AND_ALERTING.md` — what metrics services must expose (RED: rate/errors/
+  duration, USE: utilization/saturation/errors), alert ownership, runbook links, and
+  on-call paging SLA.
+- [ ] `DISTRIBUTED_TRACING.md` — trace propagation standard (W3C TraceContext or B3),
+  sampling policy, required span attributes, and how traces link to logs and metrics.
+- [ ] `SLO_POLICY.md` — how SLOs are defined, agreed, tracked, and reviewed. Error budget
+  policy, burn-rate alerts, and what happens when a budget is exhausted.
+- [ ] `DEPLOYMENT_RUNBOOK.md` — general deployment process: pre-flight checklist, deploy
+  steps, smoke tests, rollback trigger criteria, and post-deploy observation window.
+
+### AI and Agent Governance
+
+- [ ] `LLM_USAGE_POLICY.md` — which tasks AI may assist with, what requires human review,
+  prohibited uses (autonomous production changes, credential handling, self-approval),
+  and how AI-generated output is labeled and attributed.
+- [ ] `PROMPT_GOVERNANCE.md` — prompt versioning, review, and change management for
+  production LLM features. Covers prompt injection mitigations and output validation.
+- [ ] `AI_DATA_HANDLING.md` — rules for what data may be sent to external LLM providers,
+  data residency requirements, opt-out for sensitive datasets, and audit expectations.
+- [ ] `AGENT_CONTAINMENT.md` — blast-radius limits for autonomous agents: allowed file
+  paths, forbidden shell commands, network access scope, human approval gates, and
+  retry limits before escalation.
+
+### Team and Project Management
+
+- [ ] `ONBOARDING_CHECKLIST.md` — new engineer checklist: access requests, toolchain
+  setup, required reading, first-week milestones, and buddy/mentor assignment.
+- [ ] `DECISION_LOG.md` — lightweight decision log format for team-level choices that
+  are not large enough for a full ADR but need a record. Covers the decision, the
+  date, the decider, and the rationale.
+- [ ] `MEETING_CADENCE.md` — standard recurring meeting types (standup, retrospective,
+  architecture review, on-call handoff), their purpose, required participants, and
+  expected outputs.
+- [ ] `ESCALATION_PATH.md` — who to contact for which kind of problem (technical blocker,
+  security concern, compliance question, personnel issue), with expected response times.

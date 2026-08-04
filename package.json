@@ -13,6 +13,7 @@
     "dev:web": "npm run dev -w @specregistry/web",
     "seed": "npm run seed -w @specregistry/server",
     "sample:ai-sdd": "node samples/ai-sdd/load.mjs",
+    "sample:general": "node samples/general/load.mjs",
     "comply": "specreg comply",
     "install-hooks": "bash scripts/install-hooks.sh"
   },

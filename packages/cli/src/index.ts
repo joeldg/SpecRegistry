@@ -59,6 +59,7 @@ Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or the downloaded registry URL)
   --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
   --github-token <t> GitHub API token for task open/list/close (default: $SPECREG_GITHUB_TOKEN or $GITHUB_TOKEN)
+  --allow-local-fallback  task open: permit a provisional local .tasks/ file only during a GitHub API outage
   --title <text>    task open: task title
   --spec-refs <csv> task open: comma-separated spec filenames/sections
   --task-dir <path> task: local .tasks/ directory (default: .tasks)
@@ -427,6 +428,7 @@ try {
       body: typeof flags.body === "string" ? flags.body : undefined,
       specRefs: typeof flags["spec-refs"] === "string" ? flags["spec-refs"] : undefined,
       githubToken: typeof flags["github-token"] === "string" ? flags["github-token"] : undefined,
+      allowLocalFallback: flags["allow-local-fallback"] === true,
     });
   } else {
     console.error(`Unknown command: ${command}\n`);

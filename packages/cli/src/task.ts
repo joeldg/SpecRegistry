@@ -46,6 +46,7 @@ export interface TaskOptions {
   body?: string;
   specRefs?: string;
   githubToken?: string;
+  allowLocalFallback?: boolean;   // permit emergency .tasks/ fallback on GitHub API outage
 }
 
 // ─── GitHub detection ─────────────────────────────────────────────────────────
@@ -284,7 +285,25 @@ async function runTaskOpen(opts: TaskOptions): Promise<void> {
   const detection = detectTaskSystem();
   const ghToken = resolveGitHubToken(opts.githubToken);
 
-  if (detection.system === "github" && ghToken) {
+  // Policy (TASK_WORKFLOW.md): GitHub Issues are the mandatory system of record.
+  // The local .tasks/ path is only a temporary fallback for a genuine GitHub API outage
+  // while a valid token is present. Missing token or non-GitHub repo must halt.
+  if (detection.system !== "github") {
+    throw new Error(
+      "GitHub Issues are the mandatory task system of record, but no github.com origin " +
+        "remote was found. Halt and escalate: this repository cannot be governed by " +
+        "TASK_WORKFLOW.md until it is GitHub-backed."
+    );
+  }
+  if (!ghToken) {
+    throw new Error(
+      "GitHub Issues are required, but no GitHub token is configured. Set " +
+        "SPECREG_GITHUB_TOKEN or GITHUB_TOKEN (or pass --github-token). A missing token is " +
+        "an error, not a reason to write a local .tasks/ file."
+    );
+  }
+
+  try {
     const body = buildTaskBody(title, specRefs, opts.body);
     const issue = await createGitHubIssue(detection.owner!, detection.repo!, ghToken, title, body);
     const slug = slugify(title);
@@ -292,18 +311,27 @@ async function runTaskOpen(opts: TaskOptions): Promise<void> {
     console.log(`\nOpened GitHub Issue #${issue.number}: ${issue.html_url}`);
     console.log(`Branch: ${branch}`);
     console.log(`Task-Ref: #${issue.number}`);
-  } else {
-    if (detection.system === "github" && !ghToken) {
-      console.warn(
-        "Warning: GitHub remote detected but no SPECREG_GITHUB_TOKEN / GITHUB_TOKEN found. " +
-          "Falling back to local .tasks/ file."
+    return;
+  } catch (err) {
+    // Genuine API outage path. Only fall back when explicitly permitted.
+    const reason = err instanceof Error ? err.message : String(err);
+    if (!opts.allowLocalFallback) {
+      throw new Error(
+        `GitHub Issues API is unreachable (${reason}). GitHub Issues are mandatory. ` +
+          "Re-run with --allow-local-fallback to open a provisional local .tasks/ file for " +
+          "this outage; you must migrate it to a GitHub Issue before opening a PR."
       );
     }
+    console.warn(
+      `Warning: GitHub Issues API unreachable (${reason}). Opening a PROVISIONAL local ` +
+        ".tasks/ file. Migrate it to a GitHub Issue before opening a PR (TASK_WORKFLOW.md)."
+    );
     ensureTasksDir(dir);
     const id = nextTaskId(dir);
     const slug = slugify(title);
     const filename = `${id}-${slug}.md`;
     const branch = `task/${id}-${slug}`;
+    const outageNote = `\n\n_Emergency local fallback: GitHub Issues API unreachable at ${new Date().toISOString()} (${reason}). Migrate to a GitHub Issue before opening a PR._`;
     const fm: TaskFrontmatter = {
       id,
       title,
@@ -314,13 +342,17 @@ async function runTaskOpen(opts: TaskOptions): Promise<void> {
       branch,
       pr: null,
       blocked_by: null,
-      github_fallback: detection.system === "github",
+      github_fallback: true,
     };
-    const task: TaskFile = { filename, frontmatter: fm, body: buildTaskBody(title, specRefs, opts.body) };
+    const task: TaskFile = {
+      filename,
+      frontmatter: fm,
+      body: buildTaskBody(title, specRefs, opts.body) + outageNote,
+    };
     const written = writeTaskFile(dir, task);
-    console.log(`\nOpened task: ${written}`);
+    console.log(`\nOpened PROVISIONAL local task: ${written}`);
     console.log(`Branch: ${branch}`);
-    console.log(`Task-Ref: .tasks/${filename}`);
+    console.log(`Task-Ref: .tasks/${filename} (provisional — migrate to a GitHub Issue)`);
   }
 }
 

@@ -12,12 +12,15 @@ to act. An agent that cannot satisfy a rule must stop and escalate rather than p
 1. **Specification-first.** An agent MUST read the relevant specification(s) before
    making any change. If no governing specification exists for the affected system,
    the agent must flag that gap and stop — it may not infer the contract from code alone.
-2. **Task-bound work.** Before starting non-trivial work, an agent must open or locate
-   a task in the appropriate system of record as defined by `TASK_WORKFLOW.md`. For
-   GitHub-backed repositories, this is a GitHub Issue; for all others, a file in `.tasks/`.
-   An agent is permitted to create GitHub Issues autonomously. Work without a task reference
-   must not be started. The task reference must appear in the branch name, every implementation
-   commit trailer (`Task-Ref:`), and the PR body.
+2. **Task-bound work.** Before starting non-trivial work, an agent must open or locate a
+   GitHub Issue as defined by `TASK_WORKFLOW.md`. GitHub Issues are the mandatory system of
+   record for tasks. An agent is permitted to create GitHub Issues autonomously. If the
+   repository is not GitHub-backed or no GitHub token is available, the agent must halt and
+   escalate rather than tracking work outside GitHub Issues; the local `.tasks/` path is only
+   a temporary fallback for a genuine GitHub API outage and must be migrated to an Issue
+   before a PR is opened. Work without a task reference must not be started. The task
+   reference must appear in the branch name, every implementation commit trailer
+   (`Task-Ref:`), and the PR body.
 3. **Diff discipline.** Every change must be produced as an understandable, reviewable
    diff. Large, opaque, or mixed-purpose changes must be decomposed.
 4. **Test evidence.** An agent must run the tests required by the specification and the

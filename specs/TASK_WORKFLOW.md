@@ -10,22 +10,33 @@ task lifecycle and location.
 ## Intent
 
 Every non-trivial change must be traceable to an open task. The task is the authoritative
-record of intent, scope, acceptance criteria, and outcome. Tasks must exist in the system
-of record appropriate to the project — GitHub Issues for GitHub-backed repositories,
-and local `.tasks/` files for all others.
+record of intent, scope, acceptance criteria, and outcome.
+
+**GitHub Issues are the mandatory system of record for tasks.** Every governed task MUST be
+tracked as a GitHub Issue. The local `.tasks/` folder is NOT a normal alternative; it exists
+only as a temporary emergency fallback when the GitHub Issues API is genuinely unreachable
+(see **Emergency Local Fallback**). A local task file is always provisional and MUST be
+migrated to a GitHub Issue as soon as the API is reachable again.
+
+Projects governed by SpecRegistry are expected to be GitHub-backed. A repository with no
+GitHub `origin` remote cannot satisfy this workflow; the agent MUST halt and escalate to a
+human rather than silently tracking work outside GitHub Issues.
 
 ## Task System Detection
 
-Before opening or referencing a task, an agent must detect which task system applies:
+Before opening or referencing a task, an agent must confirm that GitHub Issues are usable:
 
 1. Read `.git/config` and extract the `url` for the `origin` remote.
-2. If the URL contains `github.com`, the project is **GitHub-backed**. Use the GitHub Issues
-   task path.
-3. If the URL does not contain `github.com`, or no git remote is configured, use the
-   **local `.tasks/` folder** task path.
-4. When `SPECREG_GITHUB_TOKEN` (or `GITHUB_TOKEN`) is set and the project is GitHub-backed,
-   agents MUST use the GitHub Issues API. If the token is absent or the API is unreachable,
-   fall back to the local `.tasks/` path and note the fallback in the task file.
+2. If the URL contains `github.com`, the project is **GitHub-backed** and the agent MUST use
+   the GitHub Issues task path.
+3. If the URL does not contain `github.com`, or no git remote is configured, the project
+   cannot satisfy this workflow. The agent MUST halt and escalate to a human. It MUST NOT
+   silently create local task files as a substitute for GitHub Issues.
+4. A GitHub credential is required: `SPECREG_GITHUB_TOKEN` or `GITHUB_TOKEN`. If no token is
+   configured, this is an error, not a reason to fall back. The agent MUST halt and report
+   that a GitHub token is required, rather than writing a local task file.
+5. The only permitted use of the local `.tasks/` path is a genuine GitHub Issues API outage
+   while a valid token is present — see **Emergency Local Fallback**.
 
 ## GitHub Issues Task Path
 
@@ -55,7 +66,21 @@ When an issue already exists and its state is `open`:
    `Closes #<number>` in the PR body.
 2. If merge is rejected, leave the issue open and add a comment explaining the outcome.
 
-## Local `.tasks/` Task Path
+## Emergency Local Fallback
+
+The local `.tasks/` path is permitted ONLY when a valid GitHub token is present but the
+GitHub Issues API is genuinely unreachable (network outage, GitHub incident, or rate-limit
+lockout). It is never a first-class alternative to GitHub Issues.
+
+When the fallback is used the agent MUST:
+
+1. Set `github_fallback: true` in the task front-matter.
+2. Record in the **Notes** section the reason the API was unreachable and the timestamp.
+3. Treat the local task as provisional. Before opening a PR, the agent MUST migrate the task
+   to a real GitHub Issue: create the Issue, copy the content, set the local file `status`
+   to `abandoned` with a Note pointing to the new `#<number>`, and use the Issue number as
+   the canonical task reference from that point on.
+4. Never mark a fallback task `done` locally. Completion is recorded only on the GitHub Issue.
 
 ### Folder Layout
 
@@ -178,24 +203,30 @@ and residual risk. A task reference does not replace that evidence.
 
 ## Agent Directives
 
-1. Before non-trivial work, detect the task system and open or locate a task. Do not
-   proceed without a task reference.
-2. Do not invent task IDs or issue numbers. The ID comes from the GitHub API response or
-   the next integer after the highest existing `.tasks/` file id.
-3. Do not mark a task `done` or close a GitHub Issue until the PR is merged or the work
-   is explicitly abandoned by a human decision.
-4. When blocked or when required guidance is missing, set status to `blocked`, record the
+1. Before non-trivial work, open or locate a GitHub Issue for the task. GitHub Issues are
+   mandatory. Do not proceed without a GitHub Issue task reference.
+2. Do not fall back to a local `.tasks/` file because a token is missing or the repository is
+   not GitHub-backed. In those cases, halt and escalate to a human. The local path is only
+   for a genuine API outage while a valid token is present.
+3. If the emergency local fallback is used, migrate the task to a GitHub Issue before opening
+   a PR, and use the Issue number as the canonical reference thereafter.
+4. Do not invent task IDs or issue numbers. The ID comes from the GitHub API response, or —
+   for a fallback file only — the next integer after the highest existing `.tasks/` file id.
+5. Do not mark a task `done` or close a GitHub Issue until the PR is merged or the work is
+   explicitly abandoned by a human decision.
+6. When blocked or when required guidance is missing, set status to `blocked`, record the
    blocker in the task, and halt until resolved.
-5. Always include `Task-Ref` in branch names, commit trailers, and PR bodies.
-6. Run `specreg task status` to verify task state before declaring work complete.
+7. Always include `Task-Ref` in branch names, commit trailers, and PR bodies.
+8. Run `specreg task status` to verify task state before declaring work complete.
 
 ## Acceptance Evidence
 
-- Every implementation branch name contains a task id or issue number.
-- Every implementation commit includes a `Task-Ref` trailer.
-- Every PR body contains a task reference and links to the task or issue.
-- GitHub Issues for governed work carry the `specreg-task` label.
-- Local `.tasks/` files are committed alongside implementation changes.
+- Every governed task is tracked as a GitHub Issue carrying the `specreg-task` label.
+- Every implementation branch name contains the GitHub Issue number.
+- Every implementation commit includes a `Task-Ref: #<number>` trailer.
+- Every PR body contains the GitHub Issue reference (`Closes #<number>` or `Task-Ref: #<number>`).
+- No governed work is completed against a local `.tasks/` file; any fallback file was migrated
+  to a GitHub Issue before the PR was opened.
 - `specreg task list --status open` shows only genuinely open work.
 
 ## Token Budget Class

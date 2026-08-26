@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-26T19:44:46.684Z",
+  "generated_at": "2026-08-26T20:07:08.080Z",
   "root": "SpecRepository",
   "entity_count": 2212,
   "languages": [
@@ -1683,7 +1683,7 @@
       "import ImpactExplorerPage from \"./ImpactExplorerPage\";",
       "import GenerationWorkbenchPage from \"./GenerationWorkbenchPage\";",
       "import ReportsPage from \"./ReportsPage\";",
-      "type InsightsTab = \"reports\" | \"search\" | \"impact\" | \"generate\";",
+      "type InsightsTab = \"reports\" | \"tokens\" | \"search\" | \"impact\" | \"generate\";",
       "export default function InsightsPage() {",
       "function setActive(id: InsightsTab) {",
       "packages/web/src/pages/LoginPage.tsx",
@@ -1711,7 +1711,7 @@
       "import { Markdown, StatusBadge, timeAgo } from \"../components\";",
       "import { BarChart, DonutChart, fmtTokens, total, type ChartDatum } from \"./reports/charts\";",
       "type ReportTab = \"overview\" | \"tokens\" | \"audits\" | \"projects\" | \"diagnostics\";",
-      "export default function ReportsPage({ embedded = false }: { embedded?: boolean } = {}) {",
+      "export default function ReportsPage({",
       "function reload() {",
       "async function createFeedback() {",
       "async function runAuditTest() {",
@@ -28150,8 +28150,8 @@
       1496,
       1,
       1,
-      45,
-      "7cc10f3f80ecf33d9fa2f8cc"
+      47,
+      "50927f0ec1c3ad0f2415b049"
     ],
     [
       1,
@@ -28245,7 +28245,7 @@
       8,
       1,
       8,
-      "7341fd798df9bc4dc98ca8c0",
+      "17f3d3df4997ee5118d5b066",
       1889,
       {
         "exported": false
@@ -28256,10 +28256,10 @@
       131,
       "InsightsPage",
       1504,
-      17,
+      18,
       1,
-      44,
-      "abae811a0085d98d053e2268",
+      46,
+      "aae5fc1bb3a7723a96e05809",
       1889,
       {
         "exported": true
@@ -28270,9 +28270,9 @@
       131,
       "setActive",
       1505,
-      22,
+      23,
       3,
-      27,
+      28,
       "bd5e041ba55046d2201f7d43",
       1889,
       {
@@ -28663,8 +28663,8 @@
       1526,
       1,
       1,
-      1450,
-      "b36a35c0264d1aea06ffd477"
+      1456,
+      "bc00019fde3a3affecf22de1"
     ],
     [
       1,
@@ -28757,8 +28757,8 @@
       1531,
       25,
       1,
-      1449,
-      "0958e852ae211d2a03b48e84",
+      1455,
+      "5cafbcb5ac7c7ab255b0124b",
       1927,
       {
         "exported": true,
@@ -28770,9 +28770,9 @@
       136,
       "reload",
       1532,
-      75,
+      79,
       3,
-      109,
+      113,
       "a321797d1941910cd91c9f2e",
       1927,
       {
@@ -28784,9 +28784,9 @@
       136,
       "createFeedback",
       1533,
-      201,
+      205,
       3,
-      223,
+      227,
       "59b12689edf17fe9a7c21f90",
       1927,
       {
@@ -28798,9 +28798,9 @@
       136,
       "runAuditTest",
       1534,
-      225,
+      229,
       3,
-      242,
+      246,
       "4aba3a24d247418e4710645f",
       1927,
       {
@@ -28812,9 +28812,9 @@
       136,
       "generateProjectAudit",
       1535,
-      244,
+      248,
       3,
-      290,
+      294,
       "cb5b712d3e3886c56cbe9f93",
       1927,
       {
@@ -28826,9 +28826,9 @@
       136,
       "splitList",
       1536,
-      252,
+      256,
       13,
-      252,
+      256,
       "e93fd1abaa101a52692da86a",
       1927,
       {
@@ -28840,9 +28840,9 @@
       136,
       "runEfficacyTest",
       1537,
-      292,
+      296,
       3,
-      306,
+      310,
       "523cf721d1f4563e8ae33aed",
       1927,
       {
@@ -28854,9 +28854,9 @@
       136,
       "diagnoseManifest",
       1538,
-      308,
+      312,
       3,
-      321,
+      325,
       "bb4986c1b1a4f550c750f9e7",
       1927,
       {

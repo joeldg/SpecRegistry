@@ -5,10 +5,11 @@ import ImpactExplorerPage from "./ImpactExplorerPage";
 import GenerationWorkbenchPage from "./GenerationWorkbenchPage";
 import ReportsPage from "./ReportsPage";
 
-type InsightsTab = "reports" | "search" | "impact" | "generate";
+type InsightsTab = "reports" | "tokens" | "search" | "impact" | "generate";
 
 const TABS: Array<{ id: InsightsTab; label: string }> = [
   { id: "reports", label: "Reports" },
+  { id: "tokens", label: "Token Usage" },
   { id: "search", label: "Search" },
   { id: "impact", label: "Impact" },
   { id: "generate", label: "Generate Specs" },
@@ -30,11 +31,12 @@ export default function InsightsPage() {
     <>
       <div className="page-head">
         <h1>Insights</h1>
-        <span className="sub">SDD health, spec search, change impact, and draft generation</span>
+        <span className="sub">SDD health, token usage, spec search, change impact, and draft generation</span>
       </div>
       <PageTabs tabs={TABS} active={active} onChange={setActive} ariaLabel="Insights sections" />
       <div style={{ marginTop: 16 }}>
         {active === "reports" && <ReportsPage embedded />}
+        {active === "tokens" && <ReportsPage embedded initialTab="tokens" hideTabBar />}
         {active === "search" && <SearchPage embedded />}
         {active === "impact" && <ImpactExplorerPage embedded />}
         {active === "generate" && <GenerationWorkbenchPage embedded />}

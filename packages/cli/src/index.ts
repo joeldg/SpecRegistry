@@ -64,6 +64,7 @@ Options:
   --spec-refs <csv> task open: comma-separated spec filenames/sections
   --task-dir <path> task: local .tasks/ directory (default: .tasks)
   --type <name>     Premade project type name (skips the new-project walkthrough)
+  --secure          init: require an enrolled agent token; fail if enrollment yields none (auto-on when the registry reports SPECREG_AUTH=required)
   --dir <path>      Spec directory (default: specs; generate --write default: .spec/drafts)
   --styleguides <s> init: suggested | all | none | comma ids (default: interactive/suggested)
   --styleguide-dir <path> init: local Google guide directory (default: .spec/styleguides)
@@ -240,6 +241,7 @@ try {
       styleguideDir: typeof flags["styleguide-dir"] === "string" ? flags["styleguide-dir"] : ".spec/styleguides",
       skills: typeof flags.skills === "string" ? flags.skills : undefined,
       skillDir: typeof flags["skill-dir"] === "string" ? flags["skill-dir"] : ".spec/skills",
+      secure: flags.secure === true,
     });
   // @spec[DESIGN.md#41-cli-packagescli]
   } else if (command === "generate") {

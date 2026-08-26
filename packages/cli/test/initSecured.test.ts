@@ -33,6 +33,9 @@ test("secured premade init enrolls before authenticated registry lookups", async
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     calls.push({ path: url.pathname, auth: new Headers(init?.headers).get("authorization") });
+    if (url.pathname === "/api/v1/health") {
+      return response({ status: "ok", auth_required: true });
+    }
     if (url.pathname === "/api/v1/agents/enroll") {
       return response({ token: "agent-token", username: "agent-init", role: "agent" });
     }
@@ -87,10 +90,12 @@ test("secured premade init enrolls before authenticated registry lookups", async
     else process.env.SPECREG_REPO = originalRepo;
   }
 
-  assert.equal(calls[0]?.path, "/api/v1/agents/enroll");
+  assert.equal(calls[0]?.path, "/api/v1/health");
+  assert.equal(calls[1]?.path, "/api/v1/agents/enroll");
   assert.deepEqual(
     calls.map((call) => call.path),
     [
+      "/api/v1/health",
       "/api/v1/agents/enroll",
       "/api/v1/project-types",
       "/api/v1/skills",
@@ -121,6 +126,12 @@ test("premade init downloads specs by route-safe project type id", async () => {
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
     calls.push(url.pathname);
+    if (url.pathname === "/api/v1/health") {
+      return response({ status: "ok", auth_required: false });
+    }
+    if (url.pathname === "/api/v1/agents/enroll") {
+      return response({ token: "agent-token", username: "agent-cli", role: "agent" });
+    }
     if (url.pathname === "/api/v1/project-types") {
       return response([
         {
@@ -381,5 +392,55 @@ test("sync-style init protects a locally edited retired governed file", async ()
   } finally {
     globalThis.fetch = originalFetch;
     process.chdir(originalCwd);
+  }
+});
+
+
+test("secured init fails closed when the registry requires auth but enrollment yields no token", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCwd = process.cwd();
+  const originalRepo = process.env.SPECREG_REPO;
+  const originalAuth = process.env.SPECREG_AUTH;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "specreg-init-failclosed-"));
+
+  process.chdir(root);
+  process.env.SPECREG_REPO = "github.com/dogfood/fail-closed";
+  delete process.env.SPECREG_AUTH; // rely on the server-reported posture, not local env
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/api/v1/health") {
+      return response({ status: "ok", auth_required: true });
+    }
+    if (url.pathname === "/api/v1/agents/enroll") {
+      // enrollment disabled / no enroll secret -> server refuses
+      return response({ error: "enrollment disabled" }, { status: 403 });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}`);
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      runInit({
+        server: "https://specreg.example.com",
+        type: "Web App Standard",
+        dir: "specs",
+        force: true,
+        styleguides: "none",
+        styleguideDir: ".spec/styleguides",
+        skills: "none",
+        skillDir: ".spec/skills",
+      }),
+      /requires authentication.*did not return a token|SPECREG_ENROLL_SECRET/
+    );
+    // must not have written specs or credentials while unauthenticated
+    assert.equal(fs.existsSync(path.join(root, ".spec/credentials.json")), false);
+    assert.equal(fs.existsSync(path.join(root, "specs")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.chdir(originalCwd);
+    if (originalRepo === undefined) delete process.env.SPECREG_REPO;
+    else process.env.SPECREG_REPO = originalRepo;
+    if (originalAuth === undefined) delete process.env.SPECREG_AUTH;
+    else process.env.SPECREG_AUTH = originalAuth;
   }
 });

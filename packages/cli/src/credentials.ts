@@ -51,6 +51,23 @@ function ensureGitignored(): void {
  * token, or undefined if enrollment is disabled on the server (auth-required with
  * no SPECREG_ENROLL_SECRET) — callers then proceed unauthenticated.
  */
+/**
+ * Probe the target registry's public health endpoint to learn whether it enforces
+ * authentication (SPECREG_AUTH=required). Returns `true`/`false` when the server
+ * answers, or `undefined` when the server is unreachable or does not report the
+ * field (older servers), so callers can decide how strict to be.
+ */
+export async function probeAuthRequired(server: string): Promise<boolean | undefined> {
+  try {
+    const res = await fetch(`${server}/api/v1/health`);
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { auth_required?: boolean };
+    return typeof data.auth_required === "boolean" ? data.auth_required : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function enrollAgent(
   server: string,
   repo: string,

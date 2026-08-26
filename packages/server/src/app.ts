@@ -64,7 +64,7 @@ export async function buildApp(db: Db, opts: AppOptions = {}): Promise<FastifyIn
   await app.register(cors, { origin: corsOriginPolicy(authRequired) });
   registerAuth(app, { authRequired });
 
-  app.get("/api/v1/health", async () => ({ status: "ok" }));
+  app.get("/api/v1/health", async () => ({ status: "ok", auth_required: authRequired }));
   app.get("/api/v1/meta/public-key", async () => ({ algorithm: "ed25519", public_key: getPublicKey(db) }));
   app.get("/api/v1/meta/version", async () => {
     const local = getLocalVersionInfo();

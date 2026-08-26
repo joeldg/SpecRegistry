@@ -206,6 +206,39 @@ export function enrollAgent(
   return { token, username, role: "agent", repo: input.repo };
 }
 
+/**
+ * Read-side repository scope guard for enrolled agents.
+ *
+ * Agent-role identities are enrolled for a single repo. Spec *writes* are already
+ * confined to that repo (see specRoutes.assertAgentScope). This guard applies the
+ * same repo boundary to project-scoped *reads*: when an agent requests specs/skills
+ * for a specific project (by repo or project_id), that project must belong to the
+ * agent's own enrolled repo. Requests with no project scope (global / project-type
+ * specs) are allowed — those are shared governance documents. Human and dev-mode
+ * (anonymous) callers are unaffected and retain cross-repo read access.
+ *
+ * @param req      the authenticated request (uses req.user)
+ * @param projectRepo the repo the requested project belongs to, or null when no
+ *                    specific project scope was requested
+ * @param action   verb used in the error message (e.g. "read")
+ */
+export function assertAgentReadScope(
+  req: FastifyRequest,
+  projectRepo: string | null | undefined,
+  action = "read"
+): void {
+  const user = req.user;
+  if (!user || user.role !== "agent") return;
+  // No project scope requested -> global / project-type specs are shared; allow.
+  if (!projectRepo) return;
+  if ((user.repo ?? "").toLowerCase() !== projectRepo.toLowerCase()) {
+    throw new HttpError(
+      403,
+      `This agent is enrolled for ${user.repo ?? "(none)"} and cannot ${action} another project's specs.`
+    );
+  }
+}
+
 // --- Optional LDAP (active when LDAP_URL is configured) ---
 
 export interface LdapConfig {

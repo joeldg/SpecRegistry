@@ -1142,6 +1142,97 @@ describe("agent identity, scope, and separation of duties", () => {
       delete process.env.SPECREG_ALLOW_ADMIN_SELF_APPROVE;
     }
   });
+
+  it("forbids an agent from reading another repo's project-scoped specs", async () => {
+    const repoA = "github.com/acme/alpha";
+    const repoB = "github.com/acme/bravo";
+    // register both repos as project consumers of the same project type
+    const projectB = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/cli/manifest-report",
+        payload: { repo: repoB, project_type: "Web App Standard", specs: [] },
+      })
+    ).json();
+    const agentA = await enroll(repoA);
+
+    // GET /specs?project_id=<B>  -> 403 (project belongs to repo B)
+    const byProjectId = await app.inject({
+      method: "GET",
+      url: `/api/v1/specs?project_id=${projectB.project_id}`,
+      headers: asAgent(agentA.token),
+    });
+    expect(byProjectId.statusCode).toBe(403);
+
+    // GET /ai/specs/:type?repo=<B> -> 403
+    const byRepo = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/specs/Web App Standard?repo=${encodeURIComponent(repoB)}`,
+      headers: asAgent(agentA.token),
+    });
+    expect(byRepo.statusCode).toBe(403);
+
+    // GET /ai/skills/:type?repo=<B> -> 403
+    const skillsB = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/skills/Web App Standard?repo=${encodeURIComponent(repoB)}`,
+      headers: asAgent(agentA.token),
+    });
+    expect(skillsB.statusCode).toBe(403);
+
+    // GET /ai/search?repo=<B> -> 403
+    const searchB = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/search?q=scope&project_type=${encodeURIComponent("Web App Standard")}&repo=${encodeURIComponent(repoB)}`,
+      headers: asAgent(agentA.token),
+    });
+    expect(searchB.statusCode).toBe(403);
+  });
+
+  it("still lets an agent read its own repo's specs and shared global/type specs", async () => {
+    const repoA = "github.com/acme/alpha-own";
+    const projectA = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/cli/manifest-report",
+        payload: { repo: repoA, project_type: "Web App Standard", specs: [] },
+      })
+    ).json();
+    const agentA = await enroll(repoA);
+
+    // own project by id
+    const own = await app.inject({
+      method: "GET",
+      url: `/api/v1/specs?project_id=${projectA.project_id}`,
+      headers: asAgent(agentA.token),
+    });
+    expect(own.statusCode).toBe(200);
+
+    // no project scope (global / project-type specs) is allowed
+    const shared = await app.inject({
+      method: "GET",
+      url: `/api/v1/ai/specs/Web App Standard`,
+      headers: asAgent(agentA.token),
+    });
+    expect(shared.statusCode).toBe(200);
+  });
+
+  it("lets a human (admin) read any repo's specs (cross-repo read unaffected)", async () => {
+    const repoB = "github.com/acme/bravo-human";
+    const projectB = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/cli/manifest-report",
+        payload: { repo: repoB, project_type: "Web App Standard", specs: [] },
+      })
+    ).json();
+    // no agent token -> dev-mode anonymous (admin-equivalent read here) can cross repos
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/v1/specs?project_id=${projectB.project_id}`,
+    });
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 describe("secured posture", () => {

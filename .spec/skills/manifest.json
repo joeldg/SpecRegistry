@@ -1,6 +1,6 @@
 {
   "source": "specregistry",
-  "installed_at": "2026-08-03T20:55:56.491Z",
+  "installed_at": "2026-08-12T19:07:24.085Z",
   "skills": [
     {
       "id": "builtin-collect-delivery-evidence",
@@ -111,6 +111,16 @@
       "version": "1.0.0",
       "version_id": "version-builtin-verify-conformance-1-0-0",
       "content_hash": "46a0fd26c41ef4ddfc59b6972db0b97b6f45b4984c2493b4438a1a260568c014"
+    },
+    {
+      "id": "71220eb5-85f0-4362-84fe-cb2f0705d2e5",
+      "slug": "resolve-task",
+      "name": "resolve-task",
+      "description": "Open or locate the governing task (GitHub Issue or .tasks/ file) before non-trivial implementation work. Record the task reference in branch, commits, and PR.",
+      "risk_level": "safe",
+      "version": "1.0.0",
+      "version_id": "c1692a83-5bad-4372-9893-83b1b1f0952e",
+      "content_hash": "9fb3c9f63697fc90a6d9af70a50708f1db6e133169f55f516c0e4a0667d1eeca"
     }
   ]
 }

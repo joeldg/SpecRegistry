@@ -2,7 +2,7 @@
   "project_type": "Web App Standard",
   "project": "github.com/joeldg/SpecRegistry",
   "channel": "stable",
-  "fetched_at": "2026-08-03T20:55:56.437Z",
+  "fetched_at": "2026-08-12T19:07:24.048Z",
   "specs": [
     {
       "filename": "AGENT_OPERATING_RULES.md",
@@ -13,10 +13,10 @@
     },
     {
       "filename": "AI_AGENT_OPERATING_RULES.md",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "project_type": "Global",
       "scope": "global",
-      "sha256": "ebe91205bd45c0e539b902718117612fb321c324ff9bf67c3b2cade1a37039ad"
+      "sha256": "3209d2486e18903779e57441f2347d67b8af9e713427f502d72ae26c122d03d0"
     },
     {
       "filename": "CODE_DEVELOPMENT_STANDARDS.md",
@@ -103,11 +103,18 @@
       "sha256": "dfdb68f322be27396d30321acc251acda002beefad997075db049128d231e5b7"
     },
     {
-      "filename": "TICKET_WORKFLOW.md",
+      "filename": "TASK_WORKFLOW.md",
       "version": "1.0.0",
+      "project_type": "Global",
+      "scope": "global",
+      "sha256": "8f384bafa677d1a6765bf7b5d10e2293137dc4aa0b56c28a64daad0a33503c54"
+    },
+    {
+      "filename": "TICKET_WORKFLOW.md",
+      "version": "1.3.0",
       "project_type": "github.com/joeldg/SpecRegistry",
       "scope": "project",
-      "sha256": "eb8b212257e532322e34ee5aa4fe2c5bbc809ca042dc4b18eea826d0092ba32c"
+      "sha256": "0a50e34334bada5192a0fad9d98f36ebde9262d507a4d6ecc761d52221bc04e2"
     },
     {
       "filename": "TOKENOMICS.md",
@@ -166,11 +173,11 @@
       "sha256": "57251137699ab892aec52c5736e29b0771c80cefe9b0b8e3e3960d969873a826"
     }
   ],
-  "signature": "0MTrFzi9Ecka2JiUwocmlMlaEI6/3JA6ywYnyyjTRR9+6uKgf9rt9vHS7mEaFrmydEV5iXy1rMbYVboAdoKMDQ==",
+  "signature": "H4lOm0aPgISMMK0EqYDbP+K4u1QgTy8zpYgtFMiXOqlGLiC9vwEz27hI06oszfkk6aNWO/gxVJ0ZE+yZjDaQCQ==",
   "signature_alg": "ed25519",
   "registry": {
     "url": "http://localhost:4000",
     "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAkJ7JaI+SuvG/Dqrmg7TPDtZyBIsPG8Ja18/11uWhrpg=\n-----END PUBLIC KEY-----",
-    "stamped_at": "2026-08-03T20:55:56.476Z"
+    "stamped_at": "2026-08-12T19:07:24.069Z"
   }
 }

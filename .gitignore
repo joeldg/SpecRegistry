@@ -15,3 +15,4 @@ TODO.local.md
 .spec/credentials.json
 .spec/agent-state.json
 .spec/incoming/
+graphify-out/

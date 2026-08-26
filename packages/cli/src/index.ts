@@ -23,6 +23,7 @@ import { checkMcpConnectivity, runMcpServer } from "./mcp.js";
 import { readInstalledDefaultServer } from "./defaultServer.js";
 import { resolveRegistryWorkspace } from "./workspace.js";
 import { runAgentState } from "./agentState.js";
+import { runTaskCommand } from "./task.js";
 
 const HELP = `specreg — SpecRegistry developer CLI
 
@@ -46,12 +47,21 @@ Usage:
   specreg comply    Verify spec compliance (coverage/drift) before declaring work done or committing; exit 1 if not
   specreg code-map  Generate a sidecar AST/code metadata inventory with stable code IDs
   specreg trace-check  Enforce .spec/code-trace.json coverage/drift thresholds in CI
+  specreg task open   Open a new task (GitHub Issue for GitHub repos, .tasks/ file otherwise)
+  specreg task list   List tasks; filter with --status open|in-progress|blocked|done
+  specreg task status <ref>  Show current state of a task by id or issue number
+  specreg task update <ref> --status <s>  Update local task status
+  specreg task close  <ref>  Close a task (mark done / close GitHub Issue)
   specreg mcp       Run the SpecRegistry MCP stdio server for configured agents
   specreg mcp --check  Check registry reachability/auth for the configured MCP env
 
 Options:
   --server <url>    Registry server (default: $SPECREG_SERVER or the downloaded registry URL)
   --token <token>   Registry Bearer/API token (default: $SPECREG_TOKEN)
+  --github-token <t> GitHub API token for task open/list/close (default: $SPECREG_GITHUB_TOKEN or $GITHUB_TOKEN)
+  --title <text>    task open: task title
+  --spec-refs <csv> task open: comma-separated spec filenames/sections
+  --task-dir <path> task: local .tasks/ directory (default: .tasks)
   --type <name>     Premade project type name (skips the new-project walkthrough)
   --dir <path>      Spec directory (default: specs; generate --write default: .spec/drafts)
   --styleguides <s> init: suggested | all | none | comma ids (default: interactive/suggested)
@@ -403,6 +413,20 @@ try {
       status: typeof flags.status === "string" ? flags.status : undefined,
       sourceId: typeof flags["source-id"] === "string" ? flags["source-id"] : undefined,
       query: typeof flags.query === "string" ? flags.query : undefined,
+    });
+  } else if (command === "task") {
+    await runTaskCommand({
+      server,
+      token,
+      subcommand: positionals[1],
+      args: positionals.slice(2),
+      dir: typeof flags["task-dir"] === "string" ? flags["task-dir"] : ".tasks",
+      status: typeof flags.status === "string" ? flags.status : undefined,
+      json: flags.json === true,
+      title: typeof flags.title === "string" ? flags.title : undefined,
+      body: typeof flags.body === "string" ? flags.body : undefined,
+      specRefs: typeof flags["spec-refs"] === "string" ? flags["spec-refs"] : undefined,
+      githubToken: typeof flags["github-token"] === "string" ? flags["github-token"] : undefined,
     });
   } else {
     console.error(`Unknown command: ${command}\n`);

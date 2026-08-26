@@ -22,8 +22,12 @@ type ReportTab = "overview" | "tokens" | "audits" | "projects" | "diagnostics";
 
 
 // @spec[SPEC_SECTION_EVIDENCE.md#dashboard]
-export default function ReportsPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const [reportTab, setReportTab] = useState<ReportTab>("overview");
+export default function ReportsPage({
+  embedded = false,
+  initialTab = "overview",
+  hideTabBar = false,
+}: { embedded?: boolean; initialTab?: ReportTab; hideTabBar?: boolean } = {}) {
+  const [reportTab, setReportTab] = useState<ReportTab>(initialTab);
   const [report, setReport] = useState<ReportsOverview>();
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
@@ -401,6 +405,7 @@ export default function ReportsPage({ embedded = false }: { embedded?: boolean }
             </div>
           </div>
 
+{!hideTabBar && (
           <div className="page-tabs" role="tablist" aria-label="Report sections">
             <button className={reportTab === "overview" ? "active" : ""} onClick={() => setReportTab("overview")}>Overview</button>
             <button className={reportTab === "tokens" ? "active" : ""} onClick={() => setReportTab("tokens")}>Token Usage</button>
@@ -408,6 +413,7 @@ export default function ReportsPage({ embedded = false }: { embedded?: boolean }
             <button className={reportTab === "projects" ? "active" : ""} onClick={() => setReportTab("projects")}>Projects</button>
             <button className={reportTab === "diagnostics" ? "active" : ""} onClick={() => setReportTab("diagnostics")}>Diagnostics</button>
           </div>
+          )}
 
           {reportTab === "overview" && (
             <>

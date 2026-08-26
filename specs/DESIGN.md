@@ -151,8 +151,13 @@ and persisted evidence.
 Requests authenticate with bearer tokens or `x-api-key`; stored token material is hashed.
 The server supports local users and optional LDAP authentication with the roles `agent`,
 `author`, `reviewer`, and `admin`. Route policies in `packages/server/src/lib/auth.ts` define
-minimum roles, while project-scoped agent mutations receive additional repository-scope
-checks in their handlers.
+minimum roles, while project-scoped agent requests receive additional repository-scope
+checks in their handlers. An enrolled agent identity is bound to a single repository: it
+may only create, edit, or publish project-scoped specs for that repository, and it may only
+read project-scoped specs, skills, and search results for that repository. Requests for
+global or project-type specs (no specific project scope) remain readable to any agent, since
+those are shared governance documents. Human and dev-mode (anonymous) callers are unaffected
+and retain cross-repository read access.
 
 When `SPECREG_AUTH=required`:
 

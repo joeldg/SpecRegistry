@@ -14,6 +14,7 @@ import { evaluateCompliance } from "../lib/compliance.js";
 import { ensureConsumer, persistCodeTrace } from "../lib/codeTrace.js";
 import { splitSections } from "../lib/sections.js";
 import { bundleSpecs } from "../lib/compile.js";
+import { assertAgentReadScope } from "../lib/auth.js";
 import { recordContextEvent, sectionsFromSearchResults, sectionsFromSpecs } from "../lib/tokenUsage.js";
 import { assignedSkills, renderSkillMarkdown } from "../lib/skills.js";
 
@@ -109,6 +110,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { project_id, repo } = req.query as { project_id?: string; repo?: string };
     const pt = requireProjectType(app.db, projectType);
     const project = project_id ? findProjectConsumer(app.db, project_id, pt.id) : repo ? findProjectConsumer(app.db, repo, pt.id) : undefined;
+    assertAgentReadScope(req, project?.repo);
     recordUsage(app.db, "agent_read", pt.id);
     const specs = bundleSpecs(app.db, pt.id, "stable", project?.id) as Array<Spec & { project_type_name?: string; project_type_scope: string }>;
     recordContextEvent(app.db, {
@@ -140,6 +142,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { project_id, repo, q } = req.query as { project_id?: string; repo?: string; q?: string };
     const pt = requireProjectType(app.db, projectType);
     const project = project_id ? findProjectConsumer(app.db, project_id, pt.id) : repo ? findProjectConsumer(app.db, repo, pt.id) : undefined;
+    assertAgentReadScope(req, project?.repo);
     const query = q?.trim().toLowerCase();
     const skills = assignedSkills(app.db, pt.id, project?.id).filter((skill) => {
       if (!query) return true;
@@ -638,6 +641,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
           ? findProjectConsumer(app.db, repo, pt.id)
           : undefined
       : undefined;
+    assertAgentReadScope(req, project?.repo);
     recordUsage(app.db, "search", pt?.id, q);
     const results = await searchSpecsByMode(app.db, q, searchMode, pt?.id, 20, project?.id);
     recordContextEvent(app.db, {

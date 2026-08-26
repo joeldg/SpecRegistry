@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-26T20:07:08.080Z",
+  "generated_at": "2026-08-26T20:24:13.037Z",
   "root": "SpecRepository",
   "specs_dir": "specs",
   "spec_count": 24,
-  "entity_count": 2212,
+  "entity_count": 2215,
   "dict": {
     "paths": [
       "packages/server/src/helpers.ts",
@@ -11315,6 +11315,28 @@
       0.59,
       [
         "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:f113b59a95afa58f",
+      27,
+      "assertAgentReadScope",
+      3,
+      1,
+      0.59,
+      [
+        "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:f113b59a95afa58f",
+      27,
+      "assertAgentReadScope",
+      3,
+      4,
+      0.59,
+      [
+        "matched tokens: export, packages/server/src/lib/auth.ts"
       ]
     ],
     [
@@ -38082,26 +38104,15 @@
     ]
   ],
   "unlinked_entities": [],
-  "aliases": [
-    {
-      "previous_id": "code:type:e2a15cfc208493be",
-      "current_id": "code:type:0c36c7761c542a9e",
-      "reason": "same_path_name"
-    },
-    {
-      "previous_id": "code:function:812cfb8920a1ff85",
-      "current_id": "code:function:18adf0ab49a1271f",
-      "reason": "same_path_name"
-    }
-  ],
+  "aliases": [],
   "coverage": {
-    "governed_entity_count": 786,
-    "linked_entity_count": 786,
+    "governed_entity_count": 787,
+    "linked_entity_count": 787,
     "unlinked_entity_count": 0,
     "coverage_ratio": 1,
     "linked_by_kind": {
       "interface": 188,
-      "function": 319,
+      "function": 320,
       "type": 49,
       "command": 30,
       "config": 11,
@@ -38114,7 +38125,7 @@
     "score": 0,
     "severity": "none",
     "signals": [
-      "0 of 786 governable code entities have no local spec link",
+      "0 of 787 governable code entities have no local spec link",
       "24 local spec documents scanned"
     ]
   },

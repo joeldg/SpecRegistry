@@ -18,6 +18,7 @@ import { mcpConfig, mcpSkillMarkdown } from "../lib/agentPack.js";
 import { actorFrom, recordAudit } from "../lib/auditLog.js";
 import { publicUrl } from "../lib/publicUrl.js";
 import { bundleSpecs, compileBundle, type CompileTarget } from "../lib/compile.js";
+import { assertAgentReadScope } from "../lib/auth.js";
 import { dispatchWebhooks, recordUsage } from "../lib/events.js";
 import { enqueueSyncJobs } from "../lib/github.js";
 import { lintContent } from "../lib/lint.js";
@@ -81,6 +82,7 @@ export async function specRoutes(app: FastifyInstance): Promise<void> {
     const { project_type_id, project_id } = req.query as { project_type_id?: string; project_id?: string };
     if (project_id) {
       const project = requireProjectConsumer(app.db, project_id);
+      assertAgentReadScope(req, project.repo);
       return app.db
         .prepare(`${SUMMARY_SELECT} WHERE s.deleted_at IS NULL AND (s.project_id = ? OR (s.project_id IS NULL AND (s.project_type_id = ? OR pt.scope = 'global'))) ORDER BY CASE effective_scope WHEN 'global' THEN 0 WHEN 'project_type' THEN 1 ELSE 2 END, s.filename`)
         .all(project.id, project.project_type_id);

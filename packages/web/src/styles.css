@@ -879,3 +879,12 @@ textarea.editor {
   font-size: 12px;
   outline: none;
 }
+
+.click {
+  cursor: pointer;
+}
+
+span.click:hover {
+  color: var(--text);
+  text-decoration: underline;
+}

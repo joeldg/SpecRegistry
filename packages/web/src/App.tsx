@@ -1,24 +1,19 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { clearSession, getAuthor, getLoginUsername, setAuthor } from "./api";
 import UpdateBanner from "./UpdateBanner";
 import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
-import SpecsPage from "./pages/SpecsPage";
+import SpecsLibraryPage from "./pages/SpecsLibraryPage";
+import InsightsPage from "./pages/InsightsPage";
 import SpecDetailPage from "./pages/SpecDetailPage";
 import ReviewsPage from "./pages/ReviewsPage";
 import ReviewDetailPage from "./pages/ReviewDetailPage";
 import FeedbackPage from "./pages/FeedbackPage";
-import ReportsPage from "./pages/ReportsPage";
-import ProjectTypesPage from "./pages/ProjectTypesPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
-import SearchPage from "./pages/SearchPage";
-import TemplatesPage from "./pages/TemplatesPage";
 import SkillsMarketplacePage from "./pages/SkillsMarketplacePage";
 import SettingsPage from "./pages/SettingsPage";
-import GenerationWorkbenchPage from "./pages/GenerationWorkbenchPage";
-import ImpactExplorerPage from "./pages/ImpactExplorerPage";
 
 const NAV_GROUPS = [
   {
@@ -31,20 +26,10 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: "Intelligence",
+    label: "Specs",
     items: [
-      { to: "/reports", label: "Reports" },
-      { to: "/impact", label: "Impact" },
-      { to: "/search", label: "Search" },
-      { to: "/generate", label: "Generate Specs" },
-    ],
-  },
-  {
-    label: "Library",
-    items: [
-      { to: "/specs", label: "Specifications" },
-      { to: "/project-types", label: "Baselines" },
-      { to: "/templates", label: "Templates" },
+      { to: "/specs", label: "Library", end: true },
+      { to: "/insights", label: "Insights" },
       { to: "/skills", label: "Skills" },
     ],
   },
@@ -121,22 +106,24 @@ export default function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/specs" element={<SpecsPage />} />
+          <Route path="/specs" element={<SpecsLibraryPage />} />
           <Route path="/specs/:id" element={<SpecDetailPage />} />
+          <Route path="/insights" element={<InsightsPage />} />
           <Route path="/reviews" element={<ReviewsPage />} />
           <Route path="/reviews/:id" element={<ReviewDetailPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/impact" element={<ImpactExplorerPage />} />
-          <Route path="/generate" element={<GenerationWorkbenchPage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/project-types" element={<ProjectTypesPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/skills" element={<SkillsMarketplacePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<LoginPage />} />
+          {/* Backward-compatible redirects for old routes */}
+          <Route path="/reports" element={<Navigate to="/insights?tab=reports" replace />} />
+          <Route path="/impact" element={<Navigate to="/insights?tab=impact" replace />} />
+          <Route path="/generate" element={<Navigate to="/insights?tab=generate" replace />} />
+          <Route path="/search" element={<Navigate to="/insights?tab=search" replace />} />
+          <Route path="/project-types" element={<Navigate to="/specs?tab=baselines" replace />} />
+          <Route path="/templates" element={<Navigate to="/specs?tab=templates" replace />} />
         </Routes>
       </main>
       </div>

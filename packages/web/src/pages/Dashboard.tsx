@@ -211,30 +211,21 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th>Repo</th>
-                  <th>Project type</th>
-                  <th>Iteration</th>
                   <th>Verdict</th>
-                  <th>Scores</th>
                   <th>Trace</th>
                   <th>Outstanding</th>
                   <th>When</th>
                 </tr>
               </thead>
               <tbody>
-                {compliance.slice(0, 12).map((row) => (
+                {complianceSummary.latest.slice(0, 5).map((row) => (
                   <tr key={row.id}>
                     <td className="mono">{row.repo || "unreported"}</td>
-                    <td>{row.project_type_name || "Unknown"}</td>
-                    <td className="mono">{row.iteration}</td>
                     <td>
                       <StatusBadge status={row.compliant ? "approved" : "pending"} />
                     </td>
                     <td className="mono">
-                      {row.objective_score}
-                      {typeof row.self_assessed_score === "number" ? <span className="dim"> / self {row.self_assessed_score}</span> : null}
-                    </td>
-                    <td className="mono">
-                      {pct(row.coverage_ratio)} <span className="dim">coverage</span> · {pct(row.drift_score)} <span className="dim">drift</span>
+                      {pct(row.coverage_ratio)} <span className="dim">cov</span> · {pct(row.drift_score)} <span className="dim">drift</span>
                     </td>
                     <td className="mono">{parseOutstanding(row)}</td>
                     <td className="faint">{timeAgo(row.created_at)}</td>
@@ -242,12 +233,20 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
+            <div style={{ marginTop: 8 }}>
+              <span className="faint mono click" onClick={() => navigate("/insights?tab=reports")}>View full compliance in Insights →</span>
+            </div>
           </>
         )}
       </div>
 
       <div className="section">
-        <h2>Open AI feedback</h2>
+        <div className="page-head" style={{ marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Open AI feedback</h2>
+          {feedback.length > 0 && (
+            <span className="faint mono click" onClick={() => navigate("/feedback")}>Triage all {feedback.length} →</span>
+          )}
+        </div>
         {feedback.length === 0 ? (
           <div className="empty">No open alerts. Agents are happy.</div>
         ) : (
@@ -255,7 +254,6 @@ export default function Dashboard() {
             <thead>
               <tr>
                 <th>Spec</th>
-                <th>Version</th>
                 <th>Type</th>
                 <th>Agent</th>
                 <th>Description</th>
@@ -263,10 +261,9 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {feedback.map((f) => (
+              {feedback.slice(0, 5).map((f) => (
                 <tr key={f.id} className="click" onClick={() => navigate(`/specs/${f.spec_id}`)}>
                   <td className="mono">{f.filename}</td>
-                  <td className="mono">{f.spec_version}</td>
                   <td>
                     <StatusBadge status={f.error_type} />
                   </td>
@@ -281,7 +278,12 @@ export default function Dashboard() {
       </div>
 
       <div className="section">
-        <h2>Pending reviews</h2>
+        <div className="page-head" style={{ marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Pending reviews</h2>
+          {reviews.length > 0 && (
+            <span className="faint mono click" onClick={() => navigate("/reviews")}>Open review queue ({reviews.length}) →</span>
+          )}
+        </div>
         {sla && sla.pending_count > 0 && (
           <div className={`card${sla.breached_count || sla.warning_count ? " alert" : ""}`} style={{ marginBottom: 12 }}>
             <div className="label">Review SLA</div>
@@ -306,7 +308,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {reviews.map((r) => {
+              {reviews.slice(0, 5).map((r) => {
                 const row = sla?.queue.find((item) => item.id === r.id);
                 return (
                 <tr key={r.id} className="click" onClick={() => navigate(`/reviews/${r.id}`)}>

@@ -30,7 +30,7 @@ function detectedLanguages(tree: string): string[] {
   return [...languages];
 }
 
-export default function GenerationWorkbenchPage() {
+export default function GenerationWorkbenchPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [projectTypes, setProjectTypes] = useState<ProjectTypeWithCount[]>([]);
   const [purposes, setPurposes] = useState<SpecPurposeTemplate[]>([]);
   const [features, setFeatures] = useState<AutomationFlags>();
@@ -182,12 +182,14 @@ export default function GenerationWorkbenchPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Generate Specs</h1>
-          <span className="sub">Detect missing spec coverage and generate reviewed drafts from purpose templates</span>
+      {!embedded && (
+        <div className="page-head">
+          <div>
+            <h1>Generate Specs</h1>
+            <span className="sub">Detect missing spec coverage and generate reviewed drafts from purpose templates</span>
+          </div>
         </div>
-      </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
       {notice && <div className="notice-banner">{notice}</div>}
       {features && !features.enabled && <div className="error-banner">Automation features are disabled for this deployment.</div>}

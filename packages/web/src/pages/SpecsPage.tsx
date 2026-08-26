@@ -6,7 +6,7 @@ import { Markdown, StatusBadge, timeAgo } from "../components";
 
 type DeletedSpec = SpecSummary & { deleted_at: string };
 
-export default function SpecsPage() {
+export default function SpecsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -108,7 +108,7 @@ export default function SpecsPage() {
   return (
     <>
       <div className="page-head">
-        <h1>Specifications</h1>
+        {embedded ? <span className="sub">Governed specs across all baselines and projects</span> : <h1>Specifications</h1>}
         <button className="primary" onClick={() => setCreating((v) => !v)}>
           {creating ? "Cancel" : "New spec"}
         </button>

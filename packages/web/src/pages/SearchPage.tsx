@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ProjectTypeWithCount, type SearchHit } from "../api";
 
-export default function SearchPage() {
+export default function SearchPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [query, setQuery] = useState("");
   const [typeName, setTypeName] = useState("");
   const [mode, setMode] = useState<"fts" | "semantic" | "hybrid">("fts");
@@ -27,10 +27,12 @@ export default function SearchPage() {
 
   return (
     <>
-      <div className="page-head">
-        <h1>Search Specs</h1>
-        <span className="sub">Section-level FTS, semantic, or hybrid search — the same index agents query via /api/v1/ai/search</span>
-      </div>
+      {!embedded && (
+        <div className="page-head">
+          <h1>Search Specs</h1>
+          <span className="sub">Section-level FTS, semantic, or hybrid search — the same index agents query via /api/v1/ai/search</span>
+        </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="toolbar">

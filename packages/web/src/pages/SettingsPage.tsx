@@ -32,6 +32,7 @@ import {
   type UserRow,
 } from "../api";
 import { StatusBadge, timeAgo } from "../components";
+import { baseUrlPlaceholder, clampPercentInput, modelPlaceholder, parseMappedKinds, percent, policyKinds, providerDescriptor, providerLabel } from "./settings/helpers";
 
 const WEBHOOK_EVENTS = ["spec.published", "review.submitted", "review.approved", "review.rejected", "feedback.created"];
 const LLM_TIERS: LlmTier[] = ["cheap", "standard", "frontier"];
@@ -66,48 +67,6 @@ const LLM_ROUTES: Array<{ route: LlmTaskRoute; label: string; defaultTier: LlmTi
 ];
 const COMPLIANCE_DEFAULT_TARGET = "__default__";
 
-function providerLabel(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
-  return providers.find((item) => item.id === provider)?.label ?? provider;
-}
-
-function providerDescriptor(providers: LlmProviderDescriptor[], provider: LlmProvider): LlmProviderDescriptor | undefined {
-  return providers.find((item) => item.id === provider);
-}
-
-function modelPlaceholder(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
-  return providerDescriptor(providers, provider)?.model ?? providerDescriptor(providers, provider)?.default_model ?? "model";
-}
-
-function baseUrlPlaceholder(providers: LlmProviderDescriptor[], provider: LlmProvider): string {
-  const descriptor = providerDescriptor(providers, provider);
-  if (!descriptor) return "Provider base URL";
-  if (descriptor.base_url || descriptor.default_base_url) return descriptor.base_url || descriptor.default_base_url;
-  if (provider === "anthropic") return "Optional proxy base URL";
-  if (provider === "gemini") return "Optional Gemini API base URL";
-  return "LM Studio: http://10.0.0.142:1234 · Ollama: http://localhost:11434/v1";
-}
-
-function percent(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-function clampPercentInput(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function parseMappedKinds(value: string): string[] {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((kind): kind is string => typeof kind === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function policyKinds(policy: Pick<CompliancePolicyRow, "required_mapped_kinds"> | { required_mapped_kinds: string[] }): string[] {
-  return typeof policy.required_mapped_kinds === "string" ? parseMappedKinds(policy.required_mapped_kinds) : policy.required_mapped_kinds;
-}
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
@@ -459,7 +418,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className={`section${activeTab === "features" ? "" : " settings-hidden"}`}>
+      {(activeTab === "features") && (
+      <div className="section">
         <h2>Feature controls</h2>
         <p className="settings-help">Use these switches to control high-leverage automation, LLM usage points, and code-to-spec traceability features. Environment variables still provide defaults for fresh deployments; saved settings override them.</p>
         {featureNotice && <div className="notice-banner">{featureNotice}</div>}
@@ -687,8 +647,10 @@ export default function SettingsPage() {
           <div className="empty">Feature settings are loading.</div>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "access" ? "" : " settings-hidden"}`}>
+      {(activeTab === "access") && (
+      <div className="section">
         <h2>Users and API keys</h2>
         <p className="settings-help">Create human identities and issue revocable bearer tokens for CLI, MCP, and API clients.</p>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -884,8 +846,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "providers" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "providers") && (
+      <div className="section">
         <h2>LLM providers</h2>
         <p className="settings-help">Configure reusable provider defaults and test stored credentials directly before assigning providers to tiers.</p>
         {llmTiering && (
@@ -1073,8 +1037,10 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "tiers" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "tiers") && (
+      <div className="section">
         <h2>LLM tiers</h2>
         <p className="settings-help">Assign providers and models by cost and capability. Tiers inherit saved provider keys unless you override a key here.</p>
         {llmTiering && (
@@ -1276,8 +1242,10 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "routing" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "routing") && (
+      <div className="section">
         <h2>LLM feature routing</h2>
         <p className="settings-help">Route each AI capability to the tier that matches its cost, privacy, and quality needs.</p>
         {llmTiering && (
@@ -1340,8 +1308,10 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "test" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "test") && (
+      <div className="section">
         <h2>LLM test console</h2>
         <p className="settings-help">Send a short prompt through a feature route and inspect the tier, provider, and model used.</p>
         {llmTiering && (
@@ -1412,8 +1382,10 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "embeddings" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "embeddings") && (
+      <div className="section">
         <h2>Semantic search</h2>
         <p className="settings-help">Configure section embeddings used to retrieve relevant spec context for semantic and hybrid search.</p>
         {embedding && embeddingStatus && (
@@ -1534,8 +1506,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+      {(activeTab === "integrations") && (
+      <div className="section">
         <h2>Server reachability</h2>
         <p className="settings-help">Set the hostname used in generated agent packs, MCP guides, and server URLs shared with agents.</p>
         {publicUrlConfig && (
@@ -1580,8 +1554,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+      {(activeTab === "integrations") && (
+      <div className="section">
         <h2>App keys</h2>
         <p className="settings-help">Store service credentials used for GitHub automation and verification of signed inbound requests.</p>
         {appKeys && (
@@ -1686,8 +1662,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "access" ? "" : " settings-hidden"}`}>
+      {(activeTab === "access") && (
+      <div className="section">
         <h2>LDAP</h2>
         <p className="settings-help">Connect a directory, map groups to registry roles, and test authentication before enabling it for users.</p>
         {ldap && (
@@ -1836,8 +1814,10 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "skills" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "skills") && (
+      <div className="section">
         <h2>Agent MCP guide</h2>
         <p className="settings-help">Preview the discovery guide and download a project-type agent pack with governed MCP instructions.</p>
         <div className="card">
@@ -1869,8 +1849,10 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+      )}
 
-      <div className={`section${activeTab === "ai" && activeAiTab === "skills" ? "" : " settings-hidden"}`}>
+      {(activeTab === "ai" && activeAiTab === "skills") && (
+      <div className="section">
         <h2>Agent skills</h2>
         <p className="settings-help">Register governed Markdown procedures that agents can select during initialization. Restricted skills require extra scrutiny and never grant permission by themselves.</p>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -1997,8 +1979,10 @@ export default function SettingsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
-      <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>
+      {(activeTab === "governance") && (
+      <div className="section">
         <h2>Compliance policies</h2>
         <p className="settings-help">Tune the objective compliance gate that agents and CI use before claiming implementation work is complete.</p>
         {complianceNotice && <div className="notice-banner">{complianceNotice}</div>}
@@ -2108,8 +2092,10 @@ export default function SettingsPage() {
           <div className="empty">Compliance policies are loading.</div>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>
+      {(activeTab === "governance") && (
+      <div className="section">
         <h2>Approval policies</h2>
         <p className="settings-help">Require a minimum number of approvals or named reviewers before matching spec changes can publish.</p>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -2186,8 +2172,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>
+      {(activeTab === "governance") && (
+      <div className="section">
         <h2>Audit log</h2>
         <p className="settings-help">Review recent administrative and governance actions with their actor, time, and outcome.</p>
         {auditRows.length === 0 ? (
@@ -2215,8 +2203,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+      {(activeTab === "integrations") && (
+      <div className="section">
         <h2>Webhooks</h2>
         <p className="settings-help">Notify automation, Slack, or Google Chat when important review, publication, and feedback events occur.</p>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -2271,8 +2261,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "governance" ? "" : " settings-hidden"}`}>
+      {(activeTab === "governance") && (
+      <div className="section">
         <h2>Projects</h2>
         <p className="settings-help">See which repositories report manifests, which project type governs them, and whether their specs are current.</p>
         {consumers.length === 0 ? (
@@ -2312,8 +2304,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+      {(activeTab === "integrations") && (
+      <div className="section">
         <h2>Repo subscriptions (git push-back)</h2>
         <p className="settings-help">Subscribe repositories to approved spec changes so the registry can open synchronized update pull requests.</p>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -2374,8 +2368,10 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
 
-      <div className={`section${activeTab === "integrations" ? "" : " settings-hidden"}`}>
+      {(activeTab === "integrations") && (
+      <div className="section">
         <h2>
           Sync jobs{" "}
           <button style={{ marginLeft: 8 }} onClick={() => act(() => api.runSyncJobs())}>
@@ -2414,6 +2410,7 @@ export default function SettingsPage() {
           </table>
         )}
       </div>
+      )}
     </>
   );
 }

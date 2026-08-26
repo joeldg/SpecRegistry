@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type ProjectTypeWithCount } from "../api";
 import { timeAgo } from "../components";
 
-export default function ProjectTypesPage() {
+export default function ProjectTypesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [types, setTypes] = useState<ProjectTypeWithCount[]>([]);
   const [error, setError] = useState<string>();
   const [name, setName] = useState("");
@@ -37,10 +37,12 @@ export default function ProjectTypesPage() {
 
   return (
     <>
-      <div className="page-head">
-        <h1>Baselines</h1>
-        <span className="sub">Reusable project-type guidance inherited by concrete projects</span>
-      </div>
+      {!embedded && (
+        <div className="page-head">
+          <h1>Baselines</h1>
+          <span className="sub">Reusable project-type guidance inherited by concrete projects</span>
+        </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card" style={{ marginBottom: 20 }}>

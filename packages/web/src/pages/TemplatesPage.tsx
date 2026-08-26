@@ -19,7 +19,7 @@ const SAMPLE_TEMPLATE = `# [Specification Title]
 <!-- INSTRUCTIONS: Document error handling, graceful degradation, and recovery/rollback actions. -->
 `;
 
-export default function TemplatesPage() {
+export default function TemplatesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [templates, setTemplates] = useState<SpecTemplate[]>([]);
   const [error, setError] = useState<string>();
   const [filename, setFilename] = useState("");
@@ -100,10 +100,12 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <div className="page-head">
-        <h1>Spec Templates</h1>
-        <span className="sub">Required sections are linted on every change request; the body seeds new drafts</span>
-      </div>
+      {!embedded && (
+        <div className="page-head">
+          <h1>Spec Templates</h1>
+          <span className="sub">Required sections are linted on every change request; the body seeds new drafts</span>
+        </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card" style={{ marginBottom: 20 }}>

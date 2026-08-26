@@ -3,7 +3,7 @@ import type { SpecSummary } from "@specregistry/shared";
 import { api, type SpecImpactResponse } from "../api";
 import { StatusBadge, timeAgo } from "../components";
 
-export default function ImpactExplorerPage() {
+export default function ImpactExplorerPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [specs, setSpecs] = useState<SpecSummary[]>([]);
   const [specId, setSpecId] = useState("");
   const [delta, setDelta] = useState("minor");
@@ -28,12 +28,14 @@ export default function ImpactExplorerPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Impact Explorer</h1>
-          <span className="sub">Inspect spec consumers, dependencies, migration work, and PR-ready summaries</span>
+      {!embedded && (
+        <div className="page-head">
+          <div>
+            <h1>Impact Explorer</h1>
+            <span className="sub">Inspect spec consumers, dependencies, migration work, and PR-ready summaries</span>
+          </div>
         </div>
-      </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="section">

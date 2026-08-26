@@ -1,5 +1,8 @@
 # SpecRegistry Add-On Backlog
 
+> **Backlog now tracked in GitHub Issues.** Per the GitHub-mandatory task policy (`TASK_WORKFLOW.md` v1.1.0), every open item below is migrated to a dependency-ordered epic and carries its issue reference `(#N)`. Work and status live in the issues; this file is a synced index. Epics in order: #50 → #51 → #52 → #53 → #54 → #55 → #56 → #57 → #58.
+
+
 ## LLM Spec Automation
 
 - [x] Spec gap detector that scans repo metadata and identifies missing governance specs.
@@ -38,10 +41,10 @@
   without turning reusable project types into one-off project definitions.
 - [x] Spec impact analysis before approval/publish, including affected manifest consumers,
   repo subscriptions, downstream spec references, feedback, recent usage, and risk level.
-- [ ] LLM-assisted contradiction detection: current contradiction reports use deterministic
+- [ ] LLM-assisted contradiction detection: current contradiction reports use deterministic (#51)
   normative-statement heuristics. Add an optional LLM/semantic pass that can catch
   paraphrased conflicts, policy collisions, and intent-level contradictions before review.
-- [ ] First-class "spec followed but intent missed" workflow and report type for cases
+- [ ] First-class "spec followed but intent missed" workflow and report type for cases (#51)
   where implementation technically complies but the user or operational outcome is wrong.
 
 ## Agent Access Control
@@ -65,30 +68,30 @@
   secured database auto-generates a strong admin password printed once. Converts the agent
   MCP/API boundary, RBAC, and separation of duties from advisory to server-enforced; agents
   authenticate with their enrolled `agent`-scoped token and cannot approve/publish/admin.
-- [ ] Governed tool permission profiles by project/spec/task, covering allowed file edits,
+- [ ] Governed tool permission profiles by project/spec/task, covering allowed file edits, (#51)
   shell/network/dependency/database actions, destructive commands, LLM usage, and
   escalation expectations for the host agent.
-- [ ] Task-intent to spec mapping: require agents to declare applicable specs/sections and
+- [ ] Task-intent to spec mapping: require agents to declare applicable specs/sections and (#51)
   compare that declaration to registry guidance to detect missed governing specs.
-- [ ] Human intervention queue for failed compliance, conflicting specs, missing guidance,
+- [ ] Human intervention queue for failed compliance, conflicting specs, missing guidance, (#51)
   or ambiguous task intent instead of letting agents guess through blockers.
-- [ ] Agent run timeline: event stream for loaded specs, selected skills, searches,
+- [ ] Agent run timeline: event stream for loaded specs, selected skills, searches, (#51)
   generated files, commands/checks run, compliance iterations, feedback submitted, and
   final claims.
-- [ ] Prompt-budget policy controls for agents, including required/optional/summarized spec
+- [ ] Prompt-budget policy controls for agents, including required/optional/summarized spec (#51)
   tiers, max prompt budgets by task class, and token warnings for low-value context.
-- [ ] Model/provider policy controls for agent task classes, such as cheap/local for
+- [ ] Model/provider policy controls for agent task classes, such as cheap/local for (#51)
   classification, frontier for governance audits, and local-only for private repos.
-- [ ] Spec conflict escalation workflow where agents submit contradictory clauses,
+- [ ] Spec conflict escalation workflow where agents submit contradictory clauses, (#51)
   affected specs, implementation impact, and proposed resolution path.
-- [ ] Hard agent access enforcement: issue a scoped `agent`-role token during `specreg init`
+- [ ] Hard agent access enforcement: issue a scoped `agent`-role token during `specreg init` (#50)
   and wire `SPECREG_AUTH=required` into the init/MCP flow so the MCP/API limitation is
   enforced at the network layer, not just advised. Anything beyond the agent-tier endpoints
   is then rejected with 401/403 rather than relying on agent cooperation.
-- [ ] Dedicated agent-scope token type (narrower than the `agent` role) that allows only
+- [ ] Dedicated agent-scope token type (narrower than the `agent` role) that allows only (#50)
   documented lifecycle/spec/feedback endpoints plus manifest/code-trace telemetry, with
   per-repo issuance and revocation from the admin console.
-- [ ] Clarify and, if needed, enforce cross-repo spec **read** scope: `assertAgentScope`
+- [ ] Clarify and, if needed, enforce cross-repo spec **read** scope: `assertAgentScope` (#50)
   restricts agent-role **writes** (create/edit/publish) to the agent's own enrolled repo,
   but spec **reads** (`GET /ai/specs/:type?repo=`, `GET /specs?project_id=`) accept any
   `repo`/`project_id`, so an agent enrolled for repo A can currently read repo B's
@@ -99,14 +102,14 @@
 
 ## Quality and Safety
 
-- [ ] Persisted prompt regression suites: the `/ai/regression-suite` endpoint runs prompts
+- [ ] Persisted prompt regression suites: the `/ai/regression-suite` endpoint runs prompts (#52)
   on demand, but it does not yet store suites, baselines, expected outcomes, model/spec
   version comparisons, or pass/fail history in the UI.
-- [ ] Scheduled efficacy runner: the current scheduled-run endpoint is an on-demand batch.
+- [ ] Scheduled efficacy runner: the current scheduled-run endpoint is an on-demand batch. (#52)
   Add real schedules with cadence, ownership, retries, last-run status, result history,
   and notifications.
-- [ ] Architecture Boundary Violations Engine: Implement multi-language import graph checking (via dependency-cruiser for JS/TS, Import Linter for Python, and build-system/Bazel visibility rules or compiler checks for C++) alongside category-specific LLM auditing to detect and count layer boundary breaches in CI.
-- [ ] Spec baseline quality scoring for required sections, vague language, missing
+- [ ] Architecture Boundary Violations Engine: Implement multi-language import graph checking (via dependency-cruiser for JS/TS, Import Linter for Python, and build-system/Bazel visibility rules or compiler checks for C++) alongside category-specific LLM auditing to detect and count layer boundary breaches in CI. (#52)
+- [ ] Spec baseline quality scoring for required sections, vague language, missing (#52)
   acceptance evidence, missing examples/non-goals, token budget mismatch, and repeated
   feedback against the same section.
 - [x] Bound the code-trace ingest payload explicitly: `raw_json` stores the whole untrusted
@@ -175,7 +178,7 @@ timestamps.
   evidence, Markdown preview, and JSON/Markdown export.
 - [x] Add `specreg audit-report` for project/release workflows so agents and CI can attach
   deterministic governance evidence to PRs without scraping the dashboard.
-- [ ] Add optional LLM executive summaries only after the deterministic evidence payload is
+- [ ] Add optional LLM executive summaries only after the deterministic evidence payload is (#52)
   stable; the LLM output should cite evidence keys and never replace raw audit facts.
 
 ## Managed Project Attribution
@@ -189,7 +192,7 @@ SpecRegistry is without exposing an internal registry host as the product landin
   attribution and public product repository link.
 - [x] SpecRegistry-generated sync commit messages include the managed-project attribution
   in the commit body.
-- [ ] Add configurable public product/documentation URL if the upstream product repo moves
+- [ ] Add configurable public product/documentation URL if the upstream product repo moves (#55)
   or hosted docs become the preferred landing page.
 
 ## Token Usage Observability
@@ -235,34 +238,34 @@ real tokens explain actual model spend and efficiency.
 - [x] Add a Reports token usage panel. The top-level view should list projects with
   projected context tokens, real prompt/completion tokens, estimated spend, most expensive
   specs, and most expensive sections.
-- [ ] Promote token usage into a first-class Reports tab once the Reports page has tabbed
+- [ ] Promote token usage into a first-class Reports tab once the Reports page has tabbed (#53)
   navigation.
 - [x] Add project drilldown in the Reports token panel. Selecting a project should show:
   spec-level totals, section-level totals, retrieval source, agent sessions/tasks, and
   real-vs-projected tokens.
-- [ ] Extend project drilldown with feedback/compliance/code-trace links and last-used
+- [ ] Extend project drilldown with feedback/compliance/code-trace links and last-used (#53)
   timestamps where they are not already surfaced by the aggregate tables.
-- [ ] Add section drilldown showing the section text preview, version, delivered token
+- [ ] Add section drilldown showing the section text preview, version, delivered token (#53)
   history, searches that retrieved it, agents/sessions that loaded it, citations/evidence,
   feedback clusters, code-trace links, and whether it appears to earn its prompt cost.
-- [ ] Add token ROI signals that combine delivered tokens, real prompt tokens, search hits,
+- [ ] Add token ROI signals that combine delivered tokens, real prompt tokens, search hits, (#53)
   citations, code-trace links, compliance contribution, efficacy lift, and feedback/error
   rates. Do not equate "large" with "bad"; flag high-token low-signal sections for review.
-- [ ] Add prompt saturation warnings for projects or tasks whose always-loaded specs exceed
+- [ ] Add prompt saturation warnings for projects or tasks whose always-loaded specs exceed (#53)
   configurable context budgets. Recommend splitting large specs, changing token budget
   class, moving material to search-first reference detail, or promoting only critical
   sections to default context.
 - [x] Add dashboard filters for date range, concrete project, agent session,
   model/provider, event type, spec, and section.
-- [ ] Extend token usage filters to project type, repo, and token estimator once those
+- [ ] Extend token usage filters to project type, repo, and token estimator once those (#53)
   dimensions are first-class report controls.
 - [x] Add CSV export support for token usage reports so teams can analyze cost and ROI
   outside the UI.
 - [x] Add JSON export support for token usage reports.
-- [ ] Add retention controls for token telemetry. Keep section identifiers and counts long
+- [ ] Add retention controls for token telemetry. Keep section identifiers and counts long (#53)
   term, but allow pruning detailed task/query/provider rows in privacy-sensitive deployments.
 - [x] Update generated agent guidance to explain optional real token usage reporting.
-- [ ] Update AI-SDD docs to explain projected vs real tokens, how token usage is reported,
+- [ ] Update AI-SDD docs to explain projected vs real tokens, how token usage is reported, (#53)
   and how reviewers should interpret token ROI.
 
 ## Validation & Dogfooding
@@ -331,7 +334,7 @@ whole loop end-to-end on a real project and let the friction re-rank everything 
   conditional `npm install` + `npm run build`), with a dashboard banner and Update now
   button. Only works for a live git checkout deployment (local/dev, production-style
   Node); a Docker deployment has no `.git` to pull into and reports as not a checkout.
-- [ ] Docker-deployment parity for the self-update banner: today `is_git_checkout: false`
+- [ ] Docker-deployment parity for the self-update banner: today `is_git_checkout: false` (#55)
   inside a container just hides the Update now button. Consider a lighter "new image
   available" signal for Docker (e.g. compare the running image digest/tag against the
   latest published one) instead of leaving Docker operators with no drift signal at all.
@@ -350,13 +353,13 @@ passes provenance, review, versioning, assignment, and distribution gates.
   created/updated/published metadata.
 - [x] Add skill review/change-request workflow for updating and enabling/disabling skills,
   with audit log entries, reviewer attribution, and separation of duties.
-- [ ] Extend skill reviews to cover reviewed creation/deletion semantics and unify skill
+- [ ] Extend skill reviews to cover reviewed creation/deletion semantics and unify skill (#54)
   reviews with the broader spec review queue where appropriate.
 - [x] Add scoped skill assignment: global, project type, and concrete project. Generated
   agent packs should include only active skills assigned to the target scope hierarchy,
   with project-scoped skills overriding or supplementing broader skills without mutating
   reusable project types.
-- [ ] Expand risk classification beyond `safe` / `restricted`: suggested levels are
+- [ ] Expand risk classification beyond `safe` / `restricted`: suggested levels are (#54)
   `safe`, `bounded`, `tooling`, `networked`, `privileged`, and `blocked`. Store the
   rationale and make risk visible in the UI, generated `SKILL.md` metadata, manifests,
   and agent pack summaries.
@@ -365,8 +368,8 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Extend the skill marketplace UI with a Reviews tab for skill change requests.
 - [x] Extend the skill marketplace UI with an Assignments tab for global, project type,
   and concrete project skill distribution.
-- [ ] Extend the skill marketplace UI with Marketplace discovery as that backend lands.
-- [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment,
+- [ ] Extend the skill marketplace UI with Marketplace discovery as that backend lands. (#54)
+- [ ] Add skill detail pages showing rendered instructions, metadata, risk assessment, (#54)
   version history, changelog, assignments, related specs, source/provenance, downstream
   consumers, and review status.
 - [x] Add inline marketplace triage details for installed skills, sources, and candidates,
@@ -395,26 +398,26 @@ passes provenance, review, versioning, assignment, and distribution gates.
   into active agent packs.
 - [x] Add deterministic candidate conversion into disabled governed skill drafts with
   source provenance, gate status, and review-before-enable instructions.
-- [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion
+- [ ] Add LLM-assisted candidate conversion into governed skill drafts. The conversion (#54)
   should preserve useful workflow logic, remove irrelevant persona/fluff, normalize to
   SpecRegistry skill format, add safety boundaries, add related-spec references, and
   produce a reviewer-facing diff/summary.
-- [ ] Add LLM-assisted conversion from candidate material into spec drafts when the source
+- [ ] Add LLM-assisted conversion from candidate material into spec drafts when the source (#54)
   is better treated as reusable requirements than as agent procedure. This avoids turning
   agent role repositories into project types by accident.
 - [x] Add basic provenance metadata to governed skills converted from candidates: source URL,
   source commit SHA, source path, imported_at, transformed_by, transformation note, and
   upstream content hash.
-- [ ] Extend governed skill provenance with transformation prompt/version, reviewer, local
+- [ ] Extend governed skill provenance with transformation prompt/version, reviewer, local (#54)
   version, and whether local content intentionally diverged from upstream.
-- [ ] Add upstream drift detection for imported sources. When a tracked repo/path changes,
+- [ ] Add upstream drift detection for imported sources. When a tracked repo/path changes, (#54)
   show "upstream update available" and create a reviewed update candidate rather than
   silently mutating the active skill.
 - [x] Add deterministic security and quality gates for third-party skill candidates:
   prompt-injection scan, command intent scan, network/API intent scan, secrets scan,
   license check, size/token budget check, exact duplicate detection, and risk-level
   recommendation.
-- [ ] Add deeper third-party skill quality gates: near-duplicate detection, conflict checks
+- [ ] Add deeper third-party skill quality gates: near-duplicate detection, conflict checks (#54)
   against active skills, richer license policy, and reviewer-tunable gate thresholds.
 - [x] Add explicit "skill does not grant permission" language to every rendered marketplace
   skill. Skills may tell an agent how to perform a workflow, but host approval policies,
@@ -439,22 +442,22 @@ passes provenance, review, versioning, assignment, and distribution gates.
 - [x] Add MCP tools for agent-visible skill discovery without broad context loading:
   list assigned skills, fetch one skill by slug/version, search approved skills, and report
   ambiguous/stale/missing skill guidance.
-- [ ] Add recommendation engine for suggested skills based on project type, project profile,
+- [ ] Add recommendation engine for suggested skills based on project type, project profile, (#54)
   languages/frameworks, published specs, compliance failures, code-trace drift, feedback
   clusters, and open review topics.
-- [ ] Track skill usage telemetry: which skills were packed, loaded, searched, fetched,
+- [ ] Track skill usage telemetry: which skills were packed, loaded, searched, fetched, (#54)
   referenced in agent sessions, associated with successful compliance, or correlated with
   feedback/errors. Feed low-value or high-risk signals back into review.
-- [ ] Add marketplace search/filter facets: category, project type, language/framework,
+- [ ] Add marketplace search/filter facets: category, project type, language/framework, (#54)
   risk level, source, license, status, installed/assigned state, version freshness, and
   related spec.
 - [x] Add first-pass marketplace filters for installed skills, sources, and candidates:
   text search, risk, status, trust, source type, candidate type, gate status, and source.
-- [ ] Add duplicate and conflict detection across skills. Warn when two active skills give
+- [ ] Add duplicate and conflict detection across skills. Warn when two active skills give (#54)
   competing instructions for the same workflow, tool, command, safety boundary, or spec.
-- [ ] Add export/import of approved skill packs so organizations can curate internal packs
+- [ ] Add export/import of approved skill packs so organizations can curate internal packs (#54)
   and move them between SpecRegistry instances without re-scraping GitHub.
-- [ ] Add documentation explaining the distinction between specs, project types,
+- [ ] Add documentation explaining the distinction between specs, project types, (#54)
   project-scoped specs, skills, candidates, and external sources so users do not convert
   one-off project knowledge or third-party prompt packs into reusable project types.
 
@@ -505,7 +508,7 @@ Remaining AST/code metadata work:
 - [x] Compact line-oriented DSL context projection for MCP tools (`check_compliance`, `finish_task`) and agent prompts to eliminate raw JSON overhead and reduce LLM prompt token consumption by >90%.
 - [x] Embedded SQLite sidecar (`.spec/code-map.sqlite`) support in `specreg` CLI for instant zero-token local compliance queries and indexed entity lookups.
 - [x] Manual traceability override workflow (`.spec/trace-overrides.json`) to approve, reject, or intentionally waive automatic code-to-spec links and route unmapped entities to new spec work.
-- [ ] Deepen the traceability system with manual override review, deleted-entity retention,
+- [ ] Deepen the traceability system with manual override review, deleted-entity retention, (#55)
   split/merge history, richer dependency graphs, and additional language parsers.
 
 ## Enterprise
@@ -531,109 +534,109 @@ enough to be retrievable by `search_specs` without loading the full document.
 
 ### Engineering Process
 
-- [ ] `BRANCHING_STRATEGY.md` — general Git branching model (trunk-based or GitFlow
+- [ ] `BRANCHING_STRATEGY.md` — general Git branching model (trunk-based or GitFlow (#56)
   variants) with protected branches, PR gates, and merge policies. Parameterized for
   team size and release cadence.
-- [ ] `CODE_REVIEW.md` — code review expectations: what reviewers must check, mandatory
+- [ ] `CODE_REVIEW.md` — code review expectations: what reviewers must check, mandatory (#56)
   rationale for approvals/rejections, turnaround SLAs, and bot-vs-human review split.
-- [ ] `RELEASE_PROCESS.md` — versioning policy, release candidate promotion, rollback
+- [ ] `RELEASE_PROCESS.md` — versioning policy, release candidate promotion, rollback (#56)
   procedure, and post-release validation checklist.
-- [ ] `INCIDENT_RESPONSE.md` — severity classification, on-call escalation path, war-room
+- [ ] `INCIDENT_RESPONSE.md` — severity classification, on-call escalation path, war-room (#56)
   protocol, post-mortem requirements, and blameless culture expectations.
-- [ ] `ON_CALL_RUNBOOK.md` — template runbook structure: alert context, triage steps,
+- [ ] `ON_CALL_RUNBOOK.md` — template runbook structure: alert context, triage steps, (#56)
   common failure modes, escalation contacts, and rollback commands. Intended to be
   cloned per-service.
-- [ ] `CHANGE_MANAGEMENT.md` — change request process for production systems: risk
+- [ ] `CHANGE_MANAGEMENT.md` — change request process for production systems: risk (#56)
   classification, approval gates, freeze windows, and emergency change exceptions.
 
 ### Architecture and Design
 
-- [ ] `ADR_TEMPLATE.md` — Architecture Decision Record template with status, context,
+- [ ] `ADR_TEMPLATE.md` — Architecture Decision Record template with status, context, (#56)
   options considered, decision, consequences, and review date. Explains how ADRs become
   governed specs once a decision is finalized.
-- [ ] `API_CONTRACT.md` — general REST/JSON API contract spec covering versioning,
+- [ ] `API_CONTRACT.md` — general REST/JSON API contract spec covering versioning, (#56)
   pagination, error shapes, authentication, deprecation policy, and backwards-
   compatibility expectations. Language-agnostic.
-- [ ] `EVENT_SCHEMA.md` — event-driven messaging contract: schema registry, topic naming,
+- [ ] `EVENT_SCHEMA.md` — event-driven messaging contract: schema registry, topic naming, (#56)
   envelope format, versioning, consumer guarantees, and dead-letter policy.
-- [ ] `DATA_MODEL.md` — entity relationship and data ownership spec: canonical entity
+- [ ] `DATA_MODEL.md` — entity relationship and data ownership spec: canonical entity (#56)
   definitions, ownership boundaries, ID conventions, nullability rules, and migration
   policy.
-- [ ] `SERVICE_BOUNDARIES.md` — microservice or monolith boundary spec: what each service
+- [ ] `SERVICE_BOUNDARIES.md` — microservice or monolith boundary spec: what each service (#56)
   owns, allowed communication patterns, shared-nothing enforcement, and data duplication
   policy.
-- [ ] `DEPENDENCY_POLICY.md` — rules for introducing, pinning, auditing, and retiring
+- [ ] `DEPENDENCY_POLICY.md` — rules for introducing, pinning, auditing, and retiring (#56)
   third-party dependencies. Covers license allowlist, CVE response SLA, and vendoring
   policy.
 
 ### Security and Compliance
 
-- [ ] `AUTHENTICATION_FLOWS.md` — authentication patterns (OAuth 2.0, OIDC, API keys,
+- [ ] `AUTHENTICATION_FLOWS.md` — authentication patterns (OAuth 2.0, OIDC, API keys, (#57)
   mTLS) with session lifecycle, token storage, refresh policy, and security review
   gate requirements.
-- [ ] `AUTHORIZATION_MODEL.md` — RBAC or ABAC model spec: roles, permissions, resource
+- [ ] `AUTHORIZATION_MODEL.md` — RBAC or ABAC model spec: roles, permissions, resource (#57)
   scopes, privilege escalation rules, and audit requirements.
-- [ ] `DATA_CLASSIFICATION.md` — data sensitivity tiers (public/internal/confidential/
+- [ ] `DATA_CLASSIFICATION.md` — data sensitivity tiers (public/internal/confidential/ (#57)
   restricted), handling rules per tier, retention limits, and disposal procedure.
-- [ ] `PRIVACY_AND_PII.md` — PII inventory, minimization requirements, consent model,
+- [ ] `PRIVACY_AND_PII.md` — PII inventory, minimization requirements, consent model, (#57)
   subject rights (access/erasure/portability), and breach notification steps.
-- [ ] `VULNERABILITY_MANAGEMENT.md` — CVE triage process, severity-to-SLA mapping,
+- [ ] `VULNERABILITY_MANAGEMENT.md` — CVE triage process, severity-to-SLA mapping, (#57)
   exception/waiver policy, and responsible disclosure procedure.
-- [ ] `SECRETS_MANAGEMENT.md` — where secrets live, how they rotate, who can access them,
+- [ ] `SECRETS_MANAGEMENT.md` — where secrets live, how they rotate, who can access them, (#57)
   emergency revocation procedure, and prohibited patterns (hard-coded values, .env
   in source, logged values).
 
 ### Testing and Quality
 
-- [ ] `TEST_STRATEGY.md` — general test pyramid policy: unit/integration/e2e coverage
+- [ ] `TEST_STRATEGY.md` — general test pyramid policy: unit/integration/e2e coverage (#57)
   expectations, what must be tested before merge, and what test types are exempt. Uses
   placeholder thresholds teams replace with their own numbers.
-- [ ] `ACCEPTANCE_CRITERIA_STANDARD.md` — how to write testable, auditable acceptance
+- [ ] `ACCEPTANCE_CRITERIA_STANDARD.md` — how to write testable, auditable acceptance (#57)
   criteria for tickets and specs. Includes a rubric for distinguishing weak ("it works")
   from strong ("returns 400 with body `{error: ...}` when field X is missing") criteria.
-- [ ] `LOAD_AND_PERFORMANCE.md` — performance baseline definition, load test gate
+- [ ] `LOAD_AND_PERFORMANCE.md` — performance baseline definition, load test gate (#57)
   requirements, latency/throughput targets (parameterized), and regression detection
   policy.
-- [ ] `CHAOS_AND_RESILIENCE.md` — game day and chaos engineering expectations: what failure
+- [ ] `CHAOS_AND_RESILIENCE.md` — game day and chaos engineering expectations: what failure (#57)
   scenarios must be tested, how results are reviewed, and how findings become tickets.
 
 ### Observability and Operations
 
-- [ ] `LOGGING_STANDARD.md` — structured log format, required fields (timestamp, level,
+- [ ] `LOGGING_STANDARD.md` — structured log format, required fields (timestamp, level, (#58)
   trace ID, service, actor), prohibited fields (secrets, PII), retention policy, and
   alerting expectations.
-- [ ] `METRICS_AND_ALERTING.md` — what metrics services must expose (RED: rate/errors/
+- [ ] `METRICS_AND_ALERTING.md` — what metrics services must expose (RED: rate/errors/ (#58)
   duration, USE: utilization/saturation/errors), alert ownership, runbook links, and
   on-call paging SLA.
-- [ ] `DISTRIBUTED_TRACING.md` — trace propagation standard (W3C TraceContext or B3),
+- [ ] `DISTRIBUTED_TRACING.md` — trace propagation standard (W3C TraceContext or B3), (#58)
   sampling policy, required span attributes, and how traces link to logs and metrics.
-- [ ] `SLO_POLICY.md` — how SLOs are defined, agreed, tracked, and reviewed. Error budget
+- [ ] `SLO_POLICY.md` — how SLOs are defined, agreed, tracked, and reviewed. Error budget (#58)
   policy, burn-rate alerts, and what happens when a budget is exhausted.
-- [ ] `DEPLOYMENT_RUNBOOK.md` — general deployment process: pre-flight checklist, deploy
+- [ ] `DEPLOYMENT_RUNBOOK.md` — general deployment process: pre-flight checklist, deploy (#58)
   steps, smoke tests, rollback trigger criteria, and post-deploy observation window.
 
 ### AI and Agent Governance
 
-- [ ] `LLM_USAGE_POLICY.md` — which tasks AI may assist with, what requires human review,
+- [ ] `LLM_USAGE_POLICY.md` — which tasks AI may assist with, what requires human review, (#57)
   prohibited uses (autonomous production changes, credential handling, self-approval),
   and how AI-generated output is labeled and attributed.
-- [ ] `PROMPT_GOVERNANCE.md` — prompt versioning, review, and change management for
+- [ ] `PROMPT_GOVERNANCE.md` — prompt versioning, review, and change management for (#57)
   production LLM features. Covers prompt injection mitigations and output validation.
-- [ ] `AI_DATA_HANDLING.md` — rules for what data may be sent to external LLM providers,
+- [ ] `AI_DATA_HANDLING.md` — rules for what data may be sent to external LLM providers, (#57)
   data residency requirements, opt-out for sensitive datasets, and audit expectations.
-- [ ] `AGENT_CONTAINMENT.md` — blast-radius limits for autonomous agents: allowed file
+- [ ] `AGENT_CONTAINMENT.md` — blast-radius limits for autonomous agents: allowed file (#57)
   paths, forbidden shell commands, network access scope, human approval gates, and
   retry limits before escalation.
 
 ### Team and Project Management
 
-- [ ] `ONBOARDING_CHECKLIST.md` — new engineer checklist: access requests, toolchain
+- [ ] `ONBOARDING_CHECKLIST.md` — new engineer checklist: access requests, toolchain (#58)
   setup, required reading, first-week milestones, and buddy/mentor assignment.
-- [ ] `DECISION_LOG.md` — lightweight decision log format for team-level choices that
+- [ ] `DECISION_LOG.md` — lightweight decision log format for team-level choices that (#58)
   are not large enough for a full ADR but need a record. Covers the decision, the
   date, the decider, and the rationale.
-- [ ] `MEETING_CADENCE.md` — standard recurring meeting types (standup, retrospective,
+- [ ] `MEETING_CADENCE.md` — standard recurring meeting types (standup, retrospective, (#58)
   architecture review, on-call handoff), their purpose, required participants, and
   expected outputs.
-- [ ] `ESCALATION_PATH.md` — who to contact for which kind of problem (technical blocker,
+- [ ] `ESCALATION_PATH.md` — who to contact for which kind of problem (technical blocker, (#58)
   security concern, compliance question, personnel issue), with expected response times.

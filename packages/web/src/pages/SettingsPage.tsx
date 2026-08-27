@@ -126,6 +126,8 @@ export default function SettingsPage() {
   const [pwResetConfirm, setPwResetConfirm] = useState("");
   const [pwResetSaving, setPwResetSaving] = useState(false);
   const [keyName, setKeyName] = useState("api key");
+  const [agentScopeRepo, setAgentScopeRepo] = useState("");
+  const [agentScopeType, setAgentScopeType] = useState("");
   const [ldapPassword, setLdapPassword] = useState("");
   const [ldapTestUsername, setLdapTestUsername] = useState("");
   const [ldapTestPassword, setLdapTestPassword] = useState("");
@@ -815,6 +817,52 @@ export default function SettingsPage() {
             </pre>
           )}
         </div>
+
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 8 }}>
+            <strong>Issue an agent-scope token</strong>
+            <div className="faint" style={{ fontSize: 12 }}>
+              A narrow, per-repo token that can reach only the documented lifecycle, spec,
+              feedback, and manifest/code-trace telemetry endpoints — narrower than the agent role.
+            </div>
+          </div>
+          <div className="form-row">
+            <input
+              type="text"
+              placeholder="repo, e.g. github.com/acme/service"
+              value={agentScopeRepo}
+              onChange={(e) => setAgentScopeRepo(e.target.value)}
+            />
+            <select value={agentScopeType} onChange={(e) => setAgentScopeType(e.target.value)}>
+              <option value="">Select project type…</option>
+              {types
+                .filter((t) => t.scope === "project_type")
+                .map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+            </select>
+            <button
+              className="primary"
+              disabled={!agentScopeRepo.trim() || !agentScopeType}
+              onClick={() =>
+                act(async () => {
+                  const created = await api.createAgentScopeKey({
+                    repo: agentScopeRepo.trim(),
+                    project_type: agentScopeType,
+                  });
+                  setIssuedToken(created.token);
+                  setAgentScopeRepo("");
+                  setAgentScopeType("");
+                })
+              }
+            >
+              Issue agent-scope token
+            </button>
+          </div>
+        </div>
+
         {keys.length === 0 ? (
           <div className="empty">No API keys issued.</div>
         ) : (
@@ -823,6 +871,8 @@ export default function SettingsPage() {
               <tr>
                 <th>User</th>
                 <th>Name</th>
+                <th>Type</th>
+                <th>Repo scope</th>
                 <th>Created</th>
                 <th>Last used</th>
                 <th></th>
@@ -833,6 +883,14 @@ export default function SettingsPage() {
                 <tr key={k.id}>
                   <td className="mono">{k.username}</td>
                   <td>{k.name ?? "api key"}</td>
+                  <td>
+                    {k.token_type === "agent_scope" ? (
+                      <span className="badge" title="Narrow allow-listed agent token">agent-scope</span>
+                    ) : (
+                      <span className="faint">standard</span>
+                    )}
+                  </td>
+                  <td className="faint mono">{k.scope_repo ?? "—"}</td>
                   <td className="faint">{timeAgo(k.created_at)}</td>
                   <td className="faint">{k.last_used_at ? timeAgo(k.last_used_at) : "never"}</td>
                   <td>

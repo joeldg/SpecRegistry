@@ -267,7 +267,9 @@ CREATE TABLE IF NOT EXISTS tokens (
   name TEXT,
   created_at TEXT NOT NULL,
   last_used_at TEXT,
-  expires_at TEXT
+  expires_at TEXT,
+  token_type TEXT NOT NULL DEFAULT 'standard',
+  scope_repo TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -1444,6 +1446,20 @@ Project types are reusable baselines; projects are concrete repositories. The pr
         UNIQUE (consumer_id, workspace_id)
       );
       CREATE INDEX IF NOT EXISTS idx_agent_states_consumer_time ON agent_states(consumer_id, updated_at);
+    `,
+  },
+  {
+    // Narrow, dedicated agent-scope tokens (issue #50 item [1]). `token_type`
+    // distinguishes ordinary role-based tokens ("standard") from allow-listed
+    // agent-scope tokens ("agent_scope") that may reach only the documented
+    // lifecycle/spec/feedback/telemetry endpoints regardless of the user's role.
+    // `scope_repo` records the repo an agent-scope token is issued for so the
+    // admin console can list and revoke tokens per repo. Existing rows default to
+    // "standard" and unchanged behavior.
+    version: 46,
+    sql: `
+      ALTER TABLE tokens ADD COLUMN token_type TEXT NOT NULL DEFAULT 'standard';
+      ALTER TABLE tokens ADD COLUMN scope_repo TEXT;
     `,
   },
 ];

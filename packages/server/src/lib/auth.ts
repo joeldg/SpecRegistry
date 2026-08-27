@@ -23,6 +23,8 @@ export interface User {
   created_at: string;
 }
 
+export type TokenType = "standard" | "agent_scope";
+
 export interface TokenRecord {
   id: string;
   token_hash: string;
@@ -31,11 +33,17 @@ export interface TokenRecord {
   created_at: string;
   last_used_at: string | null;
   expires_at: string | null;
+  token_type: TokenType;
+  scope_repo: string | null;
 }
 
 declare module "fastify" {
   interface FastifyRequest {
     user?: User;
+    /** Type of the presented token (standard vs. narrow agent-scope). */
+    tokenType?: TokenType;
+    /** Repo an agent-scope token is bound to, when applicable. */
+    tokenScopeRepo?: string | null;
   }
 }
 
@@ -88,20 +96,37 @@ export function agentTokenExpiresAt(): string | null {
   return days ? futureIso(days * DAY_MS) : null;
 }
 
-export function issueToken(db: Db, userId: string, name?: string, expiresAt: string | null = null): string {
+export function issueToken(
+  db: Db,
+  userId: string,
+  name?: string,
+  expiresAt: string | null = null,
+  opts: { tokenType?: TokenType; scopeRepo?: string | null } = {}
+): string {
   const token = `sreg_${crypto.randomBytes(24).toString("hex")}`;
-  db.prepare("INSERT INTO tokens (id, token_hash, user_id, name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+  db.prepare(
+    "INSERT INTO tokens (id, token_hash, user_id, name, created_at, expires_at, token_type, scope_repo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(
     uuid(),
     tokenHash(token),
     userId,
     name ?? null,
     now(),
-    expiresAt
+    expiresAt,
+    opts.tokenType ?? "standard",
+    opts.scopeRepo ?? null
   );
   return token;
 }
 
-export function lookupToken(db: Db, token: string): User | undefined {
+/** Authenticated identity plus the metadata of the token used to authenticate. */
+export interface AuthContext {
+  user: User;
+  tokenType: TokenType;
+  scopeRepo: string | null;
+}
+
+export function lookupToken(db: Db, token: string): AuthContext | undefined {
   const hash = tokenHash(token);
   const tokenRow = db
     .prepare(
@@ -114,10 +139,13 @@ export function lookupToken(db: Db, token: string): User | undefined {
     return undefined;
   }
   const row = db.prepare("SELECT * FROM users WHERE id = ?").get(tokenRow.user_id) as User | undefined;
-  if (row) {
-    db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(now(), tokenRow.id);
-  }
-  return row;
+  if (!row) return undefined;
+  db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(now(), tokenRow.id);
+  return {
+    user: row,
+    tokenType: (tokenRow.token_type as TokenType) ?? "standard",
+    scopeRepo: tokenRow.scope_repo ?? null,
+  };
 }
 
 export function findUser(db: Db, username: string): User | undefined {
@@ -447,6 +475,7 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /GET|POST/, path: /^\/api\/v1\/admin\/backups?$/, min: "admin" },
   { method: /PUT/, path: /^\/api\/v1\/auth\/users\/[^/]+\/password$/, min: "agent" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/users(\/|$)/, min: "admin" },
+  { method: /POST/, path: /^\/api\/v1\/auth\/agent-scope-keys$/, min: "admin" },
   { method: /GET|POST|DELETE/, path: /^\/api\/v1\/auth\/api-keys(\/|$)/, min: "admin" },
   // Agents reach the spec create/edit/publish/review handlers, which then restrict
   // them to project-scoped specs for their own repo (see specRoutes.assertAgentScope).
@@ -459,6 +488,48 @@ const POLICIES: Array<{ method: RegExp; path: RegExp; min: Role }> = [
   { method: /POST|PUT/, path: /^\/api\/v1\/project-types(\/|$)/, min: "author" },
 ];
 
+/**
+ * Endpoints an `agent_scope` token may reach, matched after the PUBLIC_PATHS
+ * check. This is the dedicated narrow agent surface (issue #50 item [1]): the
+ * documented lifecycle, spec read/self-publish, feedback, and manifest/code-trace
+ * telemetry endpoints. An agent-scope token that requests anything outside this
+ * list is rejected with 403 regardless of the underlying user's role — the token
+ * is narrower than the `agent` role, not a superset of it.
+ */
+const AGENT_SCOPE_ALLOW: Array<{ method: RegExp; path: RegExp }> = [
+  // Session lifecycle
+  { method: /POST/, path: /^\/api\/v1\/ai\/agent-sessions\/(begin|finish)$/ },
+  { method: /GET/, path: /^\/api\/v1\/ai\/agent-sessions$/ },
+  // Governed spec reads / context distribution
+  { method: /GET/, path: /^\/api\/v1\/ai\/(specs|skills|mcp-guide)(\/|$)/ },
+  { method: /GET/, path: /^\/api\/v1\/ai\/search$/ },
+  { method: /POST/, path: /^\/api\/v1\/ai\/resolve-guidance$/ },
+  { method: /GET/, path: /^\/api\/v1\/specs$/ },
+  { method: /GET/, path: /^\/api\/v1\/specs\/(dependency-map|deleted)$/ },
+  { method: /GET/, path: /^\/api\/v1\/specs\/[^/]+$/ },
+  { method: /GET/, path: /^\/api\/v1\/specs\/[^/]+\/(download|compile|agent-pack|impact)$/ },
+  // Self-publish spec writes (further confined to the agent's own repo downstream)
+  { method: /POST/, path: /^\/api\/v1\/specs$/ },
+  { method: /PUT/, path: /^\/api\/v1\/specs\/[^/]+$/ },
+  { method: /POST/, path: /^\/api\/v1\/specs\/[^/]+\/publish$/ },
+  { method: /POST/, path: /^\/api\/v1\/specs\/review$/ },
+  // Feedback loop
+  { method: /POST/, path: /^\/api\/v1\/ai\/feedback$/ },
+  { method: /GET/, path: /^\/api\/v1\/ai\/feedback$/ },
+  // Compliance + token telemetry
+  { method: /POST/, path: /^\/api\/v1\/ai\/(compliance-check|token-usage)$/ },
+  // Manifest / code-trace telemetry + agent-state sync + bootstrap
+  { method: /POST/, path: /^\/api\/v1\/cli\/(manifest-report|code-trace-report|sync-check|stub-prompts|manifest-diagnostics)$/ },
+  { method: /GET|POST/, path: /^\/api\/v1\/cli\/agent-state$/ },
+  { method: /GET/, path: /^\/api\/v1\/cli\/download$/ },
+  // Self identity
+  { method: /GET/, path: /^\/api\/v1\/auth\/me$/ },
+];
+
+function agentScopeAllows(method: string, path: string): boolean {
+  return AGENT_SCOPE_ALLOW.some((r) => r.method.test(method) && r.path.test(path));
+}
+
 export function registerAuth(app: FastifyInstance, opts: { authRequired: boolean }): void {
   app.addHook("onRequest", async (req) => {
     const header = req.headers.authorization;
@@ -466,8 +537,11 @@ export function registerAuth(app: FastifyInstance, opts: { authRequired: boolean
       (typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined) ??
       (req.headers["x-api-key"] as string | undefined);
     if (raw) {
-      req.user = lookupToken(app.db, raw);
-      if (!req.user) throw new HttpError(401, "Invalid or revoked token");
+      const auth = lookupToken(app.db, raw);
+      if (!auth) throw new HttpError(401, "Invalid or revoked token");
+      req.user = auth.user;
+      req.tokenType = auth.tokenType;
+      req.tokenScopeRepo = auth.scopeRepo;
     }
 
     const path = req.url.split("?")[0];
@@ -475,6 +549,16 @@ export function registerAuth(app: FastifyInstance, opts: { authRequired: boolean
 
     if (opts.authRequired && !req.user) {
       throw new HttpError(401, "Authentication required (Bearer token or x-api-key)");
+    }
+
+    // Narrow agent-scope tokens: enforce the documented allow-list before the
+    // role policies below. A token narrower than the agent role can only reach
+    // the lifecycle/spec/feedback/telemetry surface; everything else is 403.
+    if (req.tokenType === "agent_scope" && !agentScopeAllows(req.method, path)) {
+      throw new HttpError(
+        403,
+        "This agent-scope token may only access documented lifecycle, spec, feedback, and telemetry endpoints."
+      );
     }
     // Enforce role-based policies. Auth-required mode already rejected anonymous
     // requests above, so reaching here with no user means dev mode (auth disabled):

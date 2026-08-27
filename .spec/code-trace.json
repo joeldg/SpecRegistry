@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-27T17:29:10.593Z",
+  "generated_at": "2026-08-27T17:52:31.514Z",
   "root": "SpecRepository",
   "specs_dir": "specs",
   "spec_count": 24,
-  "entity_count": 2224,
+  "entity_count": 2238,
   "dict": {
     "paths": [
       "packages/server/src/helpers.ts",
@@ -4409,39 +4409,6 @@
       ]
     ],
     [
-      "code:function:294d2e7ccffa2070",
-      27,
-      "lookupToken",
-      3,
-      4,
-      0.83,
-      [
-        "matched tokens: export, string, user, packages/server/src/lib/auth.ts"
-      ]
-    ],
-    [
-      "code:function:294d2e7ccffa2070",
-      27,
-      "lookupToken",
-      3,
-      5,
-      0.71,
-      [
-        "matched tokens: db:, user, packages/server/src/lib/auth.ts"
-      ]
-    ],
-    [
-      "code:function:294d2e7ccffa2070",
-      27,
-      "lookupToken",
-      3,
-      1,
-      0.59,
-      [
-        "matched tokens: export, function"
-      ]
-    ],
-    [
       "code:function:29651e8b700e860a",
       57,
       "scanReportBody",
@@ -7355,61 +7322,6 @@
       0.59,
       [
         "matched tokens: status, status:"
-      ]
-    ],
-    [
-      "code:function:7285eb2c7d76d1c7",
-      27,
-      "issueToken",
-      3,
-      4,
-      0.83,
-      [
-        "matched tokens: export, string, name, packages/server/src/lib/auth.ts"
-      ]
-    ],
-    [
-      "code:function:7285eb2c7d76d1c7",
-      27,
-      "issueToken",
-      3,
-      1,
-      0.71,
-      [
-        "matched tokens: export, function, name"
-      ]
-    ],
-    [
-      "code:function:7285eb2c7d76d1c7",
-      27,
-      "issueToken",
-      3,
-      5,
-      0.59,
-      [
-        "matched tokens: db:, packages/server/src/lib/auth.ts"
-      ]
-    ],
-    [
-      "code:function:7285eb2c7d76d1c7",
-      27,
-      "issueToken",
-      3,
-      15,
-      0.59,
-      [
-        "matched tokens: name, null"
-      ]
-    ],
-    [
-      "code:function:7285eb2c7d76d1c7",
-      27,
-      "issueToken",
-      3,
-      3,
-      0.59,
-      [
-        "matched tokens: name, null"
       ]
     ],
     [
@@ -10412,6 +10324,39 @@
       ]
     ],
     [
+      "code:function:cfcc5cb3b68f04b4",
+      27,
+      "lookupToken",
+      3,
+      4,
+      0.71,
+      [
+        "matched tokens: export, string, packages/server/src/lib/auth.ts"
+      ]
+    ],
+    [
+      "code:function:cfcc5cb3b68f04b4",
+      27,
+      "lookupToken",
+      3,
+      1,
+      0.59,
+      [
+        "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:cfcc5cb3b68f04b4",
+      27,
+      "lookupToken",
+      3,
+      5,
+      0.59,
+      [
+        "matched tokens: db:, packages/server/src/lib/auth.ts"
+      ]
+    ],
+    [
       "code:function:d00f8f18595a10b3",
       52,
       "parseMappedKinds",
@@ -11073,6 +11018,28 @@
       0.59,
       [
         "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:e9c3c64ae71b11c4",
+      27,
+      "issueToken",
+      3,
+      1,
+      0.59,
+      [
+        "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:e9c3c64ae71b11c4",
+      27,
+      "issueToken",
+      3,
+      4,
+      0.59,
+      [
+        "matched tokens: export, packages/server/src/lib/auth.ts"
       ]
     ],
     [
@@ -13559,6 +13526,39 @@
       ]
     ],
     [
+      "code:interface:6bf3efefba0f50fd",
+      47,
+      "IssuedAgentScopeKey",
+      4,
+      1,
+      0.59,
+      [
+        "matched tokens: export, interface"
+      ]
+    ],
+    [
+      "code:interface:6bf3efefba0f50fd",
+      47,
+      "IssuedAgentScopeKey",
+      4,
+      5,
+      0.59,
+      [
+        "matched tokens: interface, packages/web/src/api.ts"
+      ]
+    ],
+    [
+      "code:interface:6bf3efefba0f50fd",
+      47,
+      "IssuedAgentScopeKey",
+      4,
+      4,
+      0.59,
+      [
+        "matched tokens: export, packages/web/src/api.ts"
+      ]
+    ],
+    [
       "code:interface:6c701883153a4506",
       47,
       "HarnessProposalValidation",
@@ -15595,6 +15595,39 @@
       0.59,
       [
         "matched tokens: export, interface"
+      ]
+    ],
+    [
+      "code:interface:e67211e88e5af55e",
+      27,
+      "AuthContext",
+      4,
+      1,
+      0.59,
+      [
+        "matched tokens: export, interface"
+      ]
+    ],
+    [
+      "code:interface:e67211e88e5af55e",
+      27,
+      "AuthContext",
+      4,
+      5,
+      0.59,
+      [
+        "matched tokens: interface, packages/server/src/lib/auth.ts"
+      ]
+    ],
+    [
+      "code:interface:e67211e88e5af55e",
+      27,
+      "AuthContext",
+      4,
+      4,
+      0.59,
+      [
+        "matched tokens: export, packages/server/src/lib/auth.ts"
       ]
     ],
     [
@@ -33824,6 +33857,61 @@
       ]
     ],
     [
+      "code:route:ff0c05409e5e1a45",
+      104,
+      "POST /auth/agent-scope-keys",
+      5,
+      5,
+      0.59,
+      [
+        "matched tokens: post, post"
+      ]
+    ],
+    [
+      "code:route:ff0c05409e5e1a45",
+      104,
+      "POST /auth/agent-scope-keys",
+      5,
+      14,
+      0.59,
+      [
+        "matched tokens: post, post"
+      ]
+    ],
+    [
+      "code:route:ff0c05409e5e1a45",
+      104,
+      "POST /auth/agent-scope-keys",
+      5,
+      9,
+      0.59,
+      [
+        "matched tokens: post, post"
+      ]
+    ],
+    [
+      "code:route:ff0c05409e5e1a45",
+      104,
+      "POST /auth/agent-scope-keys",
+      5,
+      4,
+      0.59,
+      [
+        "matched tokens: post, post"
+      ]
+    ],
+    [
+      "code:route:ff0c05409e5e1a45",
+      104,
+      "POST /auth/agent-scope-keys",
+      5,
+      3,
+      0.59,
+      [
+        "matched tokens: post, post"
+      ]
+    ],
+    [
       "code:route:ffd8d3daa9dbec7a",
       62,
       "POST /templates",
@@ -34426,6 +34514,94 @@
       0.59,
       [
         "matched tokens: type, automation"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      4,
+      0.71,
+      [
+        "matched tokens: export, type, packages/server/src/lib/auth.ts"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      0,
+      0.59,
+      [
+        "matched tokens: type, standard"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      1,
+      0.59,
+      [
+        "matched tokens: export, type"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      13,
+      0.59,
+      [
+        "matched tokens: type, standard"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      5,
+      0.59,
+      [
+        "matched tokens: type, packages/server/src/lib/auth.ts"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      8,
+      0.59,
+      [
+        "matched tokens: type, standard"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      9,
+      0.59,
+      [
+        "matched tokens: type, standard"
+      ]
+    ],
+    [
+      "code:type:1a6364337d5ee33a",
+      27,
+      "TokenType",
+      6,
+      20,
+      0.59,
+      [
+        "matched tokens: type, standard"
       ]
     ],
     [
@@ -38163,33 +38339,28 @@
   "unlinked_entities": [],
   "aliases": [
     {
-      "previous_id": "code:import:95529a082909c6b1",
-      "current_id": "code:import:02321d8befbbb474",
+      "previous_id": "code:function:7285eb2c7d76d1c7",
+      "current_id": "code:function:e9c3c64ae71b11c4",
       "reason": "same_path_name"
     },
     {
-      "previous_id": "code:import:ec097637b2f28970",
-      "current_id": "code:import:2d59eea2c8358e2c",
-      "reason": "same_hash"
-    },
-    {
-      "previous_id": "code:import:c8761e33d61a7ff7",
-      "current_id": "code:import:4fdc65e51f7dfade",
+      "previous_id": "code:function:294d2e7ccffa2070",
+      "current_id": "code:function:cfcc5cb3b68f04b4",
       "reason": "same_path_name"
     }
   ],
   "coverage": {
-    "governed_entity_count": 789,
-    "linked_entity_count": 789,
+    "governed_entity_count": 793,
+    "linked_entity_count": 793,
     "unlinked_entity_count": 0,
     "coverage_ratio": 1,
     "linked_by_kind": {
-      "interface": 188,
+      "interface": 190,
       "function": 322,
-      "type": 49,
+      "type": 50,
       "command": 30,
       "config": 11,
-      "route": 188,
+      "route": 189,
       "class": 1
     },
     "unlinked_by_kind": {}
@@ -38198,7 +38369,7 @@
     "score": 0,
     "severity": "none",
     "signals": [
-      "0 of 789 governable code entities have no local spec link",
+      "0 of 793 governable code entities have no local spec link",
       "24 local spec documents scanned"
     ]
   },

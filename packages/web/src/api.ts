@@ -612,8 +612,21 @@ export interface ApiKeyRow {
   username: string;
   role: string;
   name: string | null;
+  token_type?: string;
+  scope_repo?: string | null;
   created_at: string;
   last_used_at: string | null;
+  expires_at?: string | null;
+}
+
+export interface IssuedAgentScopeKey {
+  token: string;
+  username: string;
+  role: string;
+  token_type: string;
+  scope_repo: string;
+  project_type: string;
+  expires_at: string | null;
 }
 export interface LdapConfig {
   enabled: boolean;
@@ -1183,6 +1196,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteApiKey: (id: string) => requestVoid(`/api/v1/auth/api-keys/${id}`, { method: "DELETE" }),
+  createAgentScopeKey: (body: { repo: string; project_type: string; name?: string; expires_at?: string | null }) =>
+    request<IssuedAgentScopeKey>("/api/v1/auth/agent-scope-keys", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   ldapConfig: () => request<LdapConfig>("/api/v1/ldap/config"),
   updateLdapConfig: (body: Partial<Omit<LdapConfig, "enabled" | "has_bind_password">> & {
     bind_password?: string;

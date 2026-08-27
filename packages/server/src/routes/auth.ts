@@ -4,6 +4,7 @@ import {
   createUser,
   enrollAgent,
   apiTokenExpiresAt,
+  agentTokenExpiresAt,
   findUser,
   hashPassword,
   issueToken,
@@ -170,14 +171,78 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
-  app.get("/auth/api-keys", async () => {
+  app.get("/auth/api-keys", async (req) => {
+    const { token_type: typeFilter, repo } = (req.query ?? {}) as { token_type?: string; repo?: string };
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (typeFilter) {
+      clauses.push("t.token_type = ?");
+      params.push(typeFilter);
+    }
+    if (repo) {
+      clauses.push("t.scope_repo = ?");
+      params.push(repo);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     return app.db
       .prepare(
-        `SELECT t.id, t.user_id, u.username, u.role, t.name, t.created_at, t.last_used_at, t.expires_at
+        `SELECT t.id, t.user_id, u.username, u.role, t.name, t.token_type, t.scope_repo,
+                t.created_at, t.last_used_at, t.expires_at
          FROM tokens t JOIN users u ON u.id = t.user_id
+         ${where}
          ORDER BY t.created_at DESC`
       )
-      .all();
+      .all(...params);
+  });
+
+  // Issue a dedicated narrow agent-scope token bound to a repo (issue #50 item [1]).
+  // Unlike a role-based API key, this token can reach ONLY the documented
+  // lifecycle/spec/feedback/telemetry endpoints — narrower than the agent role.
+  // Admin-only (enforced by the route policy for /auth/api-keys). Find-or-create
+  // the enrolled agent identity for the repo, then mint a token_type=agent_scope key.
+  app.post("/auth/agent-scope-keys", async (req, reply) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const repo = requireString(body, "repo");
+    const pt = requireProjectType(app.db, requireString(body, "project_type"));
+    const username = `agent:${repo}`;
+    let user = findUser(app.db, username);
+    if (!user) {
+      user = createUser(app.db, {
+        username,
+        role: "agent",
+        display_name: typeof body.display_name === "string" ? body.display_name : `Agent for ${repo}`,
+        repo,
+        project_type_id: pt.id,
+      });
+    } else if (user.role !== "agent") {
+      throw new HttpError(409, `Identity ${username} exists with role ${user.role}; cannot issue an agent-scope token`);
+    } else {
+      app.db.prepare("UPDATE users SET project_type_id = ?, repo = ? WHERE id = ?").run(pt.id, repo, user.id);
+    }
+    const requestedExpiry = requestedExpiresAt(body.expires_at);
+    const expiresAt = requestedExpiry === undefined ? agentTokenExpiresAt() : requestedExpiry;
+    const token = issueToken(app.db, user.id, (body.name as string) ?? `agent-scope (${repo})`, expiresAt, {
+      tokenType: "agent_scope",
+      scopeRepo: repo,
+    });
+    reply.code(201);
+    recordAudit(app.db, {
+      actor: actorFrom(req, "admin"),
+      action: "agent_scope_key.created",
+      target_type: "user",
+      target_id: user.id,
+      summary: `Agent-scope token issued for ${repo} (${pt.name})`,
+      detail: { repo, project_type: pt.name, expires_at: expiresAt },
+    });
+    return {
+      token,
+      username: user.username,
+      role: user.role,
+      token_type: "agent_scope",
+      scope_repo: repo,
+      project_type: pt.name,
+      expires_at: expiresAt,
+    };
   });
 
   app.post("/auth/users", async (req, reply) => {

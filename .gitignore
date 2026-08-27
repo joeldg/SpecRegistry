@@ -16,3 +16,4 @@ TODO.local.md
 .spec/agent-state.json
 .spec/incoming/
 graphify-out/
+*.db.bak-*

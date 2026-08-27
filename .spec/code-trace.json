@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-26T20:36:17.761Z",
+  "generated_at": "2026-08-27T17:20:21.992Z",
   "root": "SpecRepository",
   "specs_dir": "specs",
   "spec_count": 24,
-  "entity_count": 2216,
+  "entity_count": 2217,
   "dict": {
     "paths": [
       "packages/server/src/helpers.ts",
@@ -8948,6 +8948,28 @@
       "code:function:a9dadd553571cb7e",
       20,
       "getLlmConfig",
+      3,
+      1,
+      0.59,
+      [
+        "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:aa445ee866090807",
+      100,
+      "seedDemoProjectTypes",
+      3,
+      6,
+      0.59,
+      [
+        "matched tokens: function, void"
+      ]
+    ],
+    [
+      "code:function:aa445ee866090807",
+      100,
+      "seedDemoProjectTypes",
       3,
       1,
       0.59,
@@ -38141,19 +38163,29 @@
   "unlinked_entities": [],
   "aliases": [
     {
-      "previous_id": "code:import:6ae873b68e2b909a",
-      "current_id": "code:import:28163321c3811f4a",
+      "previous_id": "code:import:95529a082909c6b1",
+      "current_id": "code:import:02321d8befbbb474",
+      "reason": "same_path_name"
+    },
+    {
+      "previous_id": "code:import:ec097637b2f28970",
+      "current_id": "code:import:2d59eea2c8358e2c",
+      "reason": "same_hash"
+    },
+    {
+      "previous_id": "code:import:c8761e33d61a7ff7",
+      "current_id": "code:import:4fdc65e51f7dfade",
       "reason": "same_path_name"
     }
   ],
   "coverage": {
-    "governed_entity_count": 788,
-    "linked_entity_count": 788,
+    "governed_entity_count": 789,
+    "linked_entity_count": 789,
     "unlinked_entity_count": 0,
     "coverage_ratio": 1,
     "linked_by_kind": {
       "interface": 188,
-      "function": 321,
+      "function": 322,
       "type": 49,
       "command": 30,
       "config": 11,
@@ -38166,7 +38198,7 @@
     "score": 0,
     "severity": "none",
     "signals": [
-      "0 of 788 governable code entities have no local spec link",
+      "0 of 789 governable code entities have no local spec link",
       "24 local spec documents scanned"
     ]
   },

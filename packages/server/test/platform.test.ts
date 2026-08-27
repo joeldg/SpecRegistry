@@ -9,7 +9,7 @@ import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
 import { buildApp } from "../src/app.js";
 import { createDb } from "../src/db.js";
-import { seed, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
+import { seed, seedDemoProjectTypes, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
 import { assertSecurePosture, findUser, verifyPassword } from "../src/lib/auth.js";
 import { resolvePublicUrl } from "../src/lib/publicUrl.js";
 import { buildAdminTestApp } from "./helpers.js";
@@ -20,6 +20,7 @@ let app: FastifyInstance;
 beforeEach(async () => {
   const db = createDb(":memory:");
   seed(db);
+  seedDemoProjectTypes(db);
   app = await buildAdminTestApp(db);
 });
 

@@ -28,7 +28,7 @@ export default function SpecsLibraryPage() {
     <>
       <div className="page-head">
         <h1>Specs</h1>
-        <span className="sub">The governed specification library, baselines, and templates</span>
+        <span className="sub">The governed specification library — organized by scope — plus baselines and templates</span>
       </div>
       <PageTabs tabs={TABS} active={active} onChange={setActive} ariaLabel="Specs sections" />
       <div style={{ marginTop: 16 }}>

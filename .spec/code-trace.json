@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-27T17:20:21.992Z",
+  "generated_at": "2026-08-27T17:29:10.593Z",
   "root": "SpecRepository",
   "specs_dir": "specs",
   "spec_count": 24,
-  "entity_count": 2217,
+  "entity_count": 2224,
   "dict": {
     "paths": [
       "packages/server/src/helpers.ts",

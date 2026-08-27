@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-27T17:20:21.992Z",
+  "generated_at": "2026-08-27T17:29:10.593Z",
   "root": "SpecRepository",
-  "entity_count": 2217,
+  "entity_count": 2224,
   "languages": [
     "JSON",
     "JavaScript",
@@ -1801,13 +1801,20 @@
       "function setActive(id: SpecsTab) {",
       "packages/web/src/pages/SpecsPage.tsx",
       "import { Link, useNavigate, useSearchParams } from \"react-router-dom\";",
-      "import type { SpecSummary, SpecTemplate } from \"@specregistry/shared\";",
+      "import type { Scope, SpecSummary, SpecTemplate } from \"@specregistry/shared\";",
       "import { api, getAuthor, type ProjectRow, type ProjectTypeWithCount } from \"../api\";",
       "type DeletedSpec = SpecSummary & { deleted_at: string };",
+      "type StatusFilter = \"all\" | \"draft\" | \"pending_review\" | \"published\";",
+      "function attentionCount(s: SpecSummary): number {",
       "export default function SpecsPage({ embedded = false }: { embedded?: boolean } = {}) {",
       "function loadDeleted() {",
+      "sortRows = (rows: SpecSummary[]) =>",
+      "build = (scope: Scope) => {",
+      "function clearFilters() {",
       "async function createSpec() {",
       "async function generateAssistedDraft() {",
+      "function specRow(s: SpecSummary) {",
+      "function scopeTable(rows: SpecSummary[]) {",
       "packages/web/src/pages/TemplatesPage.tsx",
       "import type { SpecTemplate } from \"@specregistry/shared\";",
       "import { api } from \"../api\";",
@@ -30070,7 +30077,7 @@
       1,
       1,
       42,
-      "186f04e849796c7f7f4455fb"
+      "4ce00ceed5164595a06b1875"
     ],
     [
       1,
@@ -30164,7 +30171,7 @@
       15,
       1,
       41,
-      "6734bdf4ac8f06245b4ed64d",
+      "88d9f5a72107a5f1e829d623",
       2029,
       {
         "exported": true
@@ -30191,8 +30198,8 @@
       1619,
       1,
       1,
-      322,
-      "bc5e80b053534d932c9e2eb5"
+      558,
+      "3458321f208f73047e33e07f"
     ],
     [
       1,
@@ -30230,7 +30237,7 @@
       3,
       1,
       3,
-      "6e85b851c4cd9ed1a089dbe3",
+      "533b6a6763ddcebd850ed11c",
       2038,
       {
         "module": "@specregistry/shared"
@@ -30279,14 +30286,42 @@
       }
     ],
     [
+      2,
+      144,
+      "StatusFilter",
+      1624,
+      8,
+      1,
+      8,
+      "33f95c61b682a799dd0ffdec",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "attentionCount",
+      1625,
+      30,
+      1,
+      32,
+      "21ea3159190f45578cdca149",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
       4,
       144,
       "SpecsPage",
-      1624,
-      9,
+      1626,
+      34,
       1,
-      321,
-      "bf7fe4269ff6d9b25140a553",
+      557,
+      "ac70f9ce401fea0b889615e2",
       2038,
       {
         "exported": true
@@ -30297,9 +30332,9 @@
       144,
       "reload",
       1537,
-      30,
+      68,
       3,
-      48,
+      86,
       "15999966742b27504ecb48cc",
       2038,
       {
@@ -30310,10 +30345,10 @@
       4,
       144,
       "loadDeleted",
-      1625,
-      52,
+      1627,
+      97,
       3,
-      54,
+      99,
       "4bac52ce4c9370c52d27401f",
       2038,
       {
@@ -30323,11 +30358,53 @@
     [
       4,
       144,
-      "createSpec",
-      1626,
-      66,
+      "sortRows",
+      1628,
+      140,
+      11,
+      145,
+      "3d7eac94baad1d5b86187a91",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "build",
+      1629,
+      147,
+      11,
+      164,
+      "e526e1b5b244b07ce228ad5b",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "clearFilters",
+      1630,
+      178,
       3,
-      84,
+      185,
+      "be1f12dcd27f6c6271452a2f",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "createSpec",
+      1631,
+      187,
+      3,
+      205,
       "79ee2b128bd6ed1d73723427",
       2038,
       {
@@ -30338,11 +30415,39 @@
       4,
       144,
       "generateAssistedDraft",
-      1627,
-      86,
+      1632,
+      207,
       3,
-      106,
+      227,
       "e18fe1bb83b3719b87cd30cf",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "specRow",
+      1633,
+      229,
+      3,
+      257,
+      "ae2b88382364fd16e0286e7e",
+      2038,
+      {
+        "exported": false
+      }
+    ],
+    [
+      4,
+      144,
+      "scopeTable",
+      1634,
+      259,
+      3,
+      277,
+      "0aabfb1d2d8f67ef1bb419a3",
       2038,
       {
         "exported": false
@@ -30352,7 +30457,7 @@
       0,
       145,
       "packages/web/src/pages/TemplatesPage.tsx",
-      1628,
+      1635,
       1,
       1,
       204,
@@ -30367,7 +30472,7 @@
       1,
       1,
       "814688cfb433212c99797552",
-      2050,
+      2057,
       {
         "module": "react"
       }
@@ -30376,12 +30481,12 @@
       1,
       145,
       "@specregistry/shared",
-      1629,
+      1636,
       2,
       1,
       2,
       "1526bae1248a32bcab493bca",
-      2050,
+      2057,
       {
         "module": "@specregistry/shared"
       }
@@ -30390,12 +30495,12 @@
       1,
       145,
       "../api",
-      1630,
+      1637,
       3,
       1,
       3,
       "0d5a9634b55fd7f1aadfd81f",
-      2050,
+      2057,
       {
         "module": "../api"
       }
@@ -30404,12 +30509,12 @@
       4,
       145,
       "TemplatesPage",
-      1631,
+      1638,
       22,
       1,
       202,
       "f1ec2b686f0734c0d15c9eca",
-      2050,
+      2057,
       {
         "exported": true
       }
@@ -30423,7 +30528,7 @@
       3,
       54,
       "c1085faaf6e35da73cfb6198",
-      2050,
+      2057,
       {
         "exported": false
       }
@@ -30432,12 +30537,12 @@
       4,
       145,
       "update",
-      1632,
+      1639,
       56,
       3,
       69,
       "e9b81a526a294a0f37a72425",
-      2050,
+      2057,
       {
         "exported": false
       }
@@ -30446,12 +30551,12 @@
       4,
       145,
       "startEdit",
-      1633,
+      1640,
       71,
       3,
       79,
       "132a5653994fdf7f9a7056f8",
-      2050,
+      2057,
       {
         "exported": false
       }
@@ -30460,12 +30565,12 @@
       4,
       145,
       "cancelEdit",
-      1634,
+      1641,
       81,
       3,
       87,
       "bc0142f60f2cbc1d79a0eeeb",
-      2050,
+      2057,
       {
         "exported": false
       }
@@ -30474,12 +30579,12 @@
       4,
       145,
       "remove",
-      1635,
+      1642,
       89,
       3,
       99,
       "d6a758161ac44419191df6f1",
-      2050,
+      2057,
       {
         "exported": false
       }
@@ -30488,7 +30593,7 @@
       0,
       146,
       "packages/web/src/api.ts",
-      1636,
+      1643,
       1,
       1,
       1431,
@@ -30498,12 +30603,12 @@
       1,
       146,
       "@specregistry/shared",
-      1637,
+      1644,
       2,
       1,
       15,
       "c7b625a51e699fa19f40d5d2",
-      2060,
+      2067,
       {
         "module": "@specregistry/shared"
       }
@@ -30512,12 +30617,12 @@
       2,
       146,
       "ProjectTypeWithCount",
-      1638,
+      1645,
       17,
       1,
       22,
       "995e2702c8212cb43dc9104f",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30526,12 +30631,12 @@
       3,
       146,
       "EfficacyRun",
-      1639,
+      1646,
       23,
       1,
       33,
       "fdef55632c28e92ca2fd6ce8",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30540,12 +30645,12 @@
       2,
       146,
       "SpecDetail",
-      1640,
+      1647,
       34,
       1,
       39,
       "384c57c43b2378a1bbdeaa3b",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30554,12 +30659,12 @@
       3,
       146,
       "SpecAssistResponse",
-      1641,
+      1648,
       40,
       1,
       48,
       "bd9935857e34bc0a38213989",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30568,12 +30673,12 @@
       3,
       146,
       "NewSpecAssistResponse",
-      1642,
+      1649,
       49,
       1,
       58,
       "f5549eb26b01143b5962da0d",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30582,12 +30687,12 @@
       2,
       146,
       "ReviewRow",
-      1643,
+      1650,
       59,
       1,
       64,
       "21005165d32f860b42e998c9",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30596,12 +30701,12 @@
       2,
       146,
       "ReviewDetail",
-      1644,
+      1651,
       65,
       1,
       76,
       "b87abf119fbbba3f55b2814b",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30610,12 +30715,12 @@
       3,
       146,
       "PublishPreview",
-      1645,
+      1652,
       77,
       1,
       100,
       "7712ae7897beaf1c9a034db7",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30624,12 +30729,12 @@
       3,
       146,
       "MigrationChecklist",
-      1646,
+      1653,
       101,
       1,
       110,
       "0addba2471e0a7eb49404755",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30638,12 +30743,12 @@
       3,
       146,
       "SpecImpactResponse",
-      1647,
+      1654,
       111,
       1,
       116,
       "7bcedacb5b74da3bd3f0da91",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30652,12 +30757,12 @@
       3,
       146,
       "ManifestDiagnostics",
-      1648,
+      1655,
       117,
       1,
       132,
       "4231f2005acde595986c9023",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30666,12 +30771,12 @@
       3,
       146,
       "ReviewSlaSummary",
-      1649,
+      1656,
       133,
       1,
       150,
       "87ace013fb0b73d5d618b843",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30680,12 +30785,12 @@
       2,
       146,
       "FeedbackRow",
-      1650,
+      1657,
       151,
       1,
       155,
       "6082b6743f7f6c8c9646f876",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30694,12 +30799,12 @@
       2,
       146,
       "SubscriptionRow",
-      1651,
+      1658,
       156,
       1,
       156,
       "b6089601f760cd5c4b80ea1c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30708,12 +30813,12 @@
       2,
       146,
       "SyncJobRow",
-      1652,
+      1659,
       157,
       1,
       157,
       "9fbced0a332c62185c7cb815",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30722,12 +30827,12 @@
       3,
       146,
       "RepoConsumerRow",
-      1653,
+      1660,
       158,
       1,
       172,
       "d788a0763c88d80a18a1ab6a",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30736,12 +30841,12 @@
       3,
       146,
       "ProjectRow",
-      1654,
+      1661,
       173,
       1,
       177,
       "2c3e160387c4ecea678c9927",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30750,12 +30855,12 @@
       3,
       146,
       "AgentSessionRow",
-      1655,
+      1662,
       178,
       1,
       199,
       "e6e973bbdcbd515d33a5a57c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30764,12 +30869,12 @@
       3,
       146,
       "AnalyticsSummary",
-      1656,
+      1663,
       200,
       1,
       211,
       "c5b3efd7eaa0eb1f75c1743c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30778,12 +30883,12 @@
       3,
       146,
       "ReportsOverview",
-      1657,
+      1664,
       212,
       1,
       291,
       "a772916ed8449df42dca525f",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30792,12 +30897,12 @@
       3,
       146,
       "ProjectSectionEvidenceReport",
-      1658,
+      1665,
       293,
       1,
       328,
       "ad9a316d24f69e7d013163e1",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30806,12 +30911,12 @@
       3,
       146,
       "TokenUsageReport",
-      1659,
+      1666,
       329,
       1,
       408,
       "9541748344acaaf24c233425",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30820,12 +30925,12 @@
       2,
       146,
       "TokenUsageFilters",
-      1660,
+      1667,
       409,
       1,
       418,
       "a080f03e83d7b190aa4ea8db",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30834,12 +30939,12 @@
       2,
       146,
       "AuditReportSummaryRow",
-      1661,
+      1668,
       419,
       1,
       419,
       "275aea210268c43680288d6b",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30848,12 +30953,12 @@
       3,
       146,
       "DependencyMap",
-      1662,
+      1669,
       420,
       1,
       424,
       "f20ff1a5814c6e9a01b91f0c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30867,7 +30972,7 @@
       1,
       434,
       "76d170d1545352fc48d3d981",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30881,7 +30986,7 @@
       1,
       442,
       "64bb15d7761439612b605f89",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30890,12 +30995,12 @@
       3,
       146,
       "GenerationPreview",
-      1663,
+      1670,
       443,
       1,
       451,
       "91cbf5131f3a3eea8ab83745",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30909,7 +31014,7 @@
       1,
       467,
       "d9661da82489d5787d708cea",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30918,12 +31023,12 @@
       2,
       146,
       "AutomationFlags",
-      1664,
+      1671,
       468,
       1,
       482,
       "a490d274d969ade196d3245f",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30932,12 +31037,12 @@
       2,
       146,
       "CodeMetadataFlags",
-      1665,
+      1672,
       483,
       1,
       498,
       "32946126bc98812cdb26de1a",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30946,12 +31051,12 @@
       2,
       146,
       "HarnessImprovementFlags",
-      1666,
+      1673,
       499,
       1,
       502,
       "2726359d4b158376807a56c3",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30960,12 +31065,12 @@
       3,
       146,
       "FeatureDescriptor",
-      1667,
+      1674,
       503,
       1,
       508,
       "50ab1a9232698c29330097d0",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30979,7 +31084,7 @@
       1,
       518,
       "fce3a34bca11fe36b4ca4fc6",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -30988,12 +31093,12 @@
       3,
       146,
       "HarnessImprovementInsight",
-      1668,
+      1675,
       519,
       1,
       529,
       "d927bd9806305d3a93585d40",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31002,12 +31107,12 @@
       3,
       146,
       "HarnessImprovementInsights",
-      1669,
+      1676,
       530,
       1,
       535,
       "35b121661bd265d6d5a05c1b",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31016,12 +31121,12 @@
       3,
       146,
       "HarnessImprovementProposal",
-      1670,
+      1677,
       536,
       1,
       555,
       "4637a2048fa3e5cdadc9cd5d",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31030,12 +31135,12 @@
       3,
       146,
       "HarnessProposalRow",
-      1671,
+      1678,
       556,
       1,
       577,
       "017c2dfe6872813213f583e3",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31044,12 +31149,12 @@
       3,
       146,
       "HarnessProposalValidation",
-      1672,
+      1679,
       578,
       1,
       587,
       "59a82e3730bdde6e0eb28ea1",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31058,12 +31163,12 @@
       3,
       146,
       "SearchHit",
-      1673,
+      1680,
       588,
       1,
       600,
       "0ff278423ab36f829df878ad",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31072,12 +31177,12 @@
       3,
       146,
       "UserRow",
-      1674,
+      1681,
       601,
       1,
       608,
       "e294833ec8de1ad063bc2022",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31086,12 +31191,12 @@
       3,
       146,
       "ApiKeyRow",
-      1675,
+      1682,
       609,
       1,
       617,
       "08a1d4d39df9735e7aa95ca7",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31105,7 +31210,7 @@
       1,
       629,
       "44ef288c4bb9a8f5b336ac07",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31119,7 +31224,7 @@
       1,
       630,
       "1171f750ceb1f2f552a75d9d",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31133,7 +31238,7 @@
       1,
       644,
       "cceedb3526fa1f9527caea26",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31147,7 +31252,7 @@
       1,
       651,
       "55ec269b1323096a8bf46f4e",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31161,7 +31266,7 @@
       1,
       652,
       "0ff4599b788916c72b68cf09",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31175,7 +31280,7 @@
       1,
       663,
       "00d5270b1589f65b23de95dc",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31184,12 +31289,12 @@
       3,
       146,
       "LlmTierConfig",
-      1676,
+      1683,
       664,
       1,
       668,
       "c6ef19fe37c99b40486a68eb",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31203,7 +31308,7 @@
       1,
       672,
       "c1a0790688ad5cecdd4a24d8",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31217,7 +31322,7 @@
       1,
       679,
       "b976a00272ad78ecf17c8f3c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31226,12 +31331,12 @@
       3,
       146,
       "EmbeddingStatus",
-      1677,
+      1684,
       680,
       1,
       688,
       "f0bb3cbe1a0ac99b43864b3e",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31245,7 +31350,7 @@
       1,
       693,
       "00f3b76d36854b062fd9c006",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31259,7 +31364,7 @@
       1,
       699,
       "60ae30ee9bdb25293457742c",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31268,12 +31373,12 @@
       3,
       146,
       "McpGuide",
-      1678,
+      1685,
       700,
       1,
       705,
       "4e436d8f0ab8aab243750a0a",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31282,12 +31387,12 @@
       3,
       146,
       "ApprovalPolicyRow",
-      1679,
+      1686,
       706,
       1,
       715,
       "bbe167d36a62ed8a280f9704",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31296,12 +31401,12 @@
       3,
       146,
       "FeedbackCluster",
-      1680,
+      1687,
       716,
       1,
       727,
       "cb3c3ed1fe92609a4ff6a074",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31310,12 +31415,12 @@
       3,
       146,
       "VersionStatus",
-      1681,
+      1688,
       728,
       1,
       747,
       "b1a8ba66073eab688bc94d27",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31329,7 +31434,7 @@
       1,
       757,
       "9b4654cc444f2d81093278fe",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31338,12 +31443,12 @@
       3,
       146,
       "AuditLogRow",
-      1682,
+      1689,
       758,
       1,
       767,
       "595d77ab9ac6eb547f282c65",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31352,12 +31457,12 @@
       3,
       146,
       "AgentSkillRow",
-      1683,
+      1690,
       768,
       1,
       787,
       "1d3bbd5322e912913f1fc3f1",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31366,12 +31471,12 @@
       3,
       146,
       "SkillSourceRow",
-      1684,
+      1691,
       788,
       1,
       802,
       "c878d7138570607d744c2809",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31380,12 +31485,12 @@
       3,
       146,
       "SkillCandidateRow",
-      1685,
+      1692,
       803,
       1,
       828,
       "9742353ecea7bad4d752c135",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31394,12 +31499,12 @@
       3,
       146,
       "SkillReviewRow",
-      1686,
+      1693,
       829,
       1,
       852,
       "e199a2d25ab73cb20edcb772",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31408,12 +31513,12 @@
       3,
       146,
       "SkillAssignmentRow",
-      1687,
+      1694,
       853,
       1,
       867,
       "4445f4fd0e974b1ae969ce25",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31422,12 +31527,12 @@
       3,
       146,
       "SkillSpecLinkRow",
-      1688,
+      1695,
       868,
       1,
       881,
       "3c0836ff1b1ae41728f17df4",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31441,7 +31546,7 @@
       1,
       895,
       "325ef8e30d50c3c5223891b1",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31450,12 +31555,12 @@
       3,
       146,
       "ComplianceAttestationRow",
-      1689,
+      1696,
       896,
       1,
       910,
       "187b77a8a3daca1e635ada32",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31469,7 +31574,7 @@
       1,
       915,
       "44304599ddee88a1cc00d61f",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31478,12 +31583,12 @@
       3,
       146,
       "CompliancePolicyRow",
-      1690,
+      1697,
       916,
       1,
       925,
       "646fd4094d4e8ff063bdbcb4",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31492,12 +31597,12 @@
       3,
       146,
       "CompliancePolicyConfig",
-      1691,
+      1698,
       926,
       1,
       929,
       "8bbff80e12a4b1bee9cc6e85",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31506,12 +31611,12 @@
       4,
       146,
       "getToken",
-      1692,
+      1699,
       934,
       1,
       936,
       "f1cc8c1efd1e1b2196673eb2",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31520,12 +31625,12 @@
       4,
       146,
       "getLoginUsername",
-      1693,
+      1700,
       938,
       1,
       940,
       "ba35593e8ffde774f105f416",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31534,12 +31639,12 @@
       4,
       146,
       "setSession",
-      1694,
+      1701,
       942,
       1,
       945,
       "672ff7784a3c87900b498ae8",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31548,12 +31653,12 @@
       4,
       146,
       "clearSession",
-      1695,
+      1702,
       947,
       1,
       950,
       "680562b79d13d421767d8f51",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31562,12 +31667,12 @@
       4,
       146,
       "request",
-      1696,
+      1703,
       952,
       1,
       972,
       "92cd241fe98221b365f9dbab",
-      2060,
+      2067,
       {
         "exported": false
       }
@@ -31576,12 +31681,12 @@
       4,
       146,
       "requestVoid",
-      1697,
+      1704,
       974,
       1,
       993,
       "51a434b6ea7659e982375cc8",
-      2060,
+      2067,
       {
         "exported": false
       }
@@ -31590,12 +31695,12 @@
       4,
       146,
       "getAuthor",
-      1698,
+      1705,
       1423,
       1,
       1426,
       "1d3e91a07e71c7a7ac01a9ea",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31604,12 +31709,12 @@
       4,
       146,
       "setAuthor",
-      1699,
+      1706,
       1428,
       1,
       1430,
       "b50c78fa4b79111fcff9996d",
-      2060,
+      2067,
       {
         "exported": true
       }
@@ -31618,7 +31723,7 @@
       0,
       147,
       "packages/web/src/App.tsx",
-      1700,
+      1707,
       1,
       1,
       133,
@@ -31633,7 +31738,7 @@
       1,
       1,
       "a64a0c8f979f6a3c2dcbec73",
-      2141,
+      2148,
       {
         "module": "react"
       }
@@ -31642,12 +31747,12 @@
       1,
       147,
       "react-router-dom",
-      1701,
+      1708,
       2,
       1,
       2,
       "2b6e4deb0562cfdefcabaae1",
-      2141,
+      2148,
       {
         "module": "react-router-dom"
       }
@@ -31656,12 +31761,12 @@
       1,
       147,
       "./api",
-      1702,
+      1709,
       3,
       1,
       3,
       "bdcdbfed40683746666577c6",
-      2141,
+      2148,
       {
         "module": "./api"
       }
@@ -31670,12 +31775,12 @@
       1,
       147,
       "./UpdateBanner",
-      1703,
+      1710,
       4,
       1,
       4,
       "3f8dc8d53cfef8463700148a",
-      2141,
+      2148,
       {
         "module": "./UpdateBanner"
       }
@@ -31684,12 +31789,12 @@
       1,
       147,
       "./pages/LoginPage",
-      1704,
+      1711,
       5,
       1,
       5,
       "803027a148f2dd2b4624f50b",
-      2141,
+      2148,
       {
         "module": "./pages/LoginPage"
       }
@@ -31698,12 +31803,12 @@
       1,
       147,
       "./pages/Dashboard",
-      1705,
+      1712,
       6,
       1,
       6,
       "088b08ce6ea99791831a762a",
-      2141,
+      2148,
       {
         "module": "./pages/Dashboard"
       }
@@ -31712,12 +31817,12 @@
       1,
       147,
       "./pages/SpecsLibraryPage",
-      1706,
+      1713,
       7,
       1,
       7,
       "bff85790b416c85b2dc7d8bc",
-      2141,
+      2148,
       {
         "module": "./pages/SpecsLibraryPage"
       }
@@ -31726,12 +31831,12 @@
       1,
       147,
       "./pages/InsightsPage",
-      1707,
+      1714,
       8,
       1,
       8,
       "5734c27505bf5afd836bd10d",
-      2141,
+      2148,
       {
         "module": "./pages/InsightsPage"
       }
@@ -31740,12 +31845,12 @@
       1,
       147,
       "./pages/SpecDetailPage",
-      1708,
+      1715,
       9,
       1,
       9,
       "29b962f0e37106da2dbc1fe6",
-      2141,
+      2148,
       {
         "module": "./pages/SpecDetailPage"
       }
@@ -31754,12 +31859,12 @@
       1,
       147,
       "./pages/ReviewsPage",
-      1709,
+      1716,
       10,
       1,
       10,
       "d12946cc360073c5959e9f4b",
-      2141,
+      2148,
       {
         "module": "./pages/ReviewsPage"
       }
@@ -31768,12 +31873,12 @@
       1,
       147,
       "./pages/ReviewDetailPage",
-      1710,
+      1717,
       11,
       1,
       11,
       "4811b3318fbcd85d29e09212",
-      2141,
+      2148,
       {
         "module": "./pages/ReviewDetailPage"
       }
@@ -31782,12 +31887,12 @@
       1,
       147,
       "./pages/FeedbackPage",
-      1711,
+      1718,
       12,
       1,
       12,
       "15857f9c352c5291af2334ec",
-      2141,
+      2148,
       {
         "module": "./pages/FeedbackPage"
       }
@@ -31796,12 +31901,12 @@
       1,
       147,
       "./pages/ProjectsPage",
-      1712,
+      1719,
       13,
       1,
       13,
       "d844358bba84b0218016dd3a",
-      2141,
+      2148,
       {
         "module": "./pages/ProjectsPage"
       }
@@ -31810,12 +31915,12 @@
       1,
       147,
       "./pages/ProjectDetailPage",
-      1713,
+      1720,
       14,
       1,
       14,
       "ba614ca103abe8a38f1c9652",
-      2141,
+      2148,
       {
         "module": "./pages/ProjectDetailPage"
       }
@@ -31824,12 +31929,12 @@
       1,
       147,
       "./pages/SkillsMarketplacePage",
-      1714,
+      1721,
       15,
       1,
       15,
       "52393b86f2f58bdf70e6d154",
-      2141,
+      2148,
       {
         "module": "./pages/SkillsMarketplacePage"
       }
@@ -31838,12 +31943,12 @@
       1,
       147,
       "./pages/SettingsPage",
-      1715,
+      1722,
       16,
       1,
       16,
       "5ea421953c97c53f472ca9b7",
-      2141,
+      2148,
       {
         "module": "./pages/SettingsPage"
       }
@@ -31852,12 +31957,12 @@
       4,
       147,
       "App",
-      1716,
+      1723,
       42,
       1,
       132,
       "a7934f8890f46e8e3da23f3b",
-      2141,
+      2148,
       {
         "exported": true
       }
@@ -31866,7 +31971,7 @@
       0,
       148,
       "packages/web/src/components.tsx",
-      1717,
+      1724,
       1,
       1,
       89,
@@ -31876,12 +31981,12 @@
       1,
       148,
       "react",
-      1718,
+      1725,
       1,
       1,
       1,
       "4e96e4e5b6d88096ea05e668",
-      2159,
+      2166,
       {
         "module": "react"
       }
@@ -31890,12 +31995,12 @@
       1,
       148,
       "marked",
-      1719,
+      1726,
       2,
       1,
       2,
       "bdc12416b76258ed3bacb81e",
-      2159,
+      2166,
       {
         "module": "marked"
       }
@@ -31904,12 +32009,12 @@
       4,
       148,
       "StatusBadge",
-      1720,
+      1727,
       4,
       1,
       6,
       "609bed861c79558652c52d41",
-      2159,
+      2166,
       {
         "exported": true
       }
@@ -31918,12 +32023,12 @@
       4,
       148,
       "Markdown",
-      1721,
+      1728,
       8,
       1,
       25,
       "d92e611a982d2f5f37a5a7dc",
-      2159,
+      2166,
       {
         "exported": true
       }
@@ -31932,12 +32037,12 @@
       4,
       148,
       "DiffView",
-      1722,
+      1729,
       27,
       1,
       50,
       "3d1cbd4c54e4e2812f9827c3",
-      2159,
+      2166,
       {
         "exported": true
       }
@@ -31946,12 +32051,12 @@
       4,
       148,
       "timeAgo",
-      1723,
+      1730,
       52,
       1,
       58,
       "2564e7806d98a0d6a05deeb9",
-      2159,
+      2166,
       {
         "exported": true
       }
@@ -31960,12 +32065,12 @@
       4,
       148,
       "PageTabs",
-      1724,
+      1731,
       61,
       1,
       88,
       "15f2e902e63d299ae1cde245",
-      2159,
+      2166,
       {
         "exported": true
       }
@@ -31974,7 +32079,7 @@
       0,
       149,
       "packages/web/src/main.tsx",
-      1725,
+      1732,
       1,
       1,
       14,
@@ -31984,12 +32089,12 @@
       1,
       149,
       "react",
-      1726,
+      1733,
       1,
       1,
       1,
       "9abf3e6700d98954fe8bbe11",
-      2167,
+      2174,
       {
         "module": "react"
       }
@@ -31998,12 +32103,12 @@
       1,
       149,
       "react-dom/client",
-      1727,
+      1734,
       2,
       1,
       2,
       "28077247199afcc37424eb3a",
-      2167,
+      2174,
       {
         "module": "react-dom/client"
       }
@@ -32012,12 +32117,12 @@
       1,
       149,
       "react-router-dom",
-      1728,
+      1735,
       3,
       1,
       3,
       "5ab3a16cb3a888132c03e49a",
-      2167,
+      2174,
       {
         "module": "react-router-dom"
       }
@@ -32026,12 +32131,12 @@
       1,
       149,
       "./App",
-      1729,
+      1736,
       4,
       1,
       4,
       "3c526a6e099f8c84fb3c3b1e",
-      2167,
+      2174,
       {
         "module": "./App"
       }
@@ -32040,12 +32145,12 @@
       1,
       149,
       "./styles.css",
-      1730,
+      1737,
       5,
       1,
       5,
       "dd2924943be52e0d0311b7cf",
-      2167,
+      2174,
       {
         "module": "./styles.css"
       }
@@ -32054,7 +32159,7 @@
       0,
       150,
       "packages/web/src/UpdateBanner.tsx",
-      1731,
+      1738,
       1,
       1,
       67,
@@ -32069,7 +32174,7 @@
       1,
       1,
       "a64a0c8f979f6a3c2dcbec73",
-      2173,
+      2180,
       {
         "module": "react"
       }
@@ -32078,12 +32183,12 @@
       1,
       150,
       "./api",
-      1732,
+      1739,
       2,
       1,
       2,
       "f3be2f745eaf8579482b71d0",
-      2173,
+      2180,
       {
         "module": "./api"
       }
@@ -32092,12 +32197,12 @@
       4,
       150,
       "UpdateBanner",
-      1733,
+      1740,
       4,
       1,
       66,
       "defd3b3cb560e4accf690dc4",
-      2173,
+      2180,
       {
         "exported": true
       }
@@ -32106,12 +32211,12 @@
       4,
       150,
       "runUpdate",
-      1734,
+      1741,
       23,
       3,
       37,
       "cc0d73b5326edcfe1ea01538",
-      2173,
+      2180,
       {
         "exported": false
       }
@@ -32120,7 +32225,7 @@
       0,
       151,
       "packages/web/package.json",
-      1735,
+      1742,
       1,
       1,
       26,
@@ -32130,12 +32235,12 @@
       5,
       151,
       "dev",
-      1736,
+      1743,
       1,
       1,
       1,
       "b16efac145e9242cfb05d739",
-      2178,
+      2185,
       {
         "source": "package.json",
         "command": "vite"
@@ -32145,12 +32250,12 @@
       5,
       151,
       "build",
-      1737,
+      1744,
       1,
       1,
       1,
       "b3376a20dafe66787e66b136",
-      2178,
+      2185,
       {
         "source": "package.json",
         "command": "tsc -p tsconfig.json && vite build"
@@ -32160,12 +32265,12 @@
       5,
       151,
       "preview",
-      1738,
+      1745,
       1,
       1,
       1,
       "9c8ceffe63853deb5c404cbb",
-      2178,
+      2185,
       {
         "source": "package.json",
         "command": "vite preview"
@@ -32175,12 +32280,12 @@
       6,
       151,
       "package dependencies",
-      1739,
+      1746,
       1,
       1,
       26,
       "b74c7cae46a7fa7d37d4489d",
-      2178,
+      2185,
       {
         "source": "package.json",
         "dependency_count": 10,
@@ -32202,7 +32307,7 @@
       0,
       152,
       "packages/web/tsconfig.json",
-      1740,
+      1747,
       1,
       1,
       16,
@@ -32212,12 +32317,12 @@
       6,
       152,
       "tsconfig.json",
-      1740,
+      1747,
       1,
       1,
       16,
       "49049bb39879a6c6b022e045",
-      2183,
+      2190,
       {
         "source": "tsconfig.json"
       }
@@ -32226,7 +32331,7 @@
       0,
       153,
       "packages/web/vite.config.ts",
-      1741,
+      1748,
       1,
       1,
       13,
@@ -32236,12 +32341,12 @@
       1,
       153,
       "vite",
-      1742,
+      1749,
       1,
       1,
       1,
       "96baf42b95974f753f18cde5",
-      2185,
+      2192,
       {
         "module": "vite"
       }
@@ -32250,12 +32355,12 @@
       1,
       153,
       "@vitejs/plugin-react",
-      1743,
+      1750,
       2,
       1,
       2,
       "edf1f0b3b89a67afb2b61d73",
-      2185,
+      2192,
       {
         "module": "@vitejs/plugin-react"
       }
@@ -32264,7 +32369,7 @@
       0,
       154,
       "samples/ai-sdd/load.mjs",
-      1744,
+      1751,
       1,
       1,
       134,
@@ -32279,7 +32384,7 @@
       1,
       17,
       "87dda682347c848f1e508267",
-      2188,
+      2195,
       {
         "module": "node:fs"
       }
@@ -32293,7 +32398,7 @@
       1,
       18,
       "aa2bc7cd756da3c4048175c5",
-      2188,
+      2195,
       {
         "module": "node:path"
       }
@@ -32307,7 +32412,7 @@
       1,
       19,
       "075bcac976af5ba3a4390962",
-      2188,
+      2195,
       {
         "module": "node:url"
       }
@@ -32316,12 +32421,12 @@
       4,
       154,
       "api",
-      1745,
+      1752,
       34,
       1,
       56,
       "9f93b22b022a6a1d83b81086",
-      2188,
+      2195,
       {
         "exported": false
       }
@@ -32330,12 +32435,12 @@
       4,
       154,
       "readSpecs",
-      1746,
+      1753,
       58,
       1,
       65,
       "f6fac934f5766d60d34e1599",
-      2188,
+      2195,
       {
         "exported": false
       }
@@ -32344,12 +32449,12 @@
       4,
       154,
       "ensureProjectType",
-      1747,
+      1754,
       67,
       1,
       77,
       "4c3b1d9a2f1991bd4583d9c3",
-      2188,
+      2195,
       {
         "exported": false
       }
@@ -32358,12 +32463,12 @@
       4,
       154,
       "loadSpecsInto",
-      1748,
+      1755,
       79,
       1,
       99,
       "89bbc2a06f76a65c80228342",
-      2188,
+      2195,
       {
         "exported": false
       }
@@ -32372,12 +32477,12 @@
       4,
       154,
       "main",
-      1749,
+      1756,
       101,
       1,
       122,
       "c20e01205c922aeb80af9b4a",
-      2188,
+      2195,
       {
         "exported": false
       }
@@ -32386,7 +32491,7 @@
       0,
       155,
       "samples/general/load.mjs",
-      1750,
+      1757,
       1,
       1,
       189,
@@ -32401,7 +32506,7 @@
       1,
       25,
       "87dda682347c848f1e508267",
-      2197,
+      2204,
       {
         "module": "node:fs"
       }
@@ -32415,7 +32520,7 @@
       1,
       26,
       "aa2bc7cd756da3c4048175c5",
-      2197,
+      2204,
       {
         "module": "node:path"
       }
@@ -32429,7 +32534,7 @@
       1,
       27,
       "075bcac976af5ba3a4390962",
-      2197,
+      2204,
       {
         "module": "node:url"
       }
@@ -32438,12 +32543,12 @@
       4,
       155,
       "api",
-      1745,
+      1752,
       86,
       1,
       108,
       "9f93b22b022a6a1d83b81086",
-      2197,
+      2204,
       {
         "exported": false
       }
@@ -32452,12 +32557,12 @@
       4,
       155,
       "readSpecs",
-      1746,
+      1753,
       110,
       1,
       120,
       "d72c020ed7403969475ad5a4",
-      2197,
+      2204,
       {
         "exported": false
       }
@@ -32466,12 +32571,12 @@
       4,
       155,
       "ensureProjectType",
-      1747,
+      1754,
       122,
       1,
       132,
       "0d7bfc9d1739afb0258f1ae8",
-      2197,
+      2204,
       {
         "exported": false
       }
@@ -32480,12 +32585,12 @@
       4,
       155,
       "loadSpecsInto",
-      1748,
+      1755,
       134,
       1,
       154,
       "8b131386456821a90d2c25d0",
-      2197,
+      2204,
       {
         "exported": false
       }
@@ -32494,12 +32599,12 @@
       4,
       155,
       "main",
-      1749,
+      1756,
       156,
       1,
       177,
       "18273aa8c317786edf9e886f",
-      2197,
+      2204,
       {
         "exported": false
       }
@@ -32508,7 +32613,7 @@
       0,
       156,
       "package.json",
-      1751,
+      1758,
       1,
       1,
       24,
@@ -32518,12 +32623,12 @@
       5,
       156,
       "build",
-      1752,
+      1759,
       1,
       1,
       1,
       "b975f84f97f9a012d6ba5d73",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "npm run build -w @specregistry/shared && npm run build -w @specregistry/server -w @specregistry/cli -w @specregistry/mcp -w @specregistry/web"
@@ -32533,12 +32638,12 @@
       5,
       156,
       "test",
-      1753,
+      1760,
       1,
       1,
       1,
       "6ae2d2bfbcd12f742a841392",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "npm run test --workspaces --if-present"
@@ -32548,12 +32653,12 @@
       5,
       156,
       "dev:server",
-      1754,
+      1761,
       1,
       1,
       1,
       "a7db4ba33db66651f7706f15",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "npm run dev -w @specregistry/server"
@@ -32563,12 +32668,12 @@
       5,
       156,
       "dev:web",
-      1755,
+      1762,
       1,
       1,
       1,
       "69224edce9364bb2b2daa816",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "npm run dev -w @specregistry/web"
@@ -32578,12 +32683,12 @@
       5,
       156,
       "seed",
-      1756,
+      1763,
       1,
       1,
       1,
       "dd6e20c164cecf0c61daf281",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "npm run seed -w @specregistry/server"
@@ -32593,12 +32698,12 @@
       5,
       156,
       "sample:ai-sdd",
-      1757,
+      1764,
       1,
       1,
       1,
       "9962983776292c54f9353616",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "node samples/ai-sdd/load.mjs"
@@ -32608,12 +32713,12 @@
       5,
       156,
       "sample:general",
-      1758,
+      1765,
       1,
       1,
       1,
       "f832354da69bd3d518e2c341",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "node samples/general/load.mjs"
@@ -32623,12 +32728,12 @@
       5,
       156,
       "comply",
-      1759,
+      1766,
       1,
       1,
       1,
       "561c16baaefd5dc68e140310",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "specreg comply"
@@ -32638,12 +32743,12 @@
       5,
       156,
       "install-hooks",
-      1760,
+      1767,
       1,
       1,
       1,
       "b35545fa45685ea602c2decf",
-      2206,
+      2213,
       {
         "source": "package.json",
         "command": "bash scripts/install-hooks.sh"
@@ -32653,12 +32758,12 @@
       6,
       156,
       "package dependencies",
-      1761,
+      1768,
       1,
       1,
       24,
       "e3b0c44298fc1c149afbf4c8",
-      2206,
+      2213,
       {
         "source": "package.json",
         "dependency_count": 0,

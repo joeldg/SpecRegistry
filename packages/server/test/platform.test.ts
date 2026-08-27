@@ -1266,6 +1266,32 @@ describe("secured posture", () => {
     expect(verifyPassword("admin", admin!.password_hash!)).toBe(false);
     expect(() => assertSecurePosture(db, { authRequired: true })).not.toThrow();
   });
+
+  it("public /health reports auth_required so clients can detect posture", async () => {
+    process.env.SPECREG_ADMIN_PASSWORD = "a-strong-passphrase";
+    const securedDb = createDb(":memory:");
+    seed(securedDb);
+    const secured = await buildApp(securedDb, { authRequired: true });
+    try {
+      // /health is public even in secured mode (no token needed)
+      const res = await secured.inject({ method: "GET", url: "/api/v1/health" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ status: "ok", auth_required: true });
+    } finally {
+      await secured.close();
+    }
+
+    const openDb = createDb(":memory:");
+    seed(openDb);
+    const open = await buildApp(openDb, { authRequired: false });
+    try {
+      const res = await open.inject({ method: "GET", url: "/api/v1/health" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ status: "ok", auth_required: false });
+    } finally {
+      await open.close();
+    }
+  });
 });
 
 describe("version endpoint and self-update", () => {

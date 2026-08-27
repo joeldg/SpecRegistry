@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-26T20:24:13.037Z",
+  "generated_at": "2026-08-26T20:36:17.761Z",
   "root": "SpecRepository",
   "specs_dir": "specs",
   "spec_count": 24,
-  "entity_count": 2215,
+  "entity_count": 2216,
   "dict": {
     "paths": [
       "packages/server/src/helpers.ts",
@@ -10771,6 +10771,39 @@
       "code:function:e217e20c86f04bf6",
       114,
       "projectSpecCurrency",
+      3,
+      4,
+      0.59,
+      [
+        "matched tokens: export, string"
+      ]
+    ],
+    [
+      "code:function:e359c362dd264d01",
+      22,
+      "probeAuthRequired",
+      3,
+      1,
+      0.59,
+      [
+        "matched tokens: export, function"
+      ]
+    ],
+    [
+      "code:function:e359c362dd264d01",
+      22,
+      "probeAuthRequired",
+      3,
+      8,
+      0.59,
+      [
+        "matched tokens: string, promise"
+      ]
+    ],
+    [
+      "code:function:e359c362dd264d01",
+      22,
+      "probeAuthRequired",
       3,
       4,
       0.59,
@@ -23655,9 +23688,11 @@
       "GET /api/v1/health",
       5,
       5,
-      0.71,
+      0.95,
       [
-        "matched tokens: get, get, packages/server/src/app.ts"
+        "entity name appears in spec",
+        "route path appears in spec",
+        "matched tokens: get, /api/v1/health, get, /api/v1/health, packages/server/src/app.ts, /api/v1/health"
       ]
     ],
     [
@@ -37821,6 +37856,17 @@
       35,
       "AuditReportStatus",
       6,
+      5,
+      0.71,
+      [
+        "matched tokens: type, pass, fail"
+      ]
+    ],
+    [
+      "code:type:ebc4cfacfc1a2046",
+      35,
+      "AuditReportStatus",
+      6,
       8,
       0.71,
       [
@@ -37880,17 +37926,6 @@
       0.59,
       [
         "matched tokens: export, type"
-      ]
-    ],
-    [
-      "code:type:ebc4cfacfc1a2046",
-      35,
-      "AuditReportStatus",
-      6,
-      5,
-      0.59,
-      [
-        "matched tokens: type, pass"
       ]
     ],
     [
@@ -38104,15 +38139,21 @@
     ]
   ],
   "unlinked_entities": [],
-  "aliases": [],
+  "aliases": [
+    {
+      "previous_id": "code:import:6ae873b68e2b909a",
+      "current_id": "code:import:28163321c3811f4a",
+      "reason": "same_path_name"
+    }
+  ],
   "coverage": {
-    "governed_entity_count": 787,
-    "linked_entity_count": 787,
+    "governed_entity_count": 788,
+    "linked_entity_count": 788,
     "unlinked_entity_count": 0,
     "coverage_ratio": 1,
     "linked_by_kind": {
       "interface": 188,
-      "function": 320,
+      "function": 321,
       "type": 49,
       "command": 30,
       "config": 11,
@@ -38125,7 +38166,7 @@
     "score": 0,
     "severity": "none",
     "signals": [
-      "0 of 787 governable code entities have no local spec link",
+      "0 of 788 governable code entities have no local spec link",
       "24 local spec documents scanned"
     ]
   },

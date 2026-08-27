@@ -6,7 +6,7 @@ import type { Spec } from "@specregistry/shared";
 import { SPECREGISTRY_PRODUCT_REPOSITORY_URL } from "./product.js";
 import { fetchBytes, fetchJson, registryToken, selectProjectType } from "./registry.js";
 import { repoIdentity, reportManifest, type Manifest } from "./repo.js";
-import { enrollAgent } from "./credentials.js";
+import { enrollAgent, probeAuthRequired } from "./credentials.js";
 import { installGoogleStyleGuides, type InstalledStyleGuide } from "./styleguides.js";
 import { renderProjectProfile, runProjectSetupWizard, type ProjectProfile } from "./projectWizard.js";
 import { installAgentSkills, listAgentSkills, resolveAgentSkills, type AgentSkill } from "./skills.js";
@@ -27,6 +27,8 @@ export interface InitOptions {
   skipEnrollment?: boolean;
   /** Preserve existing generated guides, styleguides, and skills during bundle-only recovery. */
   skipAuxiliarySetup?: boolean;
+  /** Require a successfully enrolled agent token; fail init if enrollment does not yield one. */
+  secure?: boolean;
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
@@ -37,9 +39,28 @@ export async function runInit(opts: InitOptions): Promise<void> {
     typeof previousManifest?.project === "string" && previousManifest.project.trim()
       ? previousManifest.project.trim()
       : identity.repo;
-  const token = opts.token ?? (opts.type && !opts.skipEnrollment ? await enrollAgent(opts.server, requestedRepo, opts.type) : undefined);
+  // Determine whether the target registry enforces auth. A secured registry (or an
+  // explicit --secure / SPECREG_AUTH=required) makes agent enrollment mandatory:
+  // continuing unauthenticated would leave the agent unable to reach governed
+  // endpoints (401/403), so fail fast with an actionable message instead.
+  const enrollmentRequested = Boolean(opts.type) && !opts.skipEnrollment && !opts.token;
+  const serverAuthRequired = enrollmentRequested ? await probeAuthRequired(opts.server) : undefined;
+  const secureMode = Boolean(opts.secure) || process.env.SPECREG_AUTH === "required" || serverAuthRequired === true;
+  const token = opts.token ?? (enrollmentRequested ? await enrollAgent(opts.server, requestedRepo, opts.type!) : undefined);
+  if (enrollmentRequested && !token && secureMode) {
+    throw new Error(
+      `This registry requires authentication (SPECREG_AUTH=required) but agent enrollment for ${requestedRepo} did not return a token. ` +
+        `Ask the registry operator for the enrollment secret and set SPECREG_ENROLL_SECRET, then re-run \`specreg init\`. ` +
+        `Do not proceed unauthenticated: governed endpoints will reject requests with 401/403.`
+    );
+  }
   if (token && !opts.token) {
     console.log(`Enrolled agent identity for ${requestedRepo}; token stored in .spec/credentials.json (gitignored).`);
+  } else if (enrollmentRequested && !token) {
+    console.warn(
+      `Warning: agent enrollment for ${requestedRepo} did not return a token; the registry appears to allow anonymous access. ` +
+        `Set SPECREG_ENROLL_SECRET (and SPECREG_AUTH=required on the server) to require authenticated agents.`
+    );
   }
   const setup = opts.type
     ? {
@@ -499,7 +520,7 @@ agent host's approval policy and current published specs.
 
 Use the \`specregistry\` MCP server from \`.mcp.json\`; generated configs run \`specreg mcp\`
 so the dashboard-downloaded CLI also provides the MCP server.
-${token ? "Authentication is configured through `SPECREG_TOKEN` in `.mcp.json`.\n" : "If the registry requires auth, add `SPECREG_TOKEN` to `.mcp.json`.\n"}
+${token ? "Authentication is configured through `SPECREG_TOKEN` in `.mcp.json` (issued by agent enrollment).\nWhen the registry runs with `SPECREG_AUTH=required`, this token is mandatory: requests without it are rejected with 401/403.\n" : "If the registry requires auth (`SPECREG_AUTH=required`), enrollment must issue an agent token; add `SPECREG_TOKEN` to `.mcp.json` or re-run `specreg init --secure`.\n"}
 Do not run \`specreg mcp\` directly as a health check; it is a stdio server and may exit
 when no MCP client keeps stdin/stdout open. Run \`specreg mcp --check\` to test registry
 reachability and authentication from this same environment.

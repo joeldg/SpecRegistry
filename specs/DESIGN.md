@@ -166,6 +166,10 @@ When `SPECREG_AUTH=required`:
 - Administrative settings, user/key management, audit evidence, and operational controls
   require the admin role.
 - Generated and documented clients use `SPECREG_TOKEN`; credentials are not committed.
+- `specreg init` must obtain an enrolled agent token before setting up an agent workspace,
+  and must fail closed (rather than continue unauthenticated) when the registry enforces
+  auth. The public `GET /api/v1/health` response reports `auth_required` so clients can
+  detect the registry's posture without a token.
 
 Secrets stored in settings may be encrypted at rest with `SPECREG_SECRET_KEY`. Public
 configuration responses expose presence/status metadata rather than secret values.

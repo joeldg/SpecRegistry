@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import AdmZip from "adm-zip";
 import { createDb } from "../src/db.js";
-import { seed, SPECREGISTRY_BASELINE_REQUIRED_SECTIONS, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
+import { seed, seedDemoProjectTypes, SPECREGISTRY_BASELINE_REQUIRED_SECTIONS, SPECREGISTRY_OPERATING_BASELINE_FILENAMES } from "../src/seed.js";
 import { recordAudit } from "../src/lib/auditLog.js";
 import { buildAdminTestApp } from "./helpers.js";
 
@@ -11,6 +11,7 @@ let app: FastifyInstance;
 beforeEach(async () => {
   const db = createDb(":memory:");
   seed(db);
+  seedDemoProjectTypes(db);
   app = await buildAdminTestApp(db);
 });
 
@@ -29,20 +30,23 @@ async function getJson(url: string) {
 describe("project types & specs", () => {
   it("lists seeded project types with the global scope first", async () => {
     const types = await getJson("/api/v1/project-types");
-    expect(types.length).toBe(11);
+    expect(types.length).toBe(12);
     expect(types[0].scope).toBe("global");
+    // Demo fixtures (seeded only in tests via seedDemoProjectTypes) are present.
     expect(types.map((t: any) => t.name)).toContain("Acme Edge Device");
     expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_count");
     expect(types.find((t: any) => t.name === "Acme Edge Device")).toHaveProperty("project_type_smell");
+    // The shipped default project-type catalog.
     expect(types.map((t: any) => t.name)).toEqual(
       expect.arrayContaining([
-        "MCP Server / Agent Integration",
-        "SaaS Backend API",
-        "CLI Tool / Developer Tooling",
-        "AI-SDD Governed Project",
-        "Data Platform / ETL Pipeline",
-        "Internal Admin Tool",
+        "Web Application",
+        "Backend API / Service",
+        "CLI / Developer Tool",
         "Mobile App",
+        "Library / SDK",
+        "Data Platform / ETL Pipeline",
+        "Infrastructure / Platform",
+        "MCP Server / Agent Integration",
       ])
     );
   });

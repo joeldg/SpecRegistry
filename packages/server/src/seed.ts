@@ -451,28 +451,34 @@ function insertProjectType(
 
 const DEFAULT_PROJECT_TYPES = [
   {
-    name: "MCP Server / Agent Integration",
-    industry: "AI / Developer Tools",
+    name: "Web Application",
+    industry: "Software",
     description:
-      "Model Context Protocol servers, agent tool schemas, prompt/context contracts, feedback loops, and agent onboarding.",
+      "Browser-facing applications: UI components, routing, client/server state, accessibility, forms, and REST/GraphQL contracts.",
   },
   {
-    name: "SaaS Backend API",
+    name: "Backend API / Service",
     industry: "Software / SaaS",
     description:
-      "Multi-tenant APIs, authentication, database migrations, billing/webhooks, observability, rate limits, and compatibility contracts.",
+      "Multi-tenant APIs and services: authentication, database migrations, webhooks, observability, rate limits, and compatibility contracts.",
   },
   {
-    name: "CLI Tool / Developer Tooling",
+    name: "CLI / Developer Tool",
     industry: "Developer Tools",
     description:
-      "Command-line tools, flags, config files, exit codes, stdout/stderr contracts, CI behavior, and backwards compatibility.",
+      "Command-line tools: flags, config files, exit codes, stdout/stderr contracts, CI behavior, and backwards compatibility.",
   },
   {
-    name: "AI-SDD Governed Project",
-    industry: "AI / Software Delivery",
+    name: "Mobile App",
+    industry: "Mobile Software",
     description:
-      "Strict Spec Driven Development with tokenomics, spec conflict detection, audit prompts, agent feedback, and generated context rules.",
+      "iOS, Android, or React Native apps with offline behavior, permissions, app store release, analytics, crash reporting, and deep links.",
+  },
+  {
+    name: "Library / SDK",
+    industry: "Developer Tools",
+    description:
+      "Reusable packages consumed by other codebases: public API surface, semantic versioning, deprecation policy, and usage docs.",
   },
   {
     name: "Data Platform / ETL Pipeline",
@@ -481,16 +487,16 @@ const DEFAULT_PROJECT_TYPES = [
       "Schemas, lineage, batch/stream processing, idempotency, backfills, PII handling, data quality checks, and warehouse contracts.",
   },
   {
-    name: "Internal Admin Tool",
-    industry: "Operations Software",
+    name: "Infrastructure / Platform",
+    industry: "Platform Engineering",
     description:
-      "Dense operational dashboards, auditability, role-based access, data tables/forms, imports/exports, and repeatable workflows.",
+      "Infrastructure-as-code, environments, deployment pipelines, secrets, networking, and platform service SLAs.",
   },
   {
-    name: "Mobile App",
-    industry: "Mobile Software",
+    name: "MCP Server / Agent Integration",
+    industry: "AI / Developer Tools",
     description:
-      "iOS, Android, or React Native apps with offline behavior, permissions, app store release, analytics, crash reporting, and deep links.",
+      "Model Context Protocol servers, agent tool schemas, prompt/context contracts, feedback loops, and agent onboarding.",
   },
 ] satisfies Array<{ name: string; industry: string; description: string }>;
 
@@ -658,88 +664,13 @@ function seedAdmin(db: Db): void {
   }
 }
 
-/** Seeds the Acme demo configuration. No-op if any project type already exists. */
-export function seed(db: Db): boolean {
-  seedTemplates(db);
-  seedAdmin(db);
-  // Backfill missing audit prompts, and repair baseline prompts whose embedded
-  // @version drifted from current_version (older specs stored the prompt at the
-  // 0.1.0 draft version and never refreshed it on publish). Custom prompts —
-  // those not in the generated baseline format — are left untouched.
-  const stale = db
-    .prepare(
-      `SELECT id, filename, content, current_version FROM specs
-       WHERE deleted_at IS NULL AND (
-         audit_prompt IS NULL OR audit_prompt = ''
-         OR (audit_prompt LIKE 'Audit an implementation for conformance with%'
-             AND audit_prompt NOT LIKE ('%@' || current_version || '%'))
-       )`
-    )
-    .all() as Array<{
-      id: string;
-      filename: string;
-      content: string;
-      current_version: string;
-    }>;
-  if (stale.length > 0) {
-    const update = db.prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?");
-    for (const spec of stale) {
-      const prompt = auditPromptForSpec(spec);
-      update.run(prompt, now(), spec.id);
-    }
-  }
 
-  const existing = db.prepare("SELECT COUNT(*) AS n FROM project_types").get() as { n: number };
-  if (existing.n > 0) {
-    seedDefaultProjectTypes(db);
-    seedOperatingBaseline(db);
-    return false;
-  }
-
-  const globalId = insertProjectType(
-    db,
-    "Global",
-    "global",
-    null,
-    "Organization-wide specifications that apply to every project type."
-  );
-  insertPublishedSpec(db, globalId, {
-    filename: "GLOBAL_SECURITY.md",
-    content: `# Global Security Standards
-
-## Scope
-These rules apply to every project in the organization, regardless of project type.
-
-## Requirements
-1. **Secrets** must never be committed to source control. Use the approved secret manager.
-2. **Dependencies** must be pinned and scanned weekly for CVEs.
-3. **Network services** must default to TLS 1.2+ and deny-by-default firewall rules.
-4. **Authentication** flows must be reviewed by the security team before release.
-
-## AI Agent Directives
-AI agents generating code MUST refuse to embed credentials and MUST flag any spec
-contradiction via the feedback endpoint rather than guessing.
-`,
-  });
-  insertPublishedSpec(db, globalId, {
-    filename: "CODING_STANDARDS.md",
-    content: `# General Coding Standards
-
-## Principles
-- Prefer clarity over cleverness; code is read far more than it is written.
-- Every public interface requires documentation in the repository's spec files.
-- All changes ship with tests that exercise the changed behavior.
-
-## Versioning
-All specification documents follow strict Semantic Versioning (MAJOR.MINOR.PATCH).
-Breaking guidance changes are MAJOR; new guidance is MINOR; clarifications are PATCH.
-
-## Reviews
-No specification becomes active without an approved review in SpecRegistry.
-`,
-  });
-  seedOperatingBaseline(db, globalId);
-
+/**
+ * Demo project types (Acme Edge Device, Acme Firmware) used only by the server
+ * test suite as fixtures. Not part of the shipped default seed. Call after
+ * `seed(db)` in tests that need these fixtures.
+ */
+export function seedDemoProjectTypes(db: Db): void {
   const edgeId = insertProjectType(
     db,
     "Acme Edge Device",
@@ -839,6 +770,90 @@ OTA images are signed and staged to the inactive bank; swap occurs on verified b
 CMake presets per target; \`ctest\` runs the host-side unit suite.
 `,
   });
+}
+
+/** Seeds baseline data: global specs, the default project-type catalog, and a
+ * Web App Standard baseline. Idempotent — safe to run on every startup. */
+export function seed(db: Db): boolean {
+  seedTemplates(db);
+  seedAdmin(db);
+  // Backfill missing audit prompts, and repair baseline prompts whose embedded
+  // @version drifted from current_version (older specs stored the prompt at the
+  // 0.1.0 draft version and never refreshed it on publish). Custom prompts —
+  // those not in the generated baseline format — are left untouched.
+  const stale = db
+    .prepare(
+      `SELECT id, filename, content, current_version FROM specs
+       WHERE deleted_at IS NULL AND (
+         audit_prompt IS NULL OR audit_prompt = ''
+         OR (audit_prompt LIKE 'Audit an implementation for conformance with%'
+             AND audit_prompt NOT LIKE ('%@' || current_version || '%'))
+       )`
+    )
+    .all() as Array<{
+      id: string;
+      filename: string;
+      content: string;
+      current_version: string;
+    }>;
+  if (stale.length > 0) {
+    const update = db.prepare("UPDATE specs SET audit_prompt = ?, updated_at = ? WHERE id = ?");
+    for (const spec of stale) {
+      const prompt = auditPromptForSpec(spec);
+      update.run(prompt, now(), spec.id);
+    }
+  }
+
+  const existing = db.prepare("SELECT COUNT(*) AS n FROM project_types").get() as { n: number };
+  if (existing.n > 0) {
+    seedDefaultProjectTypes(db);
+    seedOperatingBaseline(db);
+    return false;
+  }
+
+  const globalId = insertProjectType(
+    db,
+    "Global",
+    "global",
+    null,
+    "Organization-wide specifications that apply to every project type."
+  );
+  insertPublishedSpec(db, globalId, {
+    filename: "GLOBAL_SECURITY.md",
+    content: `# Global Security Standards
+
+## Scope
+These rules apply to every project in the organization, regardless of project type.
+
+## Requirements
+1. **Secrets** must never be committed to source control. Use the approved secret manager.
+2. **Dependencies** must be pinned and scanned weekly for CVEs.
+3. **Network services** must default to TLS 1.2+ and deny-by-default firewall rules.
+4. **Authentication** flows must be reviewed by the security team before release.
+
+## AI Agent Directives
+AI agents generating code MUST refuse to embed credentials and MUST flag any spec
+contradiction via the feedback endpoint rather than guessing.
+`,
+  });
+  insertPublishedSpec(db, globalId, {
+    filename: "CODING_STANDARDS.md",
+    content: `# General Coding Standards
+
+## Principles
+- Prefer clarity over cleverness; code is read far more than it is written.
+- Every public interface requires documentation in the repository's spec files.
+- All changes ship with tests that exercise the changed behavior.
+
+## Versioning
+All specification documents follow strict Semantic Versioning (MAJOR.MINOR.PATCH).
+Breaking guidance changes are MAJOR; new guidance is MINOR; clarifications are PATCH.
+
+## Reviews
+No specification becomes active without an approved review in SpecRegistry.
+`,
+  });
+  seedOperatingBaseline(db, globalId);
 
   const webId = insertProjectType(
     db,
